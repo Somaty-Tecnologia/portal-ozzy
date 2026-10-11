@@ -56,6 +56,23 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const [inativos, setInativos] = useState(false)
   const [limite, setLimite] = useState(150)
   const [editando, setEditando] = useState<Insumo | 'novo' | null>(null)
+  const { store } = useApp()
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [excluindo, setExcluindo] = useState(false)
+  const [resultado, setResultado] = useState<Awaited<ReturnType<typeof store.excluirInsumos>> | null>(null)
+  const marcar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const excluirSelecionados = async () => {
+    if (!confirm(`Excluir ${sel.size} ${sel.size === 1 ? 'material' : 'materiais'} do cadastro? O que estiver em ficha, nota ou produção só é inativado.`)) return
+    setExcluindo(true)
+    try {
+      setResultado(await store.excluirInsumos([...sel]))
+      setSel(new Set())
+      await aoMudar()
+    } catch (e) {
+      avisar((e as Error).message)
+    }
+    setExcluindo(false)
+  }
   const nomeForn = (id: string | null) => fornecedores.find((f) => f.id === id)?.nome
   const termo = busca.trim().toLowerCase()
   const lista = insumos.filter(
@@ -77,6 +94,13 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
         </select>
         <Botao onClick={() => setEditando('novo')}>+ Material</Botao>
       </div>
+      {sel.size > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl bg-carvao px-4 py-2.5 text-sm text-white shadow-lg">
+          <span className="font-semibold">{sel.size} {sel.size === 1 ? 'selecionado' : 'selecionados'}</span>
+          <button className="underline" onClick={() => setSel(new Set())}>limpar</button>
+          <Botao variante="perigo" className="ml-auto py-1.5!" disabled={excluindo} onClick={excluirSelecionados}>{excluindo ? 'Excluindo…' : 'Excluir'}</Botao>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-4 text-sm text-stone-600">
         <span>{lista.length} {lista.length === 1 ? 'material' : 'materiais'}</span>
         <label className="flex items-center gap-2">
@@ -93,6 +117,11 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-left text-xs text-stone-500">
               <tr>
+                <th className="w-8 py-2 pl-3">
+                  <input type="checkbox" className="size-4 accent-carvao" aria-label="Selecionar todos"
+                    checked={ordenada.slice(0, limite).length > 0 && ordenada.slice(0, limite).every((i) => sel.has(i.id))}
+                    onChange={(e) => setSel(e.target.checked ? new Set(ordenada.slice(0, limite).map((i) => i.id)) : new Set())} />
+                </th>
                 {cabecalho('nome', 'Material')}
                 {cabecalho('codigo', 'Código', 'hidden md:table-cell')}
                 {cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}
@@ -104,7 +133,10 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
               {ordenada.slice(0, limite).map((i) => {
                 const usos = usadoEm(cat, { insumoId: i.id }).length
                 return (
-                  <tr key={i.id} onClick={() => setEditando(i)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
+                  <tr key={i.id} onClick={() => setEditando(i)} className={`cursor-pointer border-t border-stone-100 hover:bg-stone-50 ${sel.has(i.id) ? 'bg-ozzy-400/15' : ''}`}>
+                    <td className="py-2 pl-3" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="size-4 accent-carvao" aria-label={`Selecionar ${i.nome}`} checked={sel.has(i.id)} onChange={() => marcar(i.id)} />
+                    </td>
                     <td className="px-3 py-2">
                       <div className="font-semibold">{i.nome} {!i.ativo && <Selo>Inativo</Selo>}</div>
                       <div className="text-xs text-stone-500">
@@ -133,6 +165,20 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
           )}
         </div>
       )}
+      {resultado && (
+        <Modal titulo="Exclusão de materiais" aberto aoFechar={() => setResultado(null)}>
+          <div className="space-y-3 text-sm">
+            <p><b>{resultado.filter((r) => r.excluido).length}</b> excluído{resultado.filter((r) => r.excluido).length === 1 ? '' : 's'} do cadastro.</p>
+            {resultado.some((r) => !r.excluido) && (
+              <div>
+                <p className="mb-1">Estes têm uso e foram <b>inativados</b> (somem das listas e das fichas novas):</p>
+                <ul className="space-y-1">{resultado.filter((r) => !r.excluido).map((r) => <li key={r.insumoId}><b>{r.nome}</b> <span className="text-stone-500">· {r.motivo}</span></li>)}</ul>
+              </div>
+            )}
+            <Botao className="w-full" onClick={() => setResultado(null)}>Ok</Botao>
+          </div>
+        </Modal>
+      )}
       {editando && (
         <EditarInsumo
           i={editando === 'novo' ? null : editando}
@@ -140,11 +186,11 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
           categorias={categorias}
           cat={cat}
           aoFechar={() => setEditando(null)}
-          aoSalvar={async () => {
+          aoSalvar={async (aviso) => {
             const novo = editando === 'novo'
             setEditando(null)
             await aoMudar()
-            avisar(novo ? 'Insumo cadastrado' : 'Insumo atualizado')
+            avisar(aviso ?? (novo ? 'Material cadastrado' : 'Material atualizado'))
           }}
         />
       )}
@@ -158,7 +204,7 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
   categorias: string[]
   cat: Catalogo
   aoFechar: () => void
-  aoSalvar: () => void
+  aoSalvar: (aviso?: string) => void
 }) {
   const { store, nomeDe } = useApp()
   const [f, setF] = useState({
@@ -179,6 +225,17 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
   }, [store, i])
   const usos = i ? usadoEm(cat, { insumoId: i.id }) : []
 
+  const excluir = async () => {
+    if (!i || !confirm(`Excluir ${i.nome} do cadastro?`)) return
+    setSalvando(true)
+    try {
+      const [r] = await store.excluirInsumos([i.id])
+      aoSalvar(r?.excluido ? `${i.nome} excluído` : `${i.nome} não pôde ser excluído (${r?.motivo ?? 'tem uso'}). Foi inativado.`)
+    } catch (e) {
+      setErro((e as Error).message)
+      setSalvando(false)
+    }
+  }
   const salvar = async (ev: React.FormEvent) => {
     ev.preventDefault()
     if (!f.nome.trim()) return setErro('Dê um nome ao insumo.')
@@ -270,6 +327,11 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
         )}
         {erro && <p className="text-sm text-red-600">{erro}</p>}
         <Botao className="w-full" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>
+        {i && (
+          <button type="button" disabled={salvando} onClick={excluir} className="w-full text-center text-sm font-semibold text-red-700 hover:underline">
+            Excluir material
+          </button>
+        )}
       </form>
       {i && (
         <div className="mt-5 space-y-3 border-t border-stone-200 pt-4 text-sm">
@@ -381,7 +443,7 @@ function ConferenciaPrecos({ insumos, fornecedores, categorias, cat, aoMudar }: 
       )}
       {editando && (
         <EditarInsumo i={editando} fornecedores={fornecedores} categorias={categorias} cat={cat} aoFechar={() => setEditando(null)}
-          aoSalvar={async () => { setEditando(null); await aoMudar(); avisar('Material atualizado') }} />
+          aoSalvar={async (aviso) => { setEditando(null); await aoMudar(); avisar(aviso ?? 'Material atualizado') }} />
       )}
     </div>
   )

@@ -1896,6 +1896,20 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
         return ant || entrada ? [{ insumoId: i.id, precoAnterior: ant?.preco ?? null, anteriorEm: ant?.em ?? null, custoEntrada: entrada, entradaEm: entrada ? hoje() : null }] : []
       })
     },
+    async excluirInsumos(ids) {
+      exigeGestao()
+      return ids.flatMap((id): { insumoId: string; nome: string; excluido: boolean; motivo: string | null }[] => {
+        const i = insumosDemo.find((x) => x.id === id)
+        if (!i) return []
+        const fichas = receitasDemo.filter((r) => r.insumoId === id || versoesReceitaDemo.some((v) => v.receitaId === r.id && v.itens.some((it) => it.insumoId === id)))
+        if (fichas.length) {
+          i.ativo = false
+          return [{ insumoId: id, nome: i.nome, excluido: false, motivo: 'está em ficha técnica: ' + fichas.map((r) => r.nome).join(', ') }]
+        }
+        insumosDemo.splice(insumosDemo.indexOf(i), 1)
+        return [{ insumoId: id, nome: i.nome, excluido: true, motivo: null }]
+      })
+    },
     async conferirPrecoInsumo(id, preco) {
       exigeGestao()
       const i = insumosDemo.find((x) => x.id === id)

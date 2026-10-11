@@ -879,6 +879,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         insumoId: r.insumo_id, precoAnterior: numeroOuNulo(r.preco_anterior), anteriorEm: r.anterior_em, custoEntrada: numeroOuNulo(r.custo_entrada), entradaEm: r.entrada_em,
       }))
     },
+    async excluirInsumos(ids) {
+      return (ok(await sb.rpc('excluir_insumos', { p_ids: ids })) ?? []).map((r: any) => ({ insumoId: r.insumo_id, nome: r.nome, excluido: r.excluido, motivo: r.motivo }))
+    },
     async conferirPrecoInsumo(id, preco) {
       ok(await sb.from('insumos').update({ preco_conferido: preco }).eq('id', id))
     },
