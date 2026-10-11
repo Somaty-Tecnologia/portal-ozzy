@@ -8,6 +8,7 @@ import { dataLonga } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { ir } from '../lib/rota'
 import { formatarCnpj } from '../lib/nfe'
+import { conferirPrecos, type AlertaPreco } from '../lib/conferencia'
 
 import ImportarFornecedores from './ImportarFornecedores'
 import { SETORES_ENVIO, type ContaContabil, type Fornecedor, type Insumo, type PrecoInsumo, type SetorEnvio, type UnidadeMedida } from '../lib/types'
@@ -16,7 +17,7 @@ const numero = lerNumero
 const doNumero = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
 
 // Cadastro único de insumos (com histórico de preço) e fornecedores, usado pelas fichas de eventos.
-export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' | 'categorias' }) {
+export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' | 'categorias' | 'conferencia' }) {
   const { store } = useApp()
   const [insumos, setInsumos] = useState<Insumo[] | null>(null)
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
@@ -42,6 +43,7 @@ export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' | 'ca
   if (!insumos || !cat) return <p className="text-stone-400">Carregando…</p>
   return aba === 'insumos'
     ? <ListaInsumos insumos={insumos} fornecedores={fornecedores} categorias={categorias} cat={cat} aoMudar={carregar} />
+    : aba === 'conferencia' ? <ConferenciaPrecos insumos={insumos} fornecedores={fornecedores} categorias={categorias} cat={cat} aoMudar={carregar} />
     : aba === 'categorias' ? <ListaCategorias insumos={insumos} categorias={categorias} aoMudar={carregar} />
     : <ListaFornecedores insumos={insumos} fornecedores={fornecedores} aoMudar={carregar} />
 }
@@ -295,6 +297,93 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
         </div>
       )}
     </Modal>
+  )
+}
+
+// Conferência de preços (Heitor, 11/10): o que parece errado no preço dos materiais, para corrigir ou marcar "está certo".
+function ConferenciaPrecos({ insumos, fornecedores, categorias, cat, aoMudar }: { insumos: Insumo[]; fornecedores: Fornecedor[]; categorias: string[]; cat: Catalogo; aoMudar: () => Promise<void> }) {
+  const { store, avisar } = useApp()
+  const [alertas, setAlertas] = useState<AlertaPreco[] | null>(null)
+  const [erro, setErro] = useState('')
+  const [so, setSo] = useState<'fora' | 'todos'>('fora')
+  const [editando, setEditando] = useState<Insumo | null>(null)
+  useEffect(() => {
+    let vivo = true
+    Promise.all([store.referenciasPreco(), store.produtosVenda().catch(() => [])]).then(([refs, ps]) => {
+      if (vivo) setAlertas(conferirPrecos(insumos, cat, refs, ps.filter((p) => p.ativo).map((p) => ({ nome: p.nome, receitaId: p.receitaId, preco: p.preco ?? p.precoPizza }))))
+    }, (e) => setErro((e as Error).message))
+    return () => { vivo = false }
+  }, [store, insumos, cat])
+  const lista = (alertas ?? []).filter((a) => so === 'todos' || a.gravidade === 'fora')
+  const { ordenada, cabecalho } = useOrdem(lista, {
+    nome: (a) => a.insumo.nome, categoria: (a) => a.insumo.categoria, preco: (a) => a.insumo.preco, gravidade: (a) => (a.gravidade === 'fora' ? 0 : 1),
+  }, { col: 'gravidade' })
+  const estaCerto = async (a: AlertaPreco) => {
+    try {
+      await store.conferirPrecoInsumo(a.insumo.id, a.insumo.preco)
+      await aoMudar()
+      avisar(`${a.insumo.nome}: preço marcado como certo`)
+    } catch (e) {
+      avisar((e as Error).message)
+    }
+  }
+
+  if (erro) return <p className="text-red-600">{erro}</p>
+  if (!alertas) return <p className="text-stone-400">Conferindo os preços…</p>
+  const fora = alertas.filter((a) => a.gravidade === 'fora').length
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-stone-600">
+        O portal compara o preço de cada material com a última entrada no estoque, com o preço anterior, com a ficha (nos pré-preparos), com os outros da mesma categoria e com o CMV dos produtos.
+        Corrija o preço ou marque <b>Está certo</b>: ele só volta a aparecer se o preço mudar.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {([['fora', `Fora do padrão (${fora})`], ['todos', `Tudo para conferir (${alertas.length})`]] as const).map(([v, n]) => (
+          <button key={v} onClick={() => setSo(v)} className={`rounded-lg px-3 py-1.5 font-semibold ${so === v ? 'bg-carvao text-white' : 'text-stone-600 hover:bg-stone-200'}`}>{n}</button>
+        ))}
+      </div>
+      {lista.length === 0 ? <Vazio>Nenhum preço fora do padrão. 👍</Vazio> : (
+        <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-stone-200">
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 text-left text-xs text-stone-500">
+              <tr>
+                {cabecalho('nome', 'Material')}
+                {cabecalho('categoria', 'Categoria', 'hidden md:table-cell')}
+                {cabecalho('preco', 'Preço', 'text-right', true)}
+                {cabecalho('gravidade', 'O que parece errado')}
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {ordenada.map((a) => (
+                <tr key={a.insumo.id} className="border-t border-stone-100 align-top">
+                  <td className="px-3 py-2">
+                    <button onClick={() => setEditando(a.insumo)} className="text-left font-semibold hover:underline">{a.insumo.nome}</button>
+                    <div className="text-xs text-stone-500">{a.insumo.ecleticaCodigo && `cód. ${a.insumo.ecleticaCodigo}`}<span className="md:hidden">{a.insumo.categoria && ` · ${a.insumo.categoria}`}</span></div>
+                  </td>
+                  <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{a.insumo.categoria ?? '—'}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">{a.insumo.preco !== null ? `${reais(a.insumo.preco, a.insumo.preco < 1 ? 4 : 2)}/${nomeUnidade(a.insumo.unidade)}` : '—'}</td>
+                  <td className="px-3 py-2">
+                    <Selo cor={a.gravidade === 'fora' ? 'vermelho' : 'ambar'}>{a.gravidade === 'fora' ? 'Fora do padrão' : 'Conferir'}</Selo>
+                    <ul className="mt-1 space-y-0.5 text-xs text-stone-600">{a.motivos.map((m) => <li key={m}>{m}</li>)}</ul>
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <span className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end">
+                      <Botao variante="secundario" className="px-2.5! py-1! text-xs" onClick={() => setEditando(a.insumo)}>Corrigir</Botao>
+                      {a.insumo.preco !== null && <Botao variante="fantasma" className="px-2.5! py-1! text-xs" onClick={() => estaCerto(a)}>Está certo</Botao>}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editando && (
+        <EditarInsumo i={editando} fornecedores={fornecedores} categorias={categorias} cat={cat} aoFechar={() => setEditando(null)}
+          aoSalvar={async () => { setEditando(null); await aoMudar(); avisar('Material atualizado') }} />
+      )}
+    </div>
   )
 }
 

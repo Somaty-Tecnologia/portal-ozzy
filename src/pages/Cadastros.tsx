@@ -9,13 +9,14 @@ import Insumos from './Insumos'
 
 // Cadastros (Heitor, 09/10): materiais e produtos de venda da Eclética e os fornecedores, num lugar só.
 // Até a integração, a base veio das planilhas da Eclética (código de cada um); depois passa a vir dela pelo código.
-export default function Cadastros() {
-  const [area, setArea] = useState<'materiais' | 'categorias' | 'produtos' | 'fornecedores'>('materiais')
+type Area = 'materiais' | 'categorias' | 'produtos' | 'fornecedores' | 'conferencia'
+export default function Cadastros({ aba }: { aba?: string }) {
+  const [area, setArea] = useState<Area>(aba === 'conferencia' ? 'conferencia' : 'materiais')
   return (
     <div className="space-y-4">
       <Titulo>Cadastros</Titulo>
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold sm:grid-cols-4">
-        {([['materiais', 'Materiais'], ['categorias', 'Categorias'], ['produtos', 'Produtos de venda'], ['fornecedores', 'Fornecedores']] as const).map(([a, nome]) => (
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold sm:grid-cols-5">
+        {([['materiais', 'Materiais'], ['categorias', 'Categorias'], ['produtos', 'Produtos de venda'], ['fornecedores', 'Fornecedores'], ['conferencia', 'Conferência de preços']] as const).map(([a, nome]) => (
           <button key={a} onClick={() => setArea(a)} className={`rounded-lg px-2 py-2 ${area === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
         ))}
       </div>

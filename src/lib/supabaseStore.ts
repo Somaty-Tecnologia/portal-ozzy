@@ -874,6 +874,14 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       if (antigo) ok(await sb.from('categorias_insumo').update({ nome: nome.trim() }).eq('nome', antigo))
       else ok(await sb.from('categorias_insumo').insert({ nome: nome.trim() }))
     },
+    async referenciasPreco() {
+      return (ok(await sb.rpc('conferencia_precos')) ?? []).map((r: any) => ({
+        insumoId: r.insumo_id, precoAnterior: numeroOuNulo(r.preco_anterior), anteriorEm: r.anterior_em, custoEntrada: numeroOuNulo(r.custo_entrada), entradaEm: r.entrada_em,
+      }))
+    },
+    async conferirPrecoInsumo(id, preco) {
+      ok(await sb.from('insumos').update({ preco_conferido: preco }).eq('id', id))
+    },
     async juntarCategoriaInsumo(de, para) {
       ok(await sb.rpc('juntar_categoria_insumo', { p_de: de, p_para: para }))
     },
@@ -1518,7 +1526,7 @@ const paraInsumo = (r: any): Insumo => ({
   id: r.id, nome: r.nome, categoria: r.categoria, unidade: r.unidade, embalagem: r.embalagem, embalagemQtd: numeroOuNulo(r.embalagem_qtd),
   preco: numeroOuNulo(r.preco), precoEm: r.preco_em, fornecedorId: r.fornecedor_id, observacao: r.observacao, ativo: r.ativo,
   ecleticaCodigo: r.ecletica_codigo ?? null, setorEnvio: r.setor_envio ?? null, contaId: r.conta_id ?? null, estoqueMinimo: numeroOuNulo(r.estoque_minimo),
-  prePreparo: !!r.pre_preparo,
+  prePreparo: !!r.pre_preparo, precoConferido: numeroOuNulo(r.preco_conferido),
 })
 const paraProdutoVenda = (r: any): ProdutoVenda => ({
   id: r.id, ecleticaCodigo: r.ecletica_codigo, nome: r.nome, grupo: r.grupo, subgrupo: r.subgrupo, tipo: r.tipo, unidade: r.unidade,

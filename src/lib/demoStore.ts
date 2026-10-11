@@ -204,15 +204,15 @@ const ins = (id: string, nome: string, categoria: string, unidade: Insumo['unida
   id, nome, categoria, unidade, embalagem: null, embalagemQtd: null, preco, precoEm: haHoras(24 * 5), fornecedorId, observacao: null, ativo: true, ...extra,
 })
 const insumosDemo: Insumo[] = [
-  ins('in1', 'Pão focaccia (forma)', 'Massas / Pães', 'un', 28, 'fo1'),
-  ins('in2', 'Presunto cru', 'Embutidos / Frios', 'kg', 150, 'fo1'),
-  ins('in3', 'Queijo branco', 'Laticínios / Queijos', 'kg', 42, 'fo1'),
+  ins('in1', 'Pão focaccia (forma)', 'Pães', 'un', 28, 'fo1'),
+  ins('in2', 'Presunto cru', 'Frios e embutidos', 'kg', 150, 'fo1'),
+  ins('in3', 'Queijo branco', 'Laticínios', 'kg', 42, 'fo1'),
   ins('in4', 'Creme de leite', 'Laticínios', 'kg', 18, 'fo1'),
   ins('in5', 'Rúcula', 'Hortifruti', 'kg', 20, 'fo2'),
   ins('in6', 'Tomate', 'Hortifruti', 'kg', 9, 'fo2'),
   ins('in7', 'Refrigerante lata', 'Bebidas', 'un', 3.2, 'fo1', { embalagem: 'fardo', embalagemQtd: 12 }),
-  ins('in8', 'Azeite', 'Óleos / Gorduras', 'l', null, null, { observacao: 'Sem preço: cadastre para o custo ficar completo.' }),
-  ins('in9', 'Óleo de soja', 'Óleos / Gorduras', 'l', 8, 'fo1'),
+  ins('in8', 'Azeite', 'Óleos e gorduras', 'l', null, null, { observacao: 'Sem preço: cadastre para o custo ficar completo.' }),
+  ins('in9', 'Óleo de soja', 'Óleos e gorduras', 'l', 8, 'fo1'),
   ins('in10', 'Cheiro verde', 'Hortifruti', 'kg', 12, 'fo2'),
   ins('in11', 'Alho', 'Hortifruti', 'kg', 30, 'fo2'),
   // Lista de fechamento das lojas (exemplo; a real vem da Eclética).
@@ -220,13 +220,15 @@ const insumosDemo: Insumo[] = [
   ins('in13', 'Molho especial', 'Pré-preparos', 'kg', 14, null, { ecleticaCodigo: '100902', setorEnvio: 'cozinha' }),
   ins('in14', 'Cebola caramelizada', 'Pré-preparos', 'kg', 16, null, { ecleticaCodigo: '100903', setorEnvio: 'cozinha' }),
   ins('in15', 'Alface americana', 'Hortifruti', 'un', 4, 'fo2', { ecleticaCodigo: '100904', setorEnvio: 'cozinha', embalagem: 'Caixa', embalagemQtd: 12 }),
-  ins('in16', 'Blend burger 1 unidade (100g)', 'Proteínas e Ovos', 'kg', 42, null, { ecleticaCodigo: '100905', setorEnvio: 'cozinha' }),
-  ins('in17', 'Bacon fatiado', 'Proteínas e Ovos', 'kg', 38, 'fo1', { ecleticaCodigo: '100906', setorEnvio: 'cozinha', estoqueMinimo: 5 }),
-  ins('in18', 'Pão brioche mini (PCT com 12)', 'Pão', 'un', 1.1, null, { ecleticaCodigo: '100907', setorEnvio: 'cozinha', embalagem: 'Caixa', embalagemQtd: 12 }),
+  ins('in16', 'Blend burger 1 unidade (100g)', 'Proteínas e ovos', 'kg', 42, null, { ecleticaCodigo: '100905', setorEnvio: 'cozinha' }),
+  ins('in17', 'Bacon fatiado', 'Proteínas e ovos', 'kg', 38, 'fo1', { ecleticaCodigo: '100906', setorEnvio: 'cozinha', estoqueMinimo: 5 }),
+  ins('in18', 'Pão brioche mini (PCT com 12)', 'Pães', 'un', 1.1, null, { ecleticaCodigo: '100907', setorEnvio: 'cozinha', embalagem: 'Caixa', embalagemQtd: 12 }),
   ins('in19', 'Coca cola 350ml lata', 'Bebidas', 'un', 3.2, 'fo1', { ecleticaCodigo: '88', setorEnvio: 'atendimento', embalagem: 'Fardo', embalagemQtd: 12 }),
-  ins('in20', 'Guardanapo sachê personalizado', 'Utensílios e Descartáveis', 'un', 0.05, null, { ecleticaCodigo: '100908', setorEnvio: 'atendimento' }),
+  ins('in20', 'Guardanapo sachê personalizado', 'Descartáveis e utensílios', 'un', 0.05, null, { ecleticaCodigo: '100908', setorEnvio: 'atendimento' }),
   ins('in21', 'Saco kraft P PCT C/ 100', 'Embalagens', 'un', 0.3, 'fo3', { ecleticaCodigo: '100909', setorEnvio: 'atendimento' }),
   ins('in22', 'Água sanitária 2L', 'Limpeza', 'un', 6.5, null, { ecleticaCodigo: '100619', setorEnvio: 'cozinha' }),
+  // Exemplo de preço fora do padrão (preço da caixa cadastrado como unidade), para a Conferência de preços.
+  ins('in23', 'Guardanapo', 'Descartáveis e utensílios', 'un', 90.34, null, { ecleticaCodigo: '299', setorEnvio: 'atendimento' }),
 ]
 const prePreparoDemo = new Set(['in12', 'in13', 'in14'])
 const precosInsumoDemo: PrecoInsumo[] = insumosDemo.map((i) => ({ id: 'pi' + i.id, insumoId: i.id, preco: i.preco, em: haHoras(24 * 5), por: null, origem: 'exemplo' }))
@@ -1883,6 +1885,21 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
         for (const i of insumosDemo) if (i.categoria === antigo) i.categoria = nome
       }
       categoriasDemo.add(nome)
+    },
+    async referenciasPreco() {
+      exigeGestao()
+      return insumosDemo.flatMap((i) => {
+        const h = precosInsumoDemo.filter((p) => p.insumoId === i.id)
+        const ant = h.length > 1 ? h[h.length - 2] : null
+        // Exemplo: a última entrada do guardanapo custou centavos, e o cadastro diz R$ 90 a unidade.
+        const entrada = i.id === 'in23' ? 0.09 : null
+        return ant || entrada ? [{ insumoId: i.id, precoAnterior: ant?.preco ?? null, anteriorEm: ant?.em ?? null, custoEntrada: entrada, entradaEm: entrada ? hoje() : null }] : []
+      })
+    },
+    async conferirPrecoInsumo(id, preco) {
+      exigeGestao()
+      const i = insumosDemo.find((x) => x.id === id)
+      if (i) i.precoConferido = preco
     },
     async juntarCategoriaInsumo(de, para) {
       exigeGestao()

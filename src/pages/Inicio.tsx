@@ -8,6 +8,8 @@ import arte from '../assets/banner-ozzy.jpg'
 import Icone from '../components/Icone'
 import { modulosVisiveis } from '../lib/modulos'
 import { useApp } from '../lib/contexto'
+import { conferirPrecos, type AlertaPreco } from '../lib/conferencia'
+import { montarCatalogo } from '../lib/custos'
 import { addDias, dataCurta, diaSemana, hoje, inicioDaSemana, tempoDesde } from '../lib/datas'
 import { avisaFerias, isentoDeRotinas, podeGerenciar, podeVerPainel } from '../lib/permissoes'
 import { COR_SITUACAO, TEXTO_SITUACAO, alertasFerias, type AlertaFerias as AlertaFeriasT } from '../lib/ferias'
@@ -76,6 +78,7 @@ export default function Inicio() {
 
       <DependeDeMim />
       {gestao && <ComprasAtrasadas />}
+      {(eu.nivel === 'administrativo' || eu.nivel === 'proprietario') && <PrecosForaDoPadrao />}
       {eu.nivel === 'manutencao' && <ResumoChamados />}
       {atendeChamados(eu.nivel) && <ResumoPreventiva />}
 
@@ -410,6 +413,35 @@ function ComprasAtrasadas() {
         </span>
       ))}
       {linhas.length > 5 && <span className="block text-xs text-stone-500">e mais {linhas.length - 5}</span>}
+    </button>
+  )
+}
+
+// Conferência de preços (Heitor, 11/10): material com preço totalmente fora avisa o administrativo e o proprietário.
+function PrecosForaDoPadrao() {
+  const { store } = useApp()
+  const [fora, setFora] = useState<AlertaPreco[]>([])
+  useEffect(() => {
+    let vivo = true
+    Promise.all([store.insumos(), store.receitas(), store.versoesReceitas(), store.referenciasPreco(), store.produtosVenda().catch(() => [])])
+      .then(([ins, rs, vs, refs, ps]) => {
+        if (!vivo) return
+        const alertas = conferirPrecos(ins, montarCatalogo(ins, rs, vs), refs, ps.filter((p) => p.ativo).map((p) => ({ nome: p.nome, receitaId: p.receitaId, preco: p.preco ?? p.precoPizza })))
+        setFora(alertas.filter((a) => a.gravidade === 'fora'))
+      }, () => undefined)
+    return () => { vivo = false }
+  }, [store])
+  if (!fora.length) return null
+  return (
+    <button onClick={() => ir('cadastros/conferencia')} className="block w-full space-y-1 rounded-2xl bg-red-50 p-4 text-left ring-1 ring-red-200 hover:ring-red-400">
+      <span className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-red-800">{fora.length === 1 ? '1 material com preço fora do padrão' : `${fora.length} materiais com preço fora do padrão`}</span>
+        <span className="text-sm font-semibold">Conferir ›</span>
+      </span>
+      {fora.slice(0, 3).map((a) => (
+        <span key={a.insumo.id} className="block text-sm text-stone-700"><b>{a.insumo.nome}</b> · <span className="text-stone-500">{a.motivos[0]}</span></span>
+      ))}
+      {fora.length > 3 && <span className="block text-xs text-stone-500">e mais {fora.length - 3}</span>}
     </button>
   )
 }

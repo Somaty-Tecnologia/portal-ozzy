@@ -934,6 +934,16 @@ export interface Insumo {
   estoqueMinimo?: number | null
   // Feito na Central (pré-preparo): é o que pode ser lançado em Produção.
   prePreparo?: boolean
+  // Preço que a gestão conferiu na Conferência de preços ("está certo"); enquanto for o atual, não é apontado.
+  precoConferido?: number | null
+}
+// Dados do banco para a conferência de preços: preço anterior e custo da última entrada no estoque.
+export interface ReferenciaPreco {
+  insumoId: string
+  precoAnterior: number | null
+  anteriorEm: string | null
+  custoEntrada: number | null
+  entradaEm: string | null
 }
 export type SetorEnvio = 'cozinha' | 'atendimento' | 'eventos'
 export const SETORES_ENVIO: Record<SetorEnvio, string> = { cozinha: 'Cozinha das lojas', atendimento: 'Atendimento das lojas', eventos: 'Eventos' }
