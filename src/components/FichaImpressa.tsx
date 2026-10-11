@@ -7,6 +7,7 @@ import Impressao from './Impressao'
 // Ficha de preparo para imprimir e deixar na produção (Heitor, 10/10). Sai da mesma ficha que calcula o custo:
 // mudou a ficha no portal, é só imprimir de novo. As colunas multiplicam a receita (1 a 4 receitas, ou as
 // quantidades escolhidas na ficha) e o peso de cada item já vem bruto (com o aproveitamento).
+// Econômica na tinta (Heitor, 11/10): sem fundos pintados, só texto e linhas finas.
 export default function ImprimirFichas({ fichas, cat, aoFechar }: { fichas: Receita[]; cat: Catalogo; aoFechar: () => void }) {
   const titulo = fichas.length === 1 ? `Ficha · ${fichas[0].nome}` : `${fichas.length} fichas de preparo`
   return (
@@ -43,16 +44,16 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
   ]
 
   return (
-    <article className="text-[12.5px] leading-snug [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
-      <header className="flex items-center gap-4 rounded-xl bg-carvao px-5 py-4 text-white">
-        <img src={logo} alt="" className="size-14 shrink-0" />
+    <article className="text-[12.5px] leading-snug text-black">
+      <header className="flex items-center gap-4 border-b-2 border-black pb-2">
+        <img src={logo} alt="" className="size-10 shrink-0 grayscale" />
         <div className="min-w-0 flex-1">
-          <div className="rotulo-marca text-[10px] text-ozzy-400">Ficha de preparo</div>
-          <h1 className="text-[24px] leading-tight font-bold tracking-tight uppercase">{r.nome}</h1>
+          <div className="text-[10px] font-semibold tracking-[0.2em] text-stone-600 uppercase">Ficha de preparo</div>
+          <h1 className="text-[22px] leading-tight font-bold tracking-tight uppercase">{r.nome}</h1>
         </div>
-        <div className="shrink-0 text-right text-[10.5px] leading-relaxed text-stone-300">
-          {r.ecleticaCodigo && <div>Cód. <b className="text-white">{r.ecleticaCodigo}</b></div>}
-          <div>Versão <b className="text-white">{v.numero}</b></div>
+        <div className="shrink-0 text-right text-[10.5px] leading-relaxed text-stone-600">
+          {r.ecleticaCodigo && <div>Cód. <b className="text-black">{r.ecleticaCodigo}</b></div>}
+          <div>Versão <b className="text-black">{v.numero}</b></div>
           <div>{dataLonga(v.criadaEm)}</div>
         </div>
       </header>
@@ -68,11 +69,11 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
       <h2 className="mt-4 mb-1.5 text-[11px] font-bold tracking-[0.2em] uppercase">Ingredientes</h2>
       <table className="w-full border-collapse">
         <thead>
-          <tr className="bg-ozzy-400 text-left text-carvao">
-            <th className="w-7 rounded-l-md px-2 py-1.5 text-center">#</th>
+          <tr className="border-b-2 border-black text-left">
+            <th className="w-7 px-2 py-1.5 text-center">#</th>
             <th className="px-2 py-1.5">Item</th>
             {lotes.map((l, k) => (
-              <th key={k} className={`px-2 py-1.5 text-right whitespace-nowrap ${k === lotes.length - 1 ? 'rounded-r-md' : ''}`}>
+              <th key={k} className="px-2 py-1.5 text-right whitespace-nowrap">
                 {padrao ? `${k + 1} receita${k ? 's' : ''}` : qtdLegivel(l, r.unidade)}
               </th>
             ))}
@@ -80,7 +81,7 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
         </thead>
         <tbody>
           {itens.map((it, k) => (
-            <tr key={k} className="border-b border-stone-200 even:bg-stone-50">
+            <tr key={k} className="border-b border-stone-300">
               <td className="px-2 py-1.5 text-center text-stone-500">{k + 1}</td>
               <td className="px-2 py-1.5 font-semibold">
                 {it.nome}
@@ -92,7 +93,7 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
               ))}
             </tr>
           ))}
-          <tr className="border-t-2 border-carvao font-bold">
+          <tr className="border-t-2 border-black font-bold">
             <td />
             <td className="px-2 py-1.5">Rende</td>
             {lotes.map((l, j) => <td key={j} className="px-2 py-1.5 text-right whitespace-nowrap">{qtdLegivel(l, r.unidade)}</td>)}
@@ -116,7 +117,7 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
                 <li key={k} className="pt-1.5 text-[11px] font-bold tracking-wide text-stone-600 uppercase">{p.slice(0, -1)}</li>
               ) : (
                 <li key={k} className="flex gap-2.5 break-inside-avoid">
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-ozzy-400 text-[11px] font-bold text-carvao">{++n}</span>
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-black text-[11px] font-bold">{++n}</span>
                   <span className="pt-0.5">{p}</span>
                 </li>
               ),
@@ -126,7 +127,7 @@ function FichaImpressa({ r, cat }: { r: Receita; cat: Catalogo }) {
       )}
 
       {r.observacoes && (
-        <div className="mt-4 rounded-lg border-l-4 border-ozzy-400 bg-stone-100 px-3 py-2 break-inside-avoid">
+        <div className="mt-4 rounded-lg border border-black px-3 py-2 break-inside-avoid">
           <div className="text-[10px] font-bold tracking-[0.2em] uppercase">Atenção</div>
           <p className="whitespace-pre-line">{r.observacoes}</p>
         </div>

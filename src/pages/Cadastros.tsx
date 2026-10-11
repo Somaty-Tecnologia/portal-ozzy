@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Botao, Campo, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
 import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
+import { ir } from '../lib/rota'
 import { reais } from '../lib/custos'
 import { lerValor } from '../lib/financeiro'
 import { TIPOS_PRODUTO_VENDA, type ProdutoVenda, type Receita, type TipoProdutoVenda } from '../lib/types'
@@ -178,6 +179,12 @@ function EditarProduto({ p, grupos, receitas, aoFechar, aoSalvar }: { p: Produto
             {receitas.filter((r) => r.ativo || r.id === f.receitaId).map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
           </select>
         </Campo>
+        {p?.receitaId && p.receitaId === f.receitaId && (
+          <Botao type="button" variante="secundario" className="w-full" onClick={() => ir('fichas/' + p.receitaId)}>Abrir a ficha técnica ›</Botao>
+        )}
+        {p && !f.receitaId && (
+          <Botao type="button" variante="secundario" className="w-full" onClick={() => ir('fichas')}>Ir para Fichas técnicas para criar a ficha ›</Botao>
+        )}
         {p && (
           <label className="flex items-center gap-3 text-sm">
             <input type="checkbox" className="size-5 accent-carvao" checked={!ativo} onChange={(e) => setAtivo(!e.target.checked)} /> Inativar {!ativo && <Selo>Some da lista</Selo>}
