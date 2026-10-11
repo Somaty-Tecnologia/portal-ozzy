@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Avatar, Cartao, Selo, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { isentoDeRotinas } from '../lib/permissoes'
 import { ir } from '../lib/rota'
-import { EXIGENCIAS, apelidoUnidade, type Documento } from '../lib/types'
+import { EXIGENCIAS, apelidoUnidade, type Documento, type Funcionario } from '../lib/types'
 import { AVISO_DIAS, corSituacao, exigenciasDe, iconeSituacao, pendencias, textoSituacao, type Situacao } from '../lib/vencimentos'
 
 // Controle de exames da equipe (só a gestão: são dados de saúde).
@@ -85,40 +86,51 @@ export default function Vencimentos() {
           </div>
         )
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 text-left text-stone-500">
-                <th className="px-3 py-2 font-semibold">Funcionário</th>
-                {EXIGENCIAS.map((e) => (
-                  <th key={e.id} className="px-3 py-2 font-semibold">
-                    {e.nome}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pessoas.map((p) => (
-                <tr key={p.id} className="border-b border-stone-100 last:border-0">
-                  <td className="px-3 py-2">
-                    <button onClick={() => ir('rh/equipe/' + p.id)} className="text-left font-semibold hover:underline">
-                      {p.nome}
-                    </button>
-                    <div className="text-xs text-stone-500">{p.cargo}</div>
-                  </td>
-                  {exigenciasDe(docs.filter((d) => d.funcionarioId === p.id), p).map((i) => (
-                    <td key={i.id} className="px-3 py-2">
-                      <Selo cor={corSituacao[i.situacao]}>
-                        {iconeSituacao[i.situacao]} {textoSituacao(i)}
-                      </Selo>
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TabelaExames pessoas={pessoas} docs={docs} />
       )}
+    </div>
+  )
+}
+
+// Exame: o que falta primeiro, depois o que vence antes.
+function TabelaExames({ pessoas, docs }: { pessoas: Funcionario[]; docs: Documento[] }) {
+  const itensDe = (p: Funcionario) => exigenciasDe(docs.filter((d) => d.funcionarioId === p.id), p)
+  const { ordenada, cabecalho } = useOrdem(pessoas, {
+    nome: (p) => p.nome,
+    ...Object.fromEntries(EXIGENCIAS.map((e) => [e.id, (p: Funcionario) => {
+      const i = itensDe(p).find((x) => x.id === e.id)
+      return !i ? null : i.situacao === 'faltando' ? '0000' : i.vence ?? '9999'
+    }])),
+  }, { col: 'nome' })
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-stone-200 text-left text-stone-500">
+            {cabecalho('nome', 'Funcionário')}
+            {EXIGENCIAS.map((e) => <Fragment key={e.id}>{cabecalho(e.id, e.nome)}</Fragment>)}
+          </tr>
+        </thead>
+        <tbody>
+          {ordenada.map((p) => (
+            <tr key={p.id} className="border-b border-stone-100 last:border-0">
+              <td className="px-3 py-2">
+                <button onClick={() => ir('rh/equipe/' + p.id)} className="text-left font-semibold hover:underline">
+                  {p.nome}
+                </button>
+                <div className="text-xs text-stone-500">{p.cargo}</div>
+              </td>
+              {itensDe(p).map((i) => (
+                <td key={i.id} className="px-3 py-2">
+                  <Selo cor={corSituacao[i.situacao]}>
+                    {iconeSituacao[i.situacao]} {textoSituacao(i)}
+                  </Selo>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

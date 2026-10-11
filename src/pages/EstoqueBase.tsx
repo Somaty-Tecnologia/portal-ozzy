@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Cartao, Modal, Vazio, estiloEntrada, Campo } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { nomeUnidade, qtd } from '../lib/custos'
 import { hoje, tempoDesde } from '../lib/datas'
-import { estoqueBase } from '../lib/logistica'
+import { estoqueBase, type SaldoBase } from '../lib/logistica'
 import type { EnvioEvento, Inventario, ItemContagem, ItemModeloChecklist, Operacao } from '../lib/types'
 import { Contagem } from './EventoLogistica'
 
@@ -77,33 +78,7 @@ export default function EstoqueBase() {
         ) : (
           <>
             <input className={`${estiloEntrada} sm:w-72!`} placeholder="Buscar item" value={busca} onChange={(ev) => setBusca(ev.target.value)} aria-label="Buscar item no estoque" />
-            <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
-              <table className="w-full text-sm">
-                <thead className="bg-stone-50 text-left text-xs text-stone-500">
-                  <tr>
-                    <th className="px-3 py-2">Item</th>
-                    <th className="px-2 py-2 text-right">Contado</th>
-                    <th className="px-2 py-2 text-right">Saiu depois</th>
-                    <th className="px-2 py-2 text-right">Saldo</th>
-                    <th className="px-2 py-2">Contado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linhas.map((i) => {
-                    const s = saldo.get(i.chave)!
-                    return (
-                      <tr key={i.chave} className="border-t border-stone-100">
-                        <td className="px-3 py-1.5 font-semibold">{i.nome} <span className="font-normal text-stone-400">{nomeUnidade(i.unidade)}</span></td>
-                        <td className="px-2 py-1.5 text-right">{qtd(s.contado)}</td>
-                        <td className="px-2 py-1.5 text-right text-stone-600">{s.saiu ? qtd(Math.round(s.saiu * 100) / 100) : '—'}</td>
-                        <td className={`px-2 py-1.5 text-right font-bold ${s.saldo <= 0 ? 'text-red-600' : ''}`}>{qtd(Math.round(s.saldo * 100) / 100)}</td>
-                        <td className="px-2 py-1.5 text-xs text-stone-500">{tempoDesde(s.contadoEm)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <TabelaSaldo linhas={linhas} saldo={saldo} />
           </>
         )}
         {d.contagens.length > 0 && (
@@ -175,6 +150,44 @@ export default function EstoqueBase() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function TabelaSaldo({ linhas, saldo }: { linhas: ItemContagem[]; saldo: Map<string, SaldoBase> }) {
+  const posicao = new Map(linhas.map((i, k) => [i.chave, k]))
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    ordem: (i) => posicao.get(i.chave), nome: (i) => i.nome, contado: (i) => saldo.get(i.chave)?.contado, saiu: (i) => saldo.get(i.chave)?.saiu || null,
+    saldo: (i) => saldo.get(i.chave)?.saldo, contadoEm: (i) => saldo.get(i.chave)?.contadoEm,
+  }, { col: 'ordem' })
+  const num = 'px-2! text-right'
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
+      <table className="w-full text-sm">
+        <thead className="bg-stone-50 text-left text-xs text-stone-500">
+          <tr>
+            {cabecalho('nome', 'Item')}
+            {cabecalho('contado', 'Contado', num, true)}
+            {cabecalho('saiu', 'Saiu depois', num, true)}
+            {cabecalho('saldo', 'Saldo', num, true)}
+            {cabecalho('contadoEm', 'Contado', 'px-2!', true)}
+          </tr>
+        </thead>
+        <tbody>
+          {ordenada.map((i) => {
+            const s = saldo.get(i.chave)!
+            return (
+              <tr key={i.chave} className="border-t border-stone-100">
+                <td className="px-3 py-1.5 font-semibold">{i.nome} <span className="font-normal text-stone-400">{nomeUnidade(i.unidade)}</span></td>
+                <td className="px-2 py-1.5 text-right">{qtd(s.contado)}</td>
+                <td className="px-2 py-1.5 text-right text-stone-600">{s.saiu ? qtd(Math.round(s.saiu * 100) / 100) : '—'}</td>
+                <td className={`px-2 py-1.5 text-right font-bold ${s.saldo <= 0 ? 'text-red-600' : ''}`}>{qtd(Math.round(s.saldo * 100) / 100)}</td>
+                <td className="px-2 py-1.5 text-xs text-stone-500">{tempoDesde(s.contadoEm)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

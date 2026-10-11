@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Botao, Campo, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { reais } from '../lib/custos'
 import { lerValor } from '../lib/financeiro'
@@ -9,16 +10,16 @@ import Insumos from './Insumos'
 // Cadastros (Heitor, 09/10): materiais e produtos de venda da Eclética e os fornecedores, num lugar só.
 // Até a integração, a base veio das planilhas da Eclética (código de cada um); depois passa a vir dela pelo código.
 export default function Cadastros() {
-  const [area, setArea] = useState<'materiais' | 'produtos' | 'fornecedores'>('materiais')
+  const [area, setArea] = useState<'materiais' | 'categorias' | 'produtos' | 'fornecedores'>('materiais')
   return (
     <div className="space-y-4">
       <Titulo>Cadastros</Titulo>
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold">
-        {([['materiais', 'Materiais'], ['produtos', 'Produtos de venda'], ['fornecedores', 'Fornecedores']] as const).map(([a, nome]) => (
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold sm:grid-cols-4">
+        {([['materiais', 'Materiais'], ['categorias', 'Categorias'], ['produtos', 'Produtos de venda'], ['fornecedores', 'Fornecedores']] as const).map(([a, nome]) => (
           <button key={a} onClick={() => setArea(a)} className={`rounded-lg px-2 py-2 ${area === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
         ))}
       </div>
-      {area === 'materiais' ? <Insumos aba="insumos" /> : area === 'fornecedores' ? <Insumos aba="fornecedores" /> : <ProdutosVenda />}
+      {area === 'produtos' ? <ProdutosVenda /> : <Insumos key={area} aba={area === 'materiais' ? 'insumos' : area} />}
     </div>
   )
 }
@@ -46,15 +47,19 @@ function ProdutosVenda() {
   }, [store])
   useEffect(() => { carregar() }, [carregar])
 
+  const todos = produtos ?? []
+  const grupos = [...new Set(todos.map((p) => p.grupo).filter(Boolean) as string[])].sort()
+  const termo = busca.trim().toLowerCase()
+  const lista = todos.filter((p) => p.ativo && (!grupo || p.grupo === grupo) && (!tipo || p.tipo === tipo) && (!semFicha || !p.receitaId)
+    && (!termo || p.nome.toLowerCase().includes(termo) || p.ecleticaCodigo === termo))
+  const nomeFicha = (id: string | null) => (id ? receitas.find((r) => r.id === id)?.nome ?? 'ligada' : null)
+  const { ordenada, cabecalho } = useOrdem(lista, {
+    nome: (p) => p.nome, codigo: (p) => p.ecleticaCodigo, grupo: (p) => (p.grupo ? [p.grupo, p.subgrupo ?? '', p.nome].join('\u0001') : null),
+    subgrupo: (p) => p.subgrupo, preco: (p) => p.preco, pizza: (p) => p.precoPizza,
+  }, { col: 'grupo' })
+
   if (erro) return <p className="text-red-700">{erro}</p>
   if (!produtos) return <p className="text-stone-400">Carregando…</p>
-  const grupos = [...new Set(produtos.map((p) => p.grupo).filter(Boolean) as string[])].sort()
-  const termo = busca.trim().toLowerCase()
-  const lista = produtos.filter((p) => p.ativo && (!grupo || p.grupo === grupo) && (!tipo || p.tipo === tipo) && (!semFicha || !p.receitaId)
-    && (!termo || p.nome.toLowerCase().includes(termo) || p.ecleticaCodigo === termo))
-  const porSubgrupo = new Map<string, ProdutoVenda[]>()
-  for (const p of lista) porSubgrupo.set(p.subgrupo || p.grupo || 'Outros', [...(porSubgrupo.get(p.subgrupo || p.grupo || 'Outros') ?? []), p])
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -78,28 +83,33 @@ function ProdutosVenda() {
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-left text-xs text-stone-500">
               <tr>
-                <th className="px-3 py-2 font-semibold">Produto</th>
-                <th className="px-3 py-2 text-right font-semibold">Burger</th>
-                <th className="px-3 py-2 text-right font-semibold">Pizza</th>
+                {cabecalho('nome', 'Produto')}
+                {cabecalho('codigo', 'Código', 'hidden md:table-cell')}
+                {cabecalho('grupo', 'Grupo', 'hidden sm:table-cell')}
+                {cabecalho('subgrupo', 'Subgrupo', 'hidden lg:table-cell')}
+                {cabecalho('preco', 'Burger', 'text-right', true)}
+                {cabecalho('pizza', 'Pizza', 'text-right', true)}
               </tr>
             </thead>
-            {[...porSubgrupo].sort(([a], [b]) => a.localeCompare(b)).map(([sub, ps]) => (
-              <tbody key={sub}>
-                <tr><td colSpan={3} className="bg-stone-50 px-3 py-1.5 text-xs font-bold tracking-wide text-stone-600 uppercase">{sub}</td></tr>
-                {ps.map((p) => (
-                  <tr key={p.id} onClick={() => setEditando(p)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
-                    <td className="px-3 py-2">
-                      <div className="font-semibold">{p.nome}</div>
-                      <div className="text-xs text-stone-500">
-                        {[p.ecleticaCodigo && `cód. ${p.ecleticaCodigo}`, p.tipo !== 'normal' && TIPOS_PRODUTO_VENDA[p.tipo], p.receitaId ? `ficha: ${receitas.find((r) => r.id === p.receitaId)?.nome ?? 'ligada'}` : 'sem ficha'].filter(Boolean).join(' · ')}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">{p.preco !== null ? reais(p.preco) : '—'}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">{p.precoPizza !== null ? reais(p.precoPizza) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            ))}
+            <tbody>
+              {ordenada.map((p) => (
+                <tr key={p.id} onClick={() => setEditando(p)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
+                  <td className="px-3 py-2">
+                    <div className="font-semibold">{p.nome}</div>
+                    <div className="text-xs text-stone-500">
+                      <span className="md:hidden">{p.ecleticaCodigo && `cód. ${p.ecleticaCodigo} · `}</span>
+                      <span className="sm:hidden">{(p.subgrupo || p.grupo) && `${p.subgrupo || p.grupo} · `}</span>
+                      {[p.tipo !== 'normal' && TIPOS_PRODUTO_VENDA[p.tipo], p.receitaId ? `ficha: ${nomeFicha(p.receitaId)}` : 'sem ficha'].filter(Boolean).join(' · ')}
+                    </div>
+                  </td>
+                  <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{p.ecleticaCodigo ?? '—'}</td>
+                  <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{p.grupo ?? '—'}</td>
+                  <td className="hidden px-3 py-2 text-stone-600 lg:table-cell">{p.subgrupo ?? '—'}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">{p.preco !== null ? reais(p.preco) : '—'}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">{p.precoPizza !== null ? reais(p.precoPizza) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       )}

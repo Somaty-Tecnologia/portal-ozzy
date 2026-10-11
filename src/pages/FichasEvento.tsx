@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Cartao, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
 import { useApp } from '../lib/contexto'
 import ImprimirFichas from '../components/FichaImpressa'
+import { useOrdem } from '../components/Ordenar'
+import AnaliseCmv from './AnaliseCmv'
 import { cmv, custoFicha, custoItens, montarCatalogo, nomeUnidade, qtd, qtdLegivel, reais, usadoEm, type Catalogo } from '../lib/custos'
 import { dataLonga } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
@@ -53,7 +55,7 @@ export default function FichasEvento({ id, area = 'eventos' }: { id?: string; ar
 
 function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> }) {
   const { avisar } = useApp()
-  const [tipo, setTipo] = useState<TipoReceita>('produto')
+  const [tipo, setTipo] = useState<TipoReceita | 'cmv'>('produto')
   const [linha, setLinha] = useState('')
   const [busca, setBusca] = useState('')
   const [inativas, setInativas] = useState(false)
@@ -63,9 +65,15 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
   const daArea = (r: Receita) => r.tipo === 'preparo' || (r.area ?? 'eventos') === d.area
   const linhas = [...new Set(d.receitas.filter((r) => daArea(r) && r.tipo === tipo).map((r) => r.linha).filter(Boolean) as string[])].sort()
   const termo = busca.trim().toLowerCase()
-  const lista = d.receitas
+  const lista = useMemo(() => d.receitas
     .filter((r) => r.tipo === tipo && daArea(r) && (inativas || r.ativo) && (!linha || r.linha === linha) && (!termo || r.nome.toLowerCase().includes(termo) || r.ecleticaCodigo === termo))
-    .map((r) => ({ r, c: custoFicha(d.cat, r.id) }))
+    .map((r) => {
+      const c = custoFicha(d.cat, r.id)
+      return { r, c, pct: c ? cmv(c.porUnidade, r.precoVenda) : null }
+    }), [d, tipo, inativas, linha, termo])
+  const { ordenada, cabecalho } = useOrdem(lista, {
+    nome: (x) => x.r.nome, linha: (x) => x.r.linha, custo: (x) => x.c?.porUnidade, preco: (x) => x.r.precoVenda, cmv: (x) => x.pct,
+  }, { col: 'nome' })
   const conta = (t: TipoReceita) => d.receitas.filter((r) => r.tipo === t && daArea(r) && (inativas || r.ativo)).length
 
   return (
@@ -76,15 +84,19 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
             {t === 'produto' ? 'Produtos' : 'Pré-preparos'} <span className="opacity-60">{conta(t)}</span>
           </button>
         ))}
-        <div className="ml-auto flex gap-2">
+        {d.area === 'lojas' && (
+          <button onClick={() => setTipo('cmv')} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tipo === 'cmv' ? 'bg-carvao text-white' : 'text-stone-600 hover:bg-stone-200'}`}>Análise de CMV</button>
+        )}
+        {tipo !== 'cmv' && <div className="ml-auto flex gap-2">
           {tipo === 'preparo' && (
             <Botao variante="secundario" disabled={!lista.some(({ r }) => r.versaoAtual > 0)} onClick={() => setImprimir(lista.map(({ r }) => r).filter((r) => r.versaoAtual > 0))}>
               Imprimir {lista.filter(({ r }) => r.versaoAtual > 0).length === 1 ? 'a ficha' : `as ${lista.filter(({ r }) => r.versaoAtual > 0).length} fichas`}
             </Botao>
           )}
           <Botao onClick={() => setNova(true)}>+ Nova ficha</Botao>
-        </div>
+        </div>}
       </div>
+      {tipo === 'cmv' ? <AnaliseCmv cat={d.cat} receitas={d.receitas} /> : <>
       <div className="flex flex-wrap items-center gap-2">
         <input className={`${estiloEntrada} basis-full py-2! sm:basis-0 sm:flex-1`} placeholder={d.area === 'lojas' ? 'Buscar por nome ou código' : 'Buscar ficha'} value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar ficha" />
         <select className={`${estiloEntrada} w-auto! py-2!`} value={linha} onChange={(e) => setLinha(e.target.value)} aria-label="Linha">
@@ -103,25 +115,27 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-left text-xs text-stone-500">
               <tr>
-                <th className="px-3 py-2 font-semibold">Ficha</th>
-                <th className="px-3 py-2 text-right font-semibold">Custo</th>
-                {tipo === 'produto' && <th className="px-3 py-2 text-right font-semibold">Preço</th>}
-                {tipo === 'produto' && <th className="px-3 py-2 text-right font-semibold">CMV</th>}
+                {cabecalho('nome', 'Ficha')}
+                {cabecalho('linha', d.area === 'lojas' && tipo === 'produto' ? 'Grupo' : 'Linha', 'hidden sm:table-cell')}
+                {cabecalho('custo', 'Custo', 'text-right', true)}
+                {tipo === 'produto' && cabecalho('preco', 'Preço', 'text-right', true)}
+                {tipo === 'produto' && cabecalho('cmv', 'CMV', 'text-right', true)}
               </tr>
             </thead>
             <tbody>
-              {lista.map(({ r, c }) => {
-                const pct = c ? cmv(c.porUnidade, r.precoVenda) : null
+              {ordenada.map(({ r, c, pct }) => {
                 return (
                   <tr key={r.id} onClick={() => ir(baseFichas() + '/' + r.id)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
                     <td className="px-3 py-2">
                       <div className="font-semibold">{r.nome} {!r.ativo && <Selo>Inativa</Selo>}</div>
                       <div className="text-xs text-stone-500">
-                        {[r.ecleticaCodigo && `cód. ${r.ecleticaCodigo}`, r.linha, r.tipo === 'produto' && d.area === 'eventos' ? ORIGEM_PRODUTO[r.origem] : null, r.versaoAtual ? `versão ${r.versaoAtual}` : 'sem composição']
+                        {r.linha && <span className="sm:hidden">{r.linha} · </span>}
+                        {[r.ecleticaCodigo && `cód. ${r.ecleticaCodigo}`, r.tipo === 'produto' && d.area === 'eventos' ? ORIGEM_PRODUTO[r.origem] : null, r.versaoAtual ? `versão ${r.versaoAtual}` : 'sem composição']
                           .filter(Boolean).join(' · ')}
                         {c && c.semPreco.length > 0 && <span className="font-semibold text-amber-700"> · {c.semPreco.length} sem preço</span>}
                       </div>
                     </td>
+                    <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{r.linha ?? '—'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">{c ? `${reais(c.porUnidade)}/${nomeUnidade(r.unidade)}` : '—'}</td>
                     {tipo === 'produto' && <td className="px-3 py-2 text-right whitespace-nowrap">{r.precoVenda !== null ? reais(r.precoVenda) : '—'}</td>}
                     {tipo === 'produto' && (
@@ -135,13 +149,14 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
         </div>
       )}
       <p className="text-xs text-stone-500">O custo usa o preço atual de cada insumo e o aproveitamento de cada item. O CMV fica em vermelho acima de 35%.</p>
+      </>}
 
       {imprimir && <ImprimirFichas fichas={imprimir} cat={d.cat} aoFechar={() => setImprimir(null)} />}
       {nova && (
         <EditarDadosFicha
           r={null}
           area={d.area}
-          tipoInicial={tipo}
+          tipoInicial={tipo === 'cmv' ? 'produto' : tipo}
           operacoes={d.operacoes}
           linhas={linhas}
           aoFechar={() => setNova(false)}
@@ -578,7 +593,7 @@ function EditarComposicao({ r, d, aoFechar, aoSalvar }: { r: Receita; d: Dados; 
       soDelivery: !!l.soDelivery,
     }))
   const rend = numero(rendimento) ?? 0
-  const previa = useMemo(() => custoItens(d.cat, itens, rend || 1, [r.id]), [d.cat, JSON.stringify(itens), rend, r.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const previa = useMemo(() => custoItens(d.cat, itens, rend || 1, [r.id]), [d.cat, JSON.stringify(itens), rend, r.id])
   const insumos = d.insumos.filter((i) => i.ativo || linhas.some((l) => l.ref === 'i:' + i.id))
   const preparos = d.receitas.filter((x) => x.tipo === 'preparo' && x.id !== r.id && (x.ativo || linhas.some((l) => l.ref === 'r:' + x.id)))
   // Busca digitando (pedido de 09/10): a lista com 40 pré-preparos em cima escondia os insumos.

@@ -867,6 +867,16 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         ? ok(await sb.from('insumos').update(linha).eq('id', i.id).select().single())
         : ok(await sb.from('insumos').insert(linha).select().single()))
     },
+    async categoriasInsumo() {
+      return (ok(await sb.from('categorias_insumo').select('nome').order('nome')) ?? []).map((r: { nome: string }) => r.nome)
+    },
+    async salvarCategoriaInsumo(nome, antigo) {
+      if (antigo) ok(await sb.from('categorias_insumo').update({ nome: nome.trim() }).eq('nome', antigo))
+      else ok(await sb.from('categorias_insumo').insert({ nome: nome.trim() }))
+    },
+    async juntarCategoriaInsumo(de, para) {
+      ok(await sb.rpc('juntar_categoria_insumo', { p_de: de, p_para: para }))
+    },
     async precosInsumo(id) {
       return (ok(await sb.from('insumo_precos').select('*').eq('insumo_id', id).order('em', { ascending: false })) ?? []).map((r: any) => ({
         id: r.id, insumoId: r.insumo_id, preco: numeroOuNulo(r.preco), em: r.em, por: r.por, origem: r.origem,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Cartao, Vazio } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { montarCatalogo, reais, type Catalogo } from '../lib/custos'
 import { addDias, dataCurta, hoje } from '../lib/datas'
@@ -244,41 +245,8 @@ export default function PainelEventos() {
                 opcoes={[['fat', 'Mais faturam'], ['itens', 'Mais vendidos'], ['porDia', 'Mais saem por dia'], ['margem', 'Maior margem']]}
               />
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-stone-500">
-                  <tr>
-                    <th className="py-1 pr-2">Produto</th>
-                    <th className="px-2 py-1 text-right">Itens</th>
-                    <th className="px-2 py-1 text-right">Faturamento</th>
-                    <th className="px-2 py-1 text-right">% do total</th>
-                    <th className="px-2 py-1 text-right" title="Itens por dia, contando só os dias dos eventos que tiveram o produto">Por dia</th>
-                    <th className="px-2 py-1 text-right">Preço médio</th>
-                    <th className="px-2 py-1 text-right" title="Custo da ficha de hoje ÷ preço médio vendido">CMV</th>
-                    <th className="px-2 py-1 text-right" title="Faturamento − custo da ficha × itens (sem taxa do organizador e impostos)">Margem</th>
-                    <th className="px-2 py-1 text-right">Eventos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(todosProdutos ? produtos : produtos.slice(0, 15)).map((x) => (
-                    <tr key={x.chave} className="border-t border-stone-100">
-                      <td className="py-1 pr-2">
-                        <span className="font-semibold">{x.nome}</span>
-                        <span className="block text-xs text-stone-500">{x.linha}</span>
-                      </td>
-                      <td className="px-2 py-1 text-right">{inteiro(x.itens)}</td>
-                      <td className="px-2 py-1 text-right whitespace-nowrap">{reais(x.fat, 0)}</td>
-                      <td className="px-2 py-1 text-right">{porcento((x.fat / p.fat) * 100)}</td>
-                      <td className="px-2 py-1 text-right">{inteiro(x.porDia)}</td>
-                      <td className="px-2 py-1 text-right whitespace-nowrap">{reais(x.precoMedio)}</td>
-                      <td className="px-2 py-1 text-right">{x.cmvPct === null ? <span className="text-stone-400">sem ficha</span> : porcento(x.cmvPct)}</td>
-                      <td className="px-2 py-1 text-right whitespace-nowrap">{x.margem === null ? '—' : reais(x.margem, 0)}</td>
-                      <td className="px-2 py-1 text-right">{x.eventos}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Trocar a opção acima recomeça a tabela nessa ordem. */}
+            <TabelaProdutos key={ordemProd} produtos={produtos} todos={todosProdutos} inicial={ordemProd} fatTotal={p.fat} />
             {produtos.length > 15 && (
               <button className="mt-2 text-sm font-semibold text-sky-700" onClick={() => setTodosProdutos(!todosProdutos)}>
                 {todosProdutos ? 'Mostrar só os 15 primeiros' : `Ver todos os ${produtos.length} produtos`}
@@ -291,6 +259,51 @@ export default function PainelEventos() {
           </Cartao>
         </>
       )}
+    </div>
+  )
+}
+
+function TabelaProdutos({ produtos, todos, inicial, fatTotal }: { produtos: ResumoProduto[]; todos: boolean; inicial: OrdemProduto; fatTotal: number }) {
+  const { ordenada, cabecalho } = useOrdem(produtos, {
+    nome: (x) => x.nome, itens: (x) => x.itens, fat: (x) => x.fat, pct: (x) => x.fat, porDia: (x) => x.porDia, preco: (x) => x.precoMedio,
+    cmv: (x) => x.cmvPct, margem: (x) => x.margem, eventos: (x) => x.eventos,
+  }, { col: inicial, desc: true })
+  const num = 'px-2! py-1! text-right'
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-stone-500">
+          <tr>
+            {cabecalho('nome', 'Produto', 'pl-0! pr-2! py-1!')}
+            {cabecalho('itens', 'Itens', num, true)}
+            {cabecalho('fat', 'Faturamento', num, true)}
+            {cabecalho('pct', '% do total', num, true)}
+            {cabecalho('porDia', <span title="Itens por dia, contando só os dias dos eventos que tiveram o produto">Por dia</span>, num, true)}
+            {cabecalho('preco', 'Preço médio', num, true)}
+            {cabecalho('cmv', <span title="Custo da ficha de hoje ÷ preço médio vendido">CMV</span>, num, true)}
+            {cabecalho('margem', <span title="Faturamento − custo da ficha × itens (sem taxa do organizador e impostos)">Margem</span>, num, true)}
+            {cabecalho('eventos', 'Eventos', num, true)}
+          </tr>
+        </thead>
+        <tbody>
+          {(todos ? ordenada : ordenada.slice(0, 15)).map((x) => (
+            <tr key={x.chave} className="border-t border-stone-100">
+              <td className="py-1 pr-2">
+                <span className="font-semibold">{x.nome}</span>
+                <span className="block text-xs text-stone-500">{x.linha}</span>
+              </td>
+              <td className="px-2 py-1 text-right">{inteiro(x.itens)}</td>
+              <td className="px-2 py-1 text-right whitespace-nowrap">{reais(x.fat, 0)}</td>
+              <td className="px-2 py-1 text-right">{porcento((x.fat / fatTotal) * 100)}</td>
+              <td className="px-2 py-1 text-right">{inteiro(x.porDia)}</td>
+              <td className="px-2 py-1 text-right whitespace-nowrap">{reais(x.precoMedio)}</td>
+              <td className="px-2 py-1 text-right">{x.cmvPct === null ? <span className="text-stone-400">sem ficha</span> : porcento(x.cmvPct)}</td>
+              <td className="px-2 py-1 text-right whitespace-nowrap">{x.margem === null ? '—' : reais(x.margem, 0)}</td>
+              <td className="px-2 py-1 text-right">{x.eventos}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

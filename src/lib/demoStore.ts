@@ -230,6 +230,7 @@ const insumosDemo: Insumo[] = [
 ]
 const prePreparoDemo = new Set(['in12', 'in13', 'in14'])
 const precosInsumoDemo: PrecoInsumo[] = insumosDemo.map((i) => ({ id: 'pi' + i.id, insumoId: i.id, preco: i.preco, em: haHoras(24 * 5), por: null, origem: 'exemplo' }))
+const categoriasDemo = new Set<string>()
 const rec = (id: string, nome: string, tipo: Receita['tipo'], extra: Partial<Receita> = {}): Receita => ({
   id, nome, tipo, linha: 'Foca', operacaoId: null, origem: 'propria', unidade: tipo === 'produto' ? 'un' : 'kg', precoVenda: null,
   tempoPreparoMin: null, tempoFinalizacaoMin: null, capacidadeHora: null, equipamentos: null, conservacao: null, validadeDias: null, modoPreparo: null, ativo: true, versaoAtual: 1, ...extra,
@@ -1866,6 +1867,28 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       }
       if (mudouPreco) precosInsumoDemo.push({ id: novoId('pi'), insumoId: salvo.id, preco: salvo.preco, em: agora(), por: u.id, origem: 'manual' })
       return structuredClone(salvo)
+    },
+    async categoriasInsumo() {
+      exigeGestaoOuProducao()
+      for (const i of insumosDemo) if (i.categoria) categoriasDemo.add(i.categoria)
+      return [...categoriasDemo].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    },
+    async salvarCategoriaInsumo(nome, antigo) {
+      exigeGestao()
+      nome = nome.trim()
+      if (!nome) throw new Error('Dê um nome à categoria.')
+      if (nome !== antigo && categoriasDemo.has(nome)) throw new Error('duplicate key: já existe')
+      if (antigo) {
+        categoriasDemo.delete(antigo)
+        for (const i of insumosDemo) if (i.categoria === antigo) i.categoria = nome
+      }
+      categoriasDemo.add(nome)
+    },
+    async juntarCategoriaInsumo(de, para) {
+      exigeGestao()
+      if (para) categoriasDemo.add(para)
+      for (const i of insumosDemo) if (i.categoria === de) i.categoria = para
+      categoriasDemo.delete(de)
     },
     async precosInsumo(id) {
       exigeGestao()

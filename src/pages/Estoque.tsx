@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Botao, Campo, Cartao, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
 import EscolherConta from '../components/EscolherConta'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { addDias, addMeses, dataCurta, hoje, mesDe, nomeMesAno, primeiroDia, ultimoDia } from '../lib/datas'
 import { ir } from '../lib/rota'
@@ -677,30 +678,40 @@ function Saldo() {
       {linhas.length === 0 ? (
         <Vazio>Nada em estoque nesta loja ainda. As entradas aparecem quando as notas são lançadas.</Vazio>
       ) : (
-        <Cartao className="overflow-x-auto p-0!">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-left text-stone-500">
-              <tr><th className="px-3 py-2">Insumo</th><th className="px-3 py-2 text-right">Saldo</th><th className="px-3 py-2 text-right">Custo</th><th className="px-3 py-2 text-right">Valor</th><th /></tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {linhas.map((l) => (
-                <tr key={l.id}>
-                  <td className="px-3 py-2">{l.ins?.nome ?? 'Insumo removido'}<span className="block text-xs text-stone-400">último movimento {dataCurta(l.ultima)}</span></td>
-                  <td className={`px-3 py-2 text-right whitespace-nowrap ${l.qtd < 0 ? 'font-semibold text-red-700' : ''}`}>{mostrarQtd(l.qtd)} {l.ins?.unidade}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">{l.custo !== null ? reais(l.custo) : '—'}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">{reais(l.valor)}</td>
-                  <td className="px-3 py-2 text-right"><button className="font-semibold underline" onClick={() => setMov({ insumoId: l.id })}>Ajustar</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Cartao>
+        <TabelaSaldo linhas={linhas} aoAjustar={(id) => setMov({ insumoId: id })} />
       )}
       {mov && (
         <NovoMovimento c={c} centro={centro} insumoId={mov.insumoId} saldoDe={(id) => saldos.find((x) => x.insumoId === id)?.quantidade ?? 0}
           aoFechar={() => setMov(null)} aoSalvar={() => { setMov(null); carregar() }} />
       )}
     </div>
+  )
+}
+
+type LinhaSaldo = { id: string; ins?: Insumo; qtd: number; ultima: string; custo: number | null; valor: number }
+function TabelaSaldo({ linhas, aoAjustar }: { linhas: LinhaSaldo[]; aoAjustar: (id: string) => void }) {
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    nome: (l) => l.ins?.nome ?? '', qtd: (l) => l.qtd, custo: (l) => l.custo, valor: (l) => l.valor,
+  }, { col: 'nome' })
+  return (
+    <Cartao className="overflow-x-auto p-0!">
+      <table className="w-full text-sm">
+        <thead className="bg-stone-50 text-left text-stone-500">
+          <tr>{cabecalho('nome', 'Insumo')}{cabecalho('qtd', 'Saldo', 'text-right', true)}{cabecalho('custo', 'Custo', 'text-right', true)}{cabecalho('valor', 'Valor', 'text-right', true)}<th /></tr>
+        </thead>
+        <tbody className="divide-y divide-stone-100">
+          {ordenada.map((l) => (
+            <tr key={l.id}>
+              <td className="px-3 py-2">{l.ins?.nome ?? 'Insumo removido'}<span className="block text-xs text-stone-400">último movimento {dataCurta(l.ultima)}</span></td>
+              <td className={`px-3 py-2 text-right whitespace-nowrap ${l.qtd < 0 ? 'font-semibold text-red-700' : ''}`}>{mostrarQtd(l.qtd)} {l.ins?.unidade}</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">{l.custo !== null ? reais(l.custo) : '—'}</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">{reais(l.valor)}</td>
+              <td className="px-3 py-2 text-right"><button className="font-semibold underline" onClick={() => aoAjustar(l.id)}>Ajustar</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Cartao>
   )
 }
 
@@ -828,30 +839,41 @@ function Movimentos() {
         </select>
       </div>
       {lista.length === 0 ? <Vazio>Nenhum movimento neste mês.</Vazio> : (
-        <Cartao className="overflow-x-auto p-0!">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-left text-stone-500">
-              <tr><th className="px-3 py-2">Data</th><th className="px-3 py-2">Insumo</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2 text-right">Qtd</th><th className="px-3 py-2">Loja</th></tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {lista.map((m) => {
-                const ins = c.insumos.find((i) => i.id === m.insumoId)
-                return (
-                  <tr key={m.id}>
-                    <td className="px-3 py-2 whitespace-nowrap">{dataCurta(m.data)}</td>
-                    <td className="px-3 py-2">{ins?.nome ?? '—'}{m.observacao && <span className="block text-xs text-stone-400">{m.observacao}</span>}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{m.producaoId ? 'Produção' : NOME_TIPO[m.tipo]}</td>
-                    <td className={`px-3 py-2 text-right whitespace-nowrap ${m.quantidade < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {m.quantidade > 0 ? '+' : ''}{mostrarQtd(m.quantidade)} {ins?.unidade}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{nomeCentro(c.centros.find((x) => x.id === m.centroCustoId))}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </Cartao>
+        <TabelaMovimentos lista={lista} c={c} />
       )}
     </div>
+  )
+}
+
+function TabelaMovimentos({ lista, c }: { lista: MovimentoEstoque[]; c: NonNullable<ReturnType<typeof useCadastros>['c']> }) {
+  const nomeIns = (m: MovimentoEstoque) => c.insumos.find((i) => i.id === m.insumoId)?.nome ?? ''
+  const { ordenada, cabecalho } = useOrdem(lista, {
+    data: (m) => m.data, insumo: nomeIns, tipo: (m) => (m.producaoId ? 'Produção' : NOME_TIPO[m.tipo]), qtd: (m) => m.quantidade,
+    loja: (m) => nomeCentro(c.centros.find((x) => x.id === m.centroCustoId)),
+  }, { col: 'data', desc: true })
+  return (
+    <Cartao className="overflow-x-auto p-0!">
+      <table className="w-full text-sm">
+        <thead className="bg-stone-50 text-left text-stone-500">
+          <tr>{cabecalho('data', 'Data', '', true)}{cabecalho('insumo', 'Insumo')}{cabecalho('tipo', 'Tipo')}{cabecalho('qtd', 'Qtd', 'text-right', true)}{cabecalho('loja', 'Loja')}</tr>
+        </thead>
+        <tbody className="divide-y divide-stone-100">
+          {ordenada.map((m) => {
+            const ins = c.insumos.find((i) => i.id === m.insumoId)
+            return (
+              <tr key={m.id}>
+                <td className="px-3 py-2 whitespace-nowrap">{dataCurta(m.data)}</td>
+                <td className="px-3 py-2">{ins?.nome ?? '—'}{m.observacao && <span className="block text-xs text-stone-400">{m.observacao}</span>}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{m.producaoId ? 'Produção' : NOME_TIPO[m.tipo]}</td>
+                <td className={`px-3 py-2 text-right whitespace-nowrap ${m.quantidade < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                  {m.quantidade > 0 ? '+' : ''}{mostrarQtd(m.quantidade)} {ins?.unidade}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">{nomeCentro(c.centros.find((x) => x.id === m.centroCustoId))}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </Cartao>
   )
 }

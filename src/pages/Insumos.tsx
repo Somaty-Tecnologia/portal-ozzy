@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Botao, Campo, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import EscolherConta from '../components/EscolherConta'
 import { useApp } from '../lib/contexto'
 import { montarCatalogo, nomeUnidade, reais, usadoEm, type Catalogo } from '../lib/custos'
@@ -15,17 +16,19 @@ const numero = lerNumero
 const doNumero = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
 
 // Cadastro único de insumos (com histórico de preço) e fornecedores, usado pelas fichas de eventos.
-export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' }) {
+export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' | 'categorias' }) {
   const { store } = useApp()
   const [insumos, setInsumos] = useState<Insumo[] | null>(null)
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [cat, setCat] = useState<Catalogo | null>(null)
+  const [categorias, setCategorias] = useState<string[]>([])
   const [erro, setErro] = useState('')
   const carregar = useCallback(async () => {
     try {
-      const [i, f, r, v] = await Promise.all([store.insumos(), store.fornecedores(), store.receitas(), store.versoesReceitas()])
+      const [i, f, r, v, c] = await Promise.all([store.insumos(), store.fornecedores(), store.receitas(), store.versoesReceitas(), store.categoriasInsumo()])
       setInsumos(i)
       setFornecedores(f)
+      setCategorias(c)
       setCat(montarCatalogo(i, r, v))
     } catch (e) {
       setErro((e as Error).message)
@@ -38,38 +41,34 @@ export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' }) {
   if (erro) return <p className="text-red-600">{erro}</p>
   if (!insumos || !cat) return <p className="text-stone-400">Carregando…</p>
   return aba === 'insumos'
-    ? <ListaInsumos insumos={insumos} fornecedores={fornecedores} cat={cat} aoMudar={carregar} />
+    ? <ListaInsumos insumos={insumos} fornecedores={fornecedores} categorias={categorias} cat={cat} aoMudar={carregar} />
+    : aba === 'categorias' ? <ListaCategorias insumos={insumos} categorias={categorias} aoMudar={carregar} />
     : <ListaFornecedores insumos={insumos} fornecedores={fornecedores} aoMudar={carregar} />
 }
 
-function ListaInsumos({ insumos, fornecedores, cat, aoMudar }: { insumos: Insumo[]; fornecedores: Fornecedor[]; cat: Catalogo; aoMudar: () => Promise<void> }) {
+function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { insumos: Insumo[]; fornecedores: Fornecedor[]; categorias: string[]; cat: Catalogo; aoMudar: () => Promise<void> }) {
   const { avisar } = useApp()
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('')
   const [semPreco, setSemPreco] = useState(false)
   const [inativos, setInativos] = useState(false)
-  const [setor, setSetor] = useState<SetorEnvio | 'preparo' | ''>('')
   const [limite, setLimite] = useState(150)
   const [editando, setEditando] = useState<Insumo | 'novo' | null>(null)
-  const categorias = [...new Set(insumos.map((i) => i.categoria).filter(Boolean) as string[])].sort()
   const nomeForn = (id: string | null) => fornecedores.find((f) => f.id === id)?.nome
   const termo = busca.trim().toLowerCase()
   const lista = insumos.filter(
     (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!semPreco || i.preco === null)
-      && (!setor || (setor === 'preparo' ? i.prePreparo : i.setorEnvio === setor))
       && (!termo || i.nome.toLowerCase().includes(termo) || i.ecleticaCodigo === termo),
   )
   const faltando = insumos.filter((i) => i.ativo && i.preco === null).length
+  const { ordenada, cabecalho } = useOrdem(lista, {
+    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo,
+  }, { col: 'nome' })
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <input className={`${estiloEntrada} basis-full py-2! sm:basis-0 sm:flex-1`} placeholder="Buscar por nome ou código" value={busca} onChange={(e) => { setBusca(e.target.value); setLimite(150) }} aria-label="Buscar insumo" />
-        <select className={`${estiloEntrada} w-auto! py-2!`} value={setor} onChange={(e) => setSetor(e.target.value as SetorEnvio | 'preparo' | '')} aria-label="Para onde vai">
-          <option value="">Todos os destinos</option>
-          {Object.entries(SETORES_ENVIO).map(([v, n]) => <option key={v} value={v}>{n}</option>)}
-          <option value="preparo">Pré-preparos da Central</option>
-        </select>
         <select className={`${estiloEntrada} w-auto! py-2!`} value={categoria} onChange={(e) => setCategoria(e.target.value)} aria-label="Categoria">
           <option value="">Todas as categorias</option>
           {categorias.map((c) => <option key={c}>{c}</option>)}
@@ -92,28 +91,34 @@ function ListaInsumos({ insumos, fornecedores, cat, aoMudar }: { insumos: Insumo
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-left text-xs text-stone-500">
               <tr>
-                <th className="px-3 py-2 font-semibold">Insumo</th>
-                <th className="px-3 py-2 text-right font-semibold">Preço</th>
-                <th className="hidden px-3 py-2 font-semibold sm:table-cell">Fornecedor</th>
+                {cabecalho('nome', 'Material')}
+                {cabecalho('codigo', 'Código', 'hidden md:table-cell')}
+                {cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}
+                {cabecalho('preco', 'Preço', 'text-right', true)}
+                {cabecalho('fornecedor', 'Fornecedor', 'hidden lg:table-cell')}
               </tr>
             </thead>
             <tbody>
-              {lista.slice(0, limite).map((i) => {
+              {ordenada.slice(0, limite).map((i) => {
                 const usos = usadoEm(cat, { insumoId: i.id }).length
                 return (
                   <tr key={i.id} onClick={() => setEditando(i)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
                     <td className="px-3 py-2">
                       <div className="font-semibold">{i.nome} {!i.ativo && <Selo>Inativo</Selo>}</div>
                       <div className="text-xs text-stone-500">
-                        {[i.ecleticaCodigo && `cód. ${i.ecleticaCodigo}`, i.categoria, i.prePreparo && 'pré-preparo', usos ? `em ${usos} ficha${usos === 1 ? '' : 's'}` : null,
+                        <span className="md:hidden">{i.ecleticaCodigo && `cód. ${i.ecleticaCodigo} · `}</span>
+                        <span className="sm:hidden">{i.categoria && `${i.categoria} · `}</span>
+                        {[i.prePreparo && 'pré-preparo', usos ? `em ${usos} ficha${usos === 1 ? '' : 's'}` : null,
                           i.embalagem && `compra em ${i.embalagem}${i.embalagemQtd ? ` com ${String(i.embalagemQtd).replace('.', ',')}` : ''}`].filter(Boolean).join(' · ')}
                       </div>
                     </td>
+                    <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{i.ecleticaCodigo ?? '—'}</td>
+                    <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{i.categoria ?? '—'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {i.preco !== null ? `${reais(i.preco)}/${nomeUnidade(i.unidade)}` : <span className="font-semibold text-amber-700">sem preço</span>}
                       {i.precoEm && <div className="text-xs text-stone-400">{dataLonga(i.precoEm)}</div>}
                     </td>
-                    <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{nomeForn(i.fornecedorId) ?? '—'}</td>
+                    <td className="hidden px-3 py-2 text-stone-600 lg:table-cell">{nomeForn(i.fornecedorId) ?? '—'}</td>
                   </tr>
                 )
               })}
@@ -203,9 +208,11 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
           <input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} required />
         </Campo>
         <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Categoria">
-            <input className={estiloEntrada} list="categorias-insumo" value={f.categoria} onChange={mudar('categoria')} />
-            <datalist id="categorias-insumo">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+          <Campo rotulo="Categoria" dica="Novas categorias em Cadastros › Categorias.">
+            <select className={estiloEntrada} value={f.categoria} onChange={mudar('categoria')}>
+              <option value="">Sem categoria</option>
+              {[...new Set([...categorias, ...(f.categoria ? [f.categoria] : [])])].map((c) => <option key={c}>{c}</option>)}
+            </select>
           </Campo>
           <Campo rotulo="Unidade de uso">
             <select className={estiloEntrada} value={f.unidade} onChange={mudar('unidade')}>
@@ -288,6 +295,98 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
         </div>
       )}
     </Modal>
+  )
+}
+
+function ListaCategorias({ insumos, categorias, aoMudar }: { insumos: Insumo[]; categorias: string[]; aoMudar: () => Promise<void> }) {
+  const { store, avisar } = useApp()
+  const [editando, setEditando] = useState<string | 'nova' | null>(null)
+  const [nome, setNome] = useState('')
+  const [juntarCom, setJuntarCom] = useState('')
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const linhas = categorias.map((c) => {
+    const deles = insumos.filter((i) => i.categoria === c)
+    return { nome: c, ativos: deles.filter((i) => i.ativo).length, total: deles.length }
+  })
+  const semCategoria = insumos.filter((i) => i.ativo && !i.categoria).length
+  const { ordenada, cabecalho } = useOrdem(linhas, { nome: (l) => l.nome, ativos: (l) => l.ativos }, { col: 'nome' })
+  const abrir = (c: string | 'nova') => { setEditando(c); setNome(c === 'nova' ? '' : c); setJuntarCom(''); setErro('') }
+  const fazer = async (acao: () => Promise<void>, aviso: string) => {
+    setSalvando(true)
+    try {
+      await acao()
+      setEditando(null)
+      await aoMudar()
+      avisar(aviso)
+    } catch (e) {
+      const m = (e as Error).message
+      setErro(/duplicate|unique/i.test(m) ? 'Já existe uma categoria com esse nome. Para juntar as duas, use "Juntar com".' : m)
+    }
+    setSalvando(false)
+  }
+  const salvar = (ev: React.FormEvent) => {
+    ev.preventDefault()
+    if (!nome.trim()) return setErro('Dê um nome à categoria.')
+    if (editando === nome.trim()) return setEditando(null)
+    fazer(() => store.salvarCategoriaInsumo(nome, editando === 'nova' ? undefined : editando!), editando === 'nova' ? 'Categoria criada' : 'Categoria renomeada')
+  }
+  const atual = linhas.find((l) => l.nome === editando)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-stone-600">
+          {categorias.length} categorias{semCategoria > 0 && <> · <span className="font-semibold text-amber-700">{semCategoria} materiais ativos sem categoria</span></>}
+        </span>
+        <Botao onClick={() => abrir('nova')}>+ Categoria</Botao>
+      </div>
+      {linhas.length === 0 ? <Vazio>Nenhuma categoria cadastrada.</Vazio> : (
+        <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-stone-200">
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 text-left text-xs text-stone-500">
+              <tr>{cabecalho('nome', 'Categoria')}{cabecalho('ativos', 'Materiais ativos', 'text-right', true)}</tr>
+            </thead>
+            <tbody>
+              {ordenada.map((l) => (
+                <tr key={l.nome} onClick={() => abrir(l.nome)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
+                  <td className="px-3 py-2 font-semibold">{l.nome}</td>
+                  <td className="px-3 py-2 text-right">{l.ativos}{l.total > l.ativos && <span className="text-xs text-stone-400"> (+{l.total - l.ativos} inativos)</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editando && (
+        <Modal titulo={editando === 'nova' ? 'Nova categoria' : editando} aberto aoFechar={() => setEditando(null)}>
+          <form onSubmit={salvar} className="space-y-4">
+            <Campo rotulo="Nome" dica={atual ? `Renomear muda os ${atual.total} materiais desta categoria.` : undefined}>
+              <input className={estiloEntrada} value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus />
+            </Campo>
+            {erro && <p className="text-sm text-red-600">{erro}</p>}
+            <Botao className="w-full" disabled={salvando}>{editando === 'nova' ? 'Criar' : 'Salvar nome'}</Botao>
+          </form>
+          {atual && (
+            <div className="mt-5 space-y-3 border-t border-stone-200 pt-4 text-sm">
+              <Campo rotulo="Juntar com outra categoria" dica={`Os ${atual.total} materiais passam para a escolhida e esta categoria some.`}>
+                <select className={estiloEntrada} value={juntarCom} onChange={(e) => setJuntarCom(e.target.value)}>
+                  <option value="">Escolha…</option>
+                  {categorias.filter((c) => c !== atual.nome).map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </Campo>
+              <div className="flex flex-wrap gap-2">
+                <Botao variante="secundario" disabled={!juntarCom || salvando}
+                  onClick={() => fazer(() => store.juntarCategoriaInsumo(atual.nome, juntarCom), `Juntada com ${juntarCom}`)}>Juntar</Botao>
+                <Botao variante="secundario" disabled={salvando}
+                  onClick={() => (atual.total === 0 || confirm(`Os ${atual.total} materiais ficam sem categoria. Tirar a categoria ${atual.nome}?`))
+                    && fazer(() => store.juntarCategoriaInsumo(atual.nome, null), 'Categoria tirada')}>Tirar categoria</Botao>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
   )
 }
 

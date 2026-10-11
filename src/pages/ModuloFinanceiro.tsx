@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Botao, Campo, Cartao, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { addMeses, dataCurta, diaSemana, hoje, mesDe, nomeMesAno } from '../lib/datas'
 import { ir } from '../lib/rota'
@@ -382,34 +383,7 @@ function Despesas() {
         ))}
       </div>
       {doMes.length === 0 ? <Vazio>Nenhuma despesa {base === 'caixa' ? 'paga' : 'vencendo'} em {nomeMesAno(mes)}.</Vazio> : por === 'fornecedor' ? (
-        <Cartao className="overflow-x-auto p-0!">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-100 text-left text-stone-500">
-              <tr>
-                <th className="px-3 py-2">Fornecedor</th>
-                {centros.length > 1 && centros.map((x) => <th key={x.id} className="px-3 py-2 text-right">{nomeCentro(x)}</th>)}
-                <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2 text-right">%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {porFornecedor.map((g) => (
-                <tr key={g.nome}>
-                  <td className="px-3 py-1.5">{g.nome} <span className="text-xs text-stone-400">({g.contas.length})</span></td>
-                  {centros.length > 1 && centros.map((x) => <td key={x.id} className="px-3 py-1.5 text-right whitespace-nowrap">{total(g.contas, x.id) ? reais(total(g.contas, x.id)) : '—'}</td>)}
-                  <td className="px-3 py-1.5 text-right font-semibold whitespace-nowrap">{reais(total(g.contas))}</td>
-                  <td className="px-3 py-1.5 text-right text-stone-500">{(totalMes ? total(g.contas) / totalMes : 0).toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 })}</td>
-                </tr>
-              ))}
-              <tr className="bg-carvao font-bold text-white">
-                <td className="px-3 py-2">Total</td>
-                {centros.length > 1 && centros.map((x) => <td key={x.id} className="px-3 py-2 text-right whitespace-nowrap">{reais(total(doMes, x.id))}</td>)}
-                <td className="px-3 py-2 text-right whitespace-nowrap">{reais(totalMes)}</td>
-                <td />
-              </tr>
-            </tbody>
-          </table>
-        </Cartao>
+        <TabelaFornecedores grupos={porFornecedor} centros={centros} total={total} totalMes={totalMes} doMes={doMes} />
       ) : (
         <Cartao className="overflow-x-auto p-0!">
           <table className="w-full text-sm">
@@ -447,6 +421,46 @@ function Despesas() {
         Empréstimos, investimentos e distribuição de lucros ficam abaixo do resultado operacional. A receita continua vindo do Lucro Fácil (aba Resultado).
       </p>
     </div>
+  )
+}
+
+type Centro = Dados['centros'][number]
+function TabelaFornecedores({ grupos, centros, total, totalMes, doMes }: {
+  grupos: { nome: string; contas: ContaPagar[] }[]; centros: Centro[]; total: (l: ContaPagar[], centro?: string) => number; totalMes: number; doMes: ContaPagar[]
+}) {
+  const { ordenada, cabecalho } = useOrdem(grupos, {
+    nome: (g) => g.nome, total: (g) => total(g.contas), pct: (g) => total(g.contas),
+    ...Object.fromEntries(centros.map((x) => [`c:${x.id}`, (g: { contas: ContaPagar[] }) => total(g.contas, x.id)])),
+  }, { col: 'total', desc: true })
+  return (
+    <Cartao className="overflow-x-auto p-0!">
+      <table className="w-full text-sm">
+        <thead className="bg-stone-100 text-left text-stone-500">
+          <tr>
+            {cabecalho('nome', 'Fornecedor')}
+            {centros.length > 1 && centros.map((x) => <Fragment key={x.id}>{cabecalho(`c:${x.id}`, nomeCentro(x), 'text-right', true)}</Fragment>)}
+            {cabecalho('total', 'Total', 'text-right', true)}
+            {cabecalho('pct', '%', 'text-right', true)}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-stone-100">
+          {ordenada.map((g) => (
+            <tr key={g.nome}>
+              <td className="px-3 py-1.5">{g.nome} <span className="text-xs text-stone-400">({g.contas.length})</span></td>
+              {centros.length > 1 && centros.map((x) => <td key={x.id} className="px-3 py-1.5 text-right whitespace-nowrap">{total(g.contas, x.id) ? reais(total(g.contas, x.id)) : '—'}</td>)}
+              <td className="px-3 py-1.5 text-right font-semibold whitespace-nowrap">{reais(total(g.contas))}</td>
+              <td className="px-3 py-1.5 text-right text-stone-500">{(totalMes ? total(g.contas) / totalMes : 0).toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 })}</td>
+            </tr>
+          ))}
+          <tr className="bg-carvao font-bold text-white">
+            <td className="px-3 py-2">Total</td>
+            {centros.length > 1 && centros.map((x) => <td key={x.id} className="px-3 py-2 text-right whitespace-nowrap">{reais(total(doMes, x.id))}</td>)}
+            <td className="px-3 py-2 text-right whitespace-nowrap">{reais(totalMes)}</td>
+            <td />
+          </tr>
+        </tbody>
+      </table>
+    </Cartao>
   )
 }
 

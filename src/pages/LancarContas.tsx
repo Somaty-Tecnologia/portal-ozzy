@@ -7,6 +7,7 @@ import { ir } from '../lib/rota'
 import { soDigitos, type Store } from '../lib/store'
 import { FORMAS_PAGAMENTO, type CentroCusto, type ContaContabil, type ContaPagar, type FormaPagamento, type Fornecedor, type NovaContaPagar } from '../lib/types'
 import EscolherConta from '../components/EscolherConta'
+import { useOrdem } from '../components/Ordenar'
 
 export interface Dados { contas: ContaPagar[]; centros: CentroCusto[]; plano: ContaContabil[]; fornecedores: Fornecedor[] }
 
@@ -381,6 +382,9 @@ export function ImportarLote({ d, aoFechar, aoSalvar }: { d: Dados; aoFechar: ()
   const boas = linhas.filter((l) => !l.erros.length)
   const pagas = boas.filter((l) => l.pagoEm).length
   const novos = [...new Set(boas.map((l) => l.fornecedor).filter((f) => f && !d.fornecedores.some((x) => simples(x.nome) === simples(f) || (x.cnpj && soDigitos(f) && soDigitos(x.cnpj) === soDigitos(f)))))]
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    n: (l) => l.n, conta: (l) => l.descricao, valor: (l) => l.valor || null, vence: (l) => l.vencimento,
+  }, { col: 'n' })
 
   async function abrirArquivo(f: File | undefined) {
     if (!f) return
@@ -446,10 +450,10 @@ export function ImportarLote({ d, aoFechar, aoSalvar }: { d: Dados; aoFechar: ()
           <div className="max-h-64 overflow-auto rounded-xl ring-1 ring-stone-200">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-stone-100 text-left text-stone-500">
-                <tr><th className="px-2 py-1">#</th><th className="px-2 py-1">Conta</th><th className="px-2 py-1 text-right">Valor</th><th className="px-2 py-1">Vence</th></tr>
+                <tr>{cabecalho('n', '#', 'px-2! py-1!')}{cabecalho('conta', 'Conta', 'px-2! py-1!')}{cabecalho('valor', 'Valor', 'px-2! py-1! text-right', true)}{cabecalho('vence', 'Vence', 'px-2! py-1!', true)}</tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {linhas.map((l) => (
+                {ordenada.map((l) => (
                   <tr key={l.n} className={l.erros.length ? 'bg-red-50' : ''}>
                     <td className="px-2 py-1 align-top text-stone-400">{l.n}</td>
                     <td className="px-2 py-1">

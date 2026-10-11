@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Cartao, Vazio } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { reais } from '../lib/custos'
 import { dataCurta } from '../lib/datas'
@@ -22,7 +23,6 @@ export default function ComparativoEventos() {
   const [dados, setDados] = useState<{ eventos: Evento[]; vendas: VendaEvento[] } | null>(null)
   const [erro, setErro] = useState('')
   const [gastro, setGastro] = useState('')
-  const [ordem, setOrdem] = useState<'data' | 'fat' | 'diaBarraca'>('data')
   useEffect(() => {
     Promise.all([store.eventos(), store.vendasEventos()])
       .then(([eventos, vendas]) => setDados({ eventos, vendas }))
@@ -40,21 +40,17 @@ export default function ComparativoEventos() {
   if (!linhas.length) return <Vazio>Nenhum evento com vendas ainda.</Vazio>
   const gastronomias = [...new Set(linhas.map((l) => l.e.gastronomia).filter(Boolean))] as string[]
   const filtradas = linhas.filter((l) => !gastro || l.e.gastronomia === gastro)
-  const porDiaBarraca = (l: Linha) => (l.e.barracas ? l.fat / l.dias / l.e.barracas : null)
-  const ordenadas = [...filtradas].sort((a, b) =>
-    ordem === 'fat' ? b.fat - a.fat : ordem === 'diaBarraca' ? (porDiaBarraca(b) ?? 0) - (porDiaBarraca(a) ?? 0) : (b.e.dias[0]?.data ?? '').localeCompare(a.e.dias[0]?.data ?? ''),
-  )
   const maxFat = Math.max(1, ...filtradas.map((l) => l.fat))
   const fatTotal = filtradas.reduce((s, l) => s + l.fat, 0)
   const diasTotal = filtradas.reduce((s, l) => s + l.dias, 0)
 
   // Produtos nos eventos filtrados.
   const ids = new Set(filtradas.map((l) => l.e.id))
-  const prod = new Map<string, { nome: string; itens: number; fat: number; eventos: Set<string> }>()
+  const prod = new Map<string, Produto>()
   for (const v of dados.vendas)
     if (ids.has(v.eventoId)) {
       const k = v.receitaId ?? v.produto
-      const p = prod.get(k) ?? { nome: v.produto, itens: 0, fat: 0, eventos: new Set() }
+      const p = prod.get(k) ?? { nome: v.produto, itens: 0, fat: 0, eventos: new Set<string>() }
       p.itens += v.quantidade
       p.fat += v.total ?? 0
       p.eventos.add(v.eventoId)
@@ -85,77 +81,103 @@ export default function ComparativoEventos() {
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
-        <table className="w-full text-sm">
-          <thead className="bg-stone-50 text-left text-xs text-stone-500">
-            <tr>
-              <th className="px-3 py-2"><button onClick={() => setOrdem('data')} className={ordem === 'data' ? 'text-carvao underline' : ''}>Evento</button></th>
-              <th className="px-2 py-2">Gastronomia</th>
-              <th className="px-2 py-2 text-right">Dias</th>
-              <th className="px-2 py-2 text-right">Barracas</th>
-              <th className="px-2 py-2"><button onClick={() => setOrdem('fat')} className={ordem === 'fat' ? 'text-carvao underline' : ''}>Faturamento</button></th>
-              <th className="px-2 py-2 text-right">Itens</th>
-              <th className="px-2 py-2 text-right">Por dia</th>
-              <th className="px-2 py-2 text-right"><button onClick={() => setOrdem('diaBarraca')} className={ordem === 'diaBarraca' ? 'text-carvao underline' : ''}>Dia por barraca</button></th>
-              <th className="px-2 py-2 text-right">Preço médio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordenadas.map((l) => (
-              <tr key={l.e.id} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50" onClick={() => ir(`eventos/${l.e.id}/vendas`)}>
-                <td className="px-3 py-1.5">
-                  <span className="font-semibold">{l.e.nome}</span>
-                  <span className="block text-xs text-stone-500">{l.e.dias[0] && dataCurta(l.e.dias[0].data)}{l.e.cidade && ` · ${l.e.cidade}`}</span>
-                </td>
-                <td className="px-2 py-1.5 text-stone-600">{l.e.gastronomia ?? '—'}</td>
-                <td className="px-2 py-1.5 text-right">{l.dias}</td>
-                <td className="px-2 py-1.5 text-right">{doNumero(l.e.barracas)}</td>
-                <td className="min-w-40 px-2 py-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2.5 flex-1 rounded-full bg-stone-100">
-                      <div className="h-2.5 rounded-full bg-stone-700" style={{ width: `${(l.fat / maxFat) * 100}%` }} />
-                    </div>
-                    <span className="w-24 text-right font-semibold whitespace-nowrap">{reais(l.fat, 0)}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5 text-right">{inteiro(l.itens)}</td>
-                <td className="px-2 py-1.5 text-right whitespace-nowrap">{reais(l.fat / l.dias, 0)}</td>
-                <td className="px-2 py-1.5 text-right whitespace-nowrap">{porDiaBarraca(l) === null ? '—' : reais(porDiaBarraca(l)!, 0)}</td>
-                <td className="px-2 py-1.5 text-right whitespace-nowrap">{l.itens ? reais(l.fat / l.itens) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TabelaEventos linhas={filtradas} maxFat={maxFat} />
       <p className="text-xs text-stone-500">Toque num evento para ver as vendas por dia e produto. Os eventos de jan/2025 a ago/2026 vieram da planilha DPEN.</p>
 
       <Cartao>
         <h2 className="mb-2 font-bold">Produtos que mais faturaram{gastro && ` (${gastro})`}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-stone-500">
-              <tr>
-                <th className="py-1 pr-2">Produto</th>
-                <th className="px-2 py-1 text-right">Itens</th>
-                <th className="px-2 py-1 text-right">Faturamento</th>
-                <th className="px-2 py-1 text-right">% do total</th>
-                <th className="px-2 py-1 text-right">Eventos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranking.map((p) => (
-                <tr key={p.nome} className="border-t border-stone-100">
-                  <td className="py-1 pr-2 font-semibold">{p.nome}</td>
-                  <td className="px-2 py-1 text-right">{inteiro(p.itens)}</td>
-                  <td className="px-2 py-1 text-right">{reais(p.fat, 0)}</td>
-                  <td className="px-2 py-1 text-right">{fatTotal ? ((p.fat / fatTotal) * 100).toFixed(1).replace('.', ',') : '—'}%</td>
-                  <td className="px-2 py-1 text-right">{p.eventos.size}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TabelaRanking ranking={ranking} fatTotal={fatTotal} />
       </Cartao>
+    </div>
+  )
+}
+
+const porDiaBarraca = (l: Linha) => (l.e.barracas ? l.fat / l.dias / l.e.barracas : null)
+
+function TabelaEventos({ linhas, maxFat }: { linhas: Linha[]; maxFat: number }) {
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    data: (l) => l.e.dias[0]?.data ?? '', nome: (l) => l.e.nome, gastro: (l) => l.e.gastronomia, dias: (l) => l.dias, barracas: (l) => l.e.barracas,
+    fat: (l) => l.fat, itens: (l) => l.itens, porDia: (l) => l.fat / l.dias, diaBarraca: porDiaBarraca, preco: (l) => (l.itens ? l.fat / l.itens : null),
+  }, { col: 'data', desc: true })
+  const num = 'px-2! text-right'
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
+      <table className="w-full text-sm">
+        <thead className="bg-stone-50 text-left text-xs text-stone-500">
+          <tr>
+            {cabecalho('nome', 'Evento')}
+            {cabecalho('data', 'Data', 'px-2!', true)}
+            {cabecalho('gastro', 'Gastronomia', 'px-2!')}
+            {cabecalho('dias', 'Dias', num, true)}
+            {cabecalho('barracas', 'Barracas', num, true)}
+            {cabecalho('fat', 'Faturamento', 'px-2!', true)}
+            {cabecalho('itens', 'Itens', num, true)}
+            {cabecalho('porDia', 'Por dia', num, true)}
+            {cabecalho('diaBarraca', 'Dia por barraca', num, true)}
+            {cabecalho('preco', 'Preço médio', num, true)}
+          </tr>
+        </thead>
+        <tbody>
+          {ordenada.map((l) => (
+            <tr key={l.e.id} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50" onClick={() => ir(`eventos/${l.e.id}/vendas`)}>
+              <td className="px-3 py-1.5">
+                <span className="font-semibold">{l.e.nome}</span>
+                {l.e.cidade && <span className="block text-xs text-stone-500">{l.e.cidade}</span>}
+              </td>
+              <td className="px-2 py-1.5 whitespace-nowrap text-stone-600">{l.e.dias[0] ? dataCurta(l.e.dias[0].data) : '—'}</td>
+              <td className="px-2 py-1.5 text-stone-600">{l.e.gastronomia ?? '—'}</td>
+              <td className="px-2 py-1.5 text-right">{l.dias}</td>
+              <td className="px-2 py-1.5 text-right">{doNumero(l.e.barracas)}</td>
+              <td className="min-w-40 px-2 py-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-2.5 flex-1 rounded-full bg-stone-100">
+                    <div className="h-2.5 rounded-full bg-stone-700" style={{ width: `${(l.fat / maxFat) * 100}%` }} />
+                  </div>
+                  <span className="w-24 text-right font-semibold whitespace-nowrap">{reais(l.fat, 0)}</span>
+                </div>
+              </td>
+              <td className="px-2 py-1.5 text-right">{inteiro(l.itens)}</td>
+              <td className="px-2 py-1.5 text-right whitespace-nowrap">{reais(l.fat / l.dias, 0)}</td>
+              <td className="px-2 py-1.5 text-right whitespace-nowrap">{porDiaBarraca(l) === null ? '—' : reais(porDiaBarraca(l)!, 0)}</td>
+              <td className="px-2 py-1.5 text-right whitespace-nowrap">{l.itens ? reais(l.fat / l.itens) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+type Produto = { nome: string; itens: number; fat: number; eventos: Set<string> }
+function TabelaRanking({ ranking, fatTotal }: { ranking: Produto[]; fatTotal: number }) {
+  const { ordenada, cabecalho } = useOrdem(ranking, {
+    nome: (p) => p.nome, itens: (p) => p.itens, fat: (p) => p.fat, pct: (p) => p.fat, eventos: (p) => p.eventos.size,
+  }, { col: 'fat', desc: true })
+  const num = 'px-2! py-1! text-right'
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-stone-500">
+          <tr>
+            {cabecalho('nome', 'Produto', 'pl-0! pr-2! py-1!')}
+            {cabecalho('itens', 'Itens', num, true)}
+            {cabecalho('fat', 'Faturamento', num, true)}
+            {cabecalho('pct', '% do total', num, true)}
+            {cabecalho('eventos', 'Eventos', num, true)}
+          </tr>
+        </thead>
+        <tbody>
+          {ordenada.map((p) => (
+            <tr key={p.nome} className="border-t border-stone-100">
+              <td className="py-1 pr-2 font-semibold">{p.nome}</td>
+              <td className="px-2 py-1 text-right">{inteiro(p.itens)}</td>
+              <td className="px-2 py-1 text-right">{reais(p.fat, 0)}</td>
+              <td className="px-2 py-1 text-right">{fatTotal ? ((p.fat / fatTotal) * 100).toFixed(1).replace('.', ',') : '—'}%</td>
+              <td className="px-2 py-1 text-right">{p.eventos.size}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar, Selo, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { addMeses, hoje, mesDe, nomeMesAno, primeiroDia, ultimoDia } from '../lib/datas'
 import { lerNumero, reais } from '../lib/financeiro'
@@ -145,13 +146,18 @@ export default function Caixinha() {
 }
 
 function Tabela({ titulo, linhas }: { titulo: string; linhas: LinhaCaixinha[] }) {
+  const posicao = new Map(linhas.map((l, k) => [l.pessoa.id, k]))
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    ordem: (l) => posicao.get(l.pessoa.id), nome: (l) => l.pessoa.nome, pontos: (l) => l.pontos, parte: (l) => l.parte,
+    faltas: (l) => l.faltas || null, advertencias: (l) => l.advertencias || null, bonus: (l) => l.bonus || null, total: (l) => l.total,
+  }, { col: 'ordem' })
   if (!linhas.length) return null
   return (
     <section>
       <h2 className="mb-2 font-bold">{titulo}</h2>
       {/* Celular: um cartão por pessoa, com o total sempre visível. */}
       <div className="divide-y divide-stone-100 rounded-2xl bg-white ring-1 ring-stone-200 sm:hidden">
-        {linhas.map((l) => (
+        {ordenada.map((l) => (
           <button key={l.pessoa.id} onClick={() => ir('rh/equipe/' + l.pessoa.id)} className="flex w-full items-center gap-3 p-3 text-left">
             <Avatar nome={l.pessoa.nome} foto={l.pessoa.fotoUrl} tamanho={32} />
             <span className="min-w-0 flex-1">
@@ -171,17 +177,17 @@ function Tabela({ titulo, linhas }: { titulo: string; linhas: LinhaCaixinha[] })
         <table className="w-full min-w-[640px] text-sm tabular-nums">
           <thead>
             <tr className="border-b border-stone-200 text-left text-stone-500">
-              <th className="px-3 py-2 font-semibold">Funcionário</th>
-              <th className="px-2 py-2 text-right font-semibold">Pontos</th>
-              <th className="px-2 py-2 text-right font-semibold">Parte</th>
-              <th className="px-2 py-2 text-right font-semibold">Faltas</th>
-              <th className="px-2 py-2 text-right font-semibold">Advert.</th>
-              <th className="px-2 py-2 text-right font-semibold">Bônus</th>
-              <th className="px-3 py-2 text-right font-semibold">Total</th>
+              {cabecalho('nome', 'Funcionário')}
+              {cabecalho('pontos', 'Pontos', 'px-2! text-right', true)}
+              {cabecalho('parte', 'Parte', 'px-2! text-right', true)}
+              {cabecalho('faltas', 'Faltas', 'px-2! text-right', true)}
+              {cabecalho('advertencias', 'Advert.', 'px-2! text-right', true)}
+              {cabecalho('bonus', 'Bônus', 'px-2! text-right', true)}
+              {cabecalho('total', 'Total', 'text-right', true)}
             </tr>
           </thead>
           <tbody>
-            {linhas.map((l) => (
+            {ordenada.map((l) => (
               <tr key={l.pessoa.id} className="border-b border-stone-100 last:border-0">
                 <td className="px-3 py-2">
                   <button onClick={() => ir('rh/equipe/' + l.pessoa.id)} className="flex items-center gap-2 text-left">

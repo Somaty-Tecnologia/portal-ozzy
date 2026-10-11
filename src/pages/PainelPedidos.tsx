@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarraParticipacao, COR_SEMANA, ColunasSemanas, Legenda, LinhasDias, TINTA, moeda, numero, pct, type Semana } from '../components/graficos'
+import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, hoje, inicioDaSemana } from '../lib/datas'
 import { CANAIS, apelidoUnidade, type Avaliacao, type Canal, type VendaDia } from '../lib/types'
@@ -27,6 +28,10 @@ export default function PainelPedidos({ unidade, avaliacoes }: { unidade: string
   const r = useMemo(() => resumir(todas.filter((v) => !unidade || v.unidadeId === unidade), seg, hj, decorridos), [todas, unidade, seg, hj, decorridos])
   const lojas = unidade ? [] : unidades.map((u) => ({ u, r: resumir(todas.filter((v) => v.unidadeId === u.id), seg, hj, decorridos) }))
   const comparacao = `vs ${DIAS[0].toLowerCase()} a ${DIAS[decorridos - 1].toLowerCase()} da semana passada`
+  const { ordenada: canais, cabecalho } = useOrdem(CANAIS, {
+    ordem: (c) => CANAIS.indexOf(c), nome: (c) => c.nome, pedidos: (c) => r.canais[c.valor].pedidos, pct: (c) => r.canais[c.valor].pedidos, faturado: (c) => r.canais[c.valor].faturamento,
+    ticket: (c) => r.canais[c.valor].faturamento / (r.canais[c.valor].pedidos || 1), vs: (c) => variacao(r.canais[c.valor].pedidos, r.canaisPassada[c.valor].pedidos),
+  }, { col: 'ordem' })
 
   if (!todas.length) return <p className="text-sm text-stone-500">Carregando pedidos…</p>
 
@@ -100,16 +105,16 @@ export default function PainelPedidos({ unidade, avaliacoes }: { unidade: string
           <table className="w-full min-w-[480px] text-sm tabular-nums">
             <thead>
               <tr className="border-b border-stone-200 text-left text-stone-500">
-                <th className="py-2 pr-3 font-semibold">Canal</th>
-                <th className="px-2 py-2 text-right font-semibold">Pedidos</th>
-                <th className="px-2 py-2 text-right font-semibold">% dos pedidos</th>
-                <th className="px-2 py-2 text-right font-semibold">Faturado</th>
-                <th className="px-2 py-2 text-right font-semibold">Ticket</th>
-                <th className="py-2 pl-2 text-right font-semibold">vs semana passada</th>
+                {cabecalho('nome', 'Canal', 'pl-0! pr-3!')}
+                {cabecalho('pedidos', 'Pedidos', 'px-2! text-right', true)}
+                {cabecalho('pct', '% dos pedidos', 'px-2! text-right', true)}
+                {cabecalho('faturado', 'Faturado', 'px-2! text-right', true)}
+                {cabecalho('ticket', 'Ticket', 'px-2! text-right', true)}
+                {cabecalho('vs', 'vs semana passada', 'pl-2! pr-0! text-right', true)}
               </tr>
             </thead>
             <tbody>
-              {CANAIS.map((c) => {
+              {canais.map((c) => {
                 const v = r.canais[c.valor]
                 const antes = r.canaisPassada[c.valor]
                 return (

@@ -259,6 +259,10 @@ export interface Store {
   insumos(): Promise<Insumo[]>
   salvarInsumo(i: Omit<Insumo, 'id' | 'precoEm'> & { id?: string }): Promise<Insumo>
   precosInsumo(insumoId: string): Promise<PrecoInsumo[]>
+  // Cadastro de categorias dos materiais: renomear muda todos os materiais; juntar com null tira a categoria.
+  categoriasInsumo(): Promise<string[]>
+  salvarCategoriaInsumo(nome: string, antigo?: string): Promise<void>
+  juntarCategoriaInsumo(de: string, para: string | null): Promise<void>
   receitas(): Promise<Receita[]>
   // Todas as versões de todas as fichas, com os itens (a tela calcula o custo da versão atual).
   versoesReceitas(): Promise<VersaoReceita[]>

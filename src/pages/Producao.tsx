@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Modal, Vazio, estiloEntrada } from '../components/ui'
+import { useOrdem } from '../components/Ordenar'
 import { agruparPorCategoria } from '../lib/categorias'
 import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
@@ -71,12 +72,16 @@ function Pedidos() {
   }, [store, para])
   useEffect(() => { setLinhas(null); carregar() }, [carregar])
 
-  if (erro) return <p className="text-red-700">{erro}</p>
   const preparar = (linhas ?? []).filter((l) => l.prePreparo)
   const separar = (linhas ?? []).filter((l) => !l.prePreparo)
   const temNa = (l: PedidoProducao) => lerValor(tem[l.insumoId] ?? '') ?? 0
   const fazer = (l: PedidoProducao) => Math.max(0, Math.round((l.total - temNa(l)) * 1000) / 1000)
   const feito = (l: PedidoProducao) => feitos.filter((p) => p.insumoId === l.insumoId).reduce((t, p) => t + p.quantidade, 0)
+  const posicao = new Map((linhas ?? []).map((l, k) => [l.insumoId, k]))
+  const { ordenada: prepararOrd, cabecalho } = useOrdem(preparar, {
+    ordem: (l) => posicao.get(l.insumoId), nome: (l) => l.nome, psd: (l) => l.psd || null, va: (l) => l.va || null, total: (l) => l.total, fazer, feito: (l) => feito(l) || null,
+  }, { col: 'ordem' })
+  if (erro) return <p className="text-red-700">{erro}</p>
   const abrirLancar = async (l: PedidoProducao) => {
     try {
       setDados(dados ?? (await carregarDados(store)))
@@ -143,12 +148,12 @@ function Pedidos() {
               <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
                 <table className="w-full text-sm">
                   <thead><tr className="text-left text-xs text-stone-500">
-                    <th className="px-2 py-2">Preparo</th><th className="px-1 py-2 text-right">PSD</th><th className="px-1 py-2 text-right">Vila</th>
-                    <th className="px-1 py-2 text-right">Total</th><th className="px-1 py-2 text-center">Tem na Central</th><th className="px-2 py-2 text-right">Fazer</th>
-                    <th className="px-2 py-2 text-right">Feito</th>
+                    {cabecalho('nome', 'Preparo', 'px-2!')}{cabecalho('psd', 'PSD', 'px-1! text-right', true)}{cabecalho('va', 'Vila', 'px-1! text-right', true)}
+                    {cabecalho('total', 'Total', 'px-1! text-right', true)}<th className="px-1 py-2 text-center">Tem na Central</th>{cabecalho('fazer', 'Fazer', 'px-2! text-right', true)}
+                    {cabecalho('feito', 'Feito', 'px-2! text-right', true)}
                   </tr></thead>
                   <tbody className="divide-y divide-stone-100">
-                    {preparar.map((l) => (
+                    {prepararOrd.map((l) => (
                       <tr key={l.insumoId}>
                         <td className="px-2 py-2 font-semibold">{l.nome} <span className="text-xs font-normal text-stone-500">{l.unidadeContagem}</span></td>
                         <td className="px-1 py-2 text-right">{q(l.psd)}</td>
@@ -189,24 +194,7 @@ function Pedidos() {
               const doSetor = [...preparar, ...separar].filter((l) => l.setor === s)
               if (!doSetor.length) return null
               return (
-                <div key={s} className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
-                  <p className="px-3 pt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">{NOME_SETOR[s]}</p>
-                  <table className="w-full text-sm">
-                    <thead><tr className="text-left text-xs text-stone-500">
-                      <th className="px-3 py-2">Item</th><th className="px-2 py-2 text-right">PSD</th><th className="px-2 py-2 text-right">Vila</th><th className="px-3 py-2 text-right">Total</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {doSetor.map((l) => (
-                        <tr key={l.insumoId}>
-                          <td className="px-3 py-1.5">{l.nome} <span className="text-xs text-stone-500">{l.unidadeContagem}</span></td>
-                          <td className="px-2 py-1.5 text-right">{q(l.psd)}</td>
-                          <td className="px-2 py-1.5 text-right">{q(l.va)}</td>
-                          <td className="px-3 py-1.5 text-right font-semibold">{mostrarQtd(l.total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <TabelaSeparar key={s} titulo={NOME_SETOR[s]} linhas={doSetor} />
               )
             })}
           </section>
@@ -216,6 +204,33 @@ function Pedidos() {
         <LancarProducao d={dados} inicial={{ insumoId: lancar.insumoId, quantidade: unidadeIgual(lancar.unidadeContagem, dados.insumos.find((i) => i.id === lancar.insumoId)?.unidade) && fazer(lancar) - feito(lancar) > 0 ? Math.round((fazer(lancar) - feito(lancar)) * 1000) / 1000 : null }}
           aoFechar={() => setLancar(null)} aoSalvar={async () => { setLancar(null); avisar('Produção lançada: estoque atualizado'); await carregar() }} />
       )}
+    </div>
+  )
+}
+
+function TabelaSeparar({ titulo, linhas }: { titulo: string; linhas: PedidoProducao[] }) {
+  const posicao = new Map(linhas.map((l, k) => [l.insumoId, k]))
+  const { ordenada, cabecalho } = useOrdem(linhas, {
+    ordem: (l) => posicao.get(l.insumoId), nome: (l) => l.nome, psd: (l) => l.psd || null, va: (l) => l.va || null, total: (l) => l.total,
+  }, { col: 'ordem' })
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
+      <p className="px-3 pt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">{titulo}</p>
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-xs text-stone-500">
+          {cabecalho('nome', 'Item')}{cabecalho('psd', 'PSD', 'px-2! text-right', true)}{cabecalho('va', 'Vila', 'px-2! text-right', true)}{cabecalho('total', 'Total', 'text-right', true)}
+        </tr></thead>
+        <tbody className="divide-y divide-stone-100">
+          {ordenada.map((l) => (
+            <tr key={l.insumoId}>
+              <td className="px-3 py-1.5">{l.nome} <span className="text-xs text-stone-500">{l.unidadeContagem}</span></td>
+              <td className="px-2 py-1.5 text-right">{q(l.psd)}</td>
+              <td className="px-2 py-1.5 text-right">{q(l.va)}</td>
+              <td className="px-3 py-1.5 text-right font-semibold">{mostrarQtd(l.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
