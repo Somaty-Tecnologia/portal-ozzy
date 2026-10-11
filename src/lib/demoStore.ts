@@ -216,9 +216,9 @@ const insumosDemo: Insumo[] = [
   ins('in10', 'Cheiro verde', 'Hortifruti', 'kg', 12, 'fo2'),
   ins('in11', 'Alho', 'Hortifruti', 'kg', 30, 'fo2'),
   // Lista de fechamento das lojas (exemplo; a real vem da Eclética).
-  ins('in12', 'Maionese verde', 'Pré Preparos', 'kg', 8.8, null, { ecleticaCodigo: '100901', setorEnvio: 'cozinha' }),
-  ins('in13', 'Molho especial', 'Pré Preparos', 'kg', 14, null, { ecleticaCodigo: '100902', setorEnvio: 'cozinha' }),
-  ins('in14', 'Cebola caramelizada', 'Pré Preparos', 'kg', 16, null, { ecleticaCodigo: '100903', setorEnvio: 'cozinha' }),
+  ins('in12', 'Maionese verde', 'Pré-preparos', 'kg', 8.8, null, { ecleticaCodigo: '100901', setorEnvio: 'cozinha' }),
+  ins('in13', 'Molho especial', 'Pré-preparos', 'kg', 14, null, { ecleticaCodigo: '100902', setorEnvio: 'cozinha' }),
+  ins('in14', 'Cebola caramelizada', 'Pré-preparos', 'kg', 16, null, { ecleticaCodigo: '100903', setorEnvio: 'cozinha' }),
   ins('in15', 'Alface americana', 'Hortifruti', 'un', 4, 'fo2', { ecleticaCodigo: '100904', setorEnvio: 'cozinha', embalagem: 'Caixa', embalagemQtd: 12 }),
   ins('in16', 'Blend burger 1 unidade (100g)', 'Proteínas e Ovos', 'kg', 42, null, { ecleticaCodigo: '100905', setorEnvio: 'cozinha' }),
   ins('in17', 'Bacon fatiado', 'Proteínas e Ovos', 'kg', 38, 'fo1', { ecleticaCodigo: '100906', setorEnvio: 'cozinha', estoqueMinimo: 5 }),
@@ -226,7 +226,7 @@ const insumosDemo: Insumo[] = [
   ins('in19', 'Coca cola 350ml lata', 'Bebidas', 'un', 3.2, 'fo1', { ecleticaCodigo: '88', setorEnvio: 'atendimento', embalagem: 'Fardo', embalagemQtd: 12 }),
   ins('in20', 'Guardanapo sachê personalizado', 'Utensílios e Descartáveis', 'un', 0.05, null, { ecleticaCodigo: '100908', setorEnvio: 'atendimento' }),
   ins('in21', 'Saco kraft P PCT C/ 100', 'Embalagens', 'un', 0.3, 'fo3', { ecleticaCodigo: '100909', setorEnvio: 'atendimento' }),
-  ins('in22', 'Água sanitária 2L', 'Produtos de Limpeza', 'un', 6.5, null, { ecleticaCodigo: '100619', setorEnvio: 'cozinha' }),
+  ins('in22', 'Água sanitária 2L', 'Limpeza', 'un', 6.5, null, { ecleticaCodigo: '100619', setorEnvio: 'cozinha' }),
 ]
 const prePreparoDemo = new Set(['in12', 'in13', 'in14'])
 const precosInsumoDemo: PrecoInsumo[] = insumosDemo.map((i) => ({ id: 'pi' + i.id, insumoId: i.id, preco: i.preco, em: haHoras(24 * 5), por: null, origem: 'exemplo' }))
@@ -2516,7 +2516,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
         insumoId = r.insumoId ?? insumosDemo.find((i) => i.nome.toLowerCase() === r.nome.toLowerCase())?.id ?? null
         if (!insumoId) {
           insumoId = novoId('in')
-          insumosDemo.push(ins(insumoId, r.nome, 'Preparos', r.unidade, null, null, { observacao: 'Produção própria (criado ao lançar a produção).' }))
+          insumosDemo.push(ins(insumoId, r.nome, 'Pré-preparos', r.unidade, null, null, { observacao: 'Produção própria (criado ao lançar a produção).' }))
         }
         r.insumoId = insumoId
       }
