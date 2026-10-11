@@ -368,14 +368,15 @@ function ConferenciaPrecos({ insumos, fornecedores, categorias, cat, aoMudar }: 
   const [alertas, setAlertas] = useState<AlertaPreco[] | null>(null)
   const [erro, setErro] = useState('')
   const [so, setSo] = useState<'fora' | 'todos'>('fora')
+  const [inativos, setInativos] = useState(false)
   const [editando, setEditando] = useState<Insumo | null>(null)
   useEffect(() => {
     let vivo = true
     Promise.all([store.referenciasPreco(), store.produtosVenda().catch(() => [])]).then(([refs, ps]) => {
-      if (vivo) setAlertas(conferirPrecos(insumos, cat, refs, ps.filter((p) => p.ativo).map((p) => ({ nome: p.nome, receitaId: p.receitaId, preco: p.preco ?? p.precoPizza }))))
+      if (vivo) setAlertas(conferirPrecos(insumos, cat, refs, ps.filter((p) => p.ativo).map((p) => ({ nome: p.nome, receitaId: p.receitaId, preco: p.preco ?? p.precoPizza })), inativos))
     }, (e) => setErro((e as Error).message))
     return () => { vivo = false }
-  }, [store, insumos, cat])
+  }, [store, insumos, cat, inativos])
   const lista = (alertas ?? []).filter((a) => so === 'todos' || a.gravidade === 'fora')
   const { ordenada, cabecalho } = useOrdem(lista, {
     nome: (a) => a.insumo.nome, categoria: (a) => a.insumo.categoria, preco: (a) => a.insumo.preco, gravidade: (a) => (a.gravidade === 'fora' ? 0 : 1),
@@ -403,6 +404,9 @@ function ConferenciaPrecos({ insumos, fornecedores, categorias, cat, aoMudar }: 
         {([['fora', `Fora do padrão (${fora})`], ['todos', `Tudo para conferir (${alertas.length})`]] as const).map(([v, n]) => (
           <button key={v} onClick={() => setSo(v)} className={`rounded-lg px-3 py-1.5 font-semibold ${so === v ? 'bg-carvao text-white' : 'text-stone-600 hover:bg-stone-200'}`}>{n}</button>
         ))}
+        <label className="ml-auto flex items-center gap-2 text-stone-600">
+          <input type="checkbox" className="accent-carvao" checked={inativos} onChange={(e) => setInativos(e.target.checked)} /> Mostrar inativos
+        </label>
       </div>
       {lista.length === 0 ? <Vazio>Nenhum preço fora do padrão. 👍</Vazio> : (
         <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-stone-200">
@@ -420,7 +424,7 @@ function ConferenciaPrecos({ insumos, fornecedores, categorias, cat, aoMudar }: 
               {ordenada.map((a) => (
                 <tr key={a.insumo.id} className="border-t border-stone-100 align-top">
                   <td className="px-3 py-2">
-                    <button onClick={() => setEditando(a.insumo)} className="text-left font-semibold hover:underline">{a.insumo.nome}</button>
+                    <button onClick={() => setEditando(a.insumo)} className="text-left font-semibold hover:underline">{a.insumo.nome}</button> {!a.insumo.ativo && <Selo>Inativo</Selo>}
                     <div className="text-xs text-stone-500">{a.insumo.ecleticaCodigo && `cód. ${a.insumo.ecleticaCodigo}`}<span className="md:hidden">{a.insumo.categoria && ` · ${a.insumo.categoria}`}</span></div>
                   </td>
                   <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{a.insumo.categoria ?? '—'}</td>

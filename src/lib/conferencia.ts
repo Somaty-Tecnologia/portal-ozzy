@@ -27,12 +27,12 @@ const mediana = (ns: number[]) => {
   return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2
 }
 
-// Material que não entra na conferência (observações do PDV não são compradas).
-export const foraDaConferencia = (i: Insumo) => !i.ativo || i.categoria === 'Observações do PDV'
+// Material que não entra na conferência: inativo (Heitor, 11/10: só volta se for reativado) e observação do PDV (não é comprada).
+export const foraDaConferencia = (i: Insumo, inativos = false) => (!inativos && !i.ativo) || i.categoria === 'Observações do PDV'
 
-export function conferirPrecos(insumos: Insumo[], cat: Catalogo, refs: ReferenciaPreco[], produtos: { nome: string; receitaId: string | null; preco: number | null }[] = []): AlertaPreco[] {
+export function conferirPrecos(insumos: Insumo[], cat: Catalogo, refs: ReferenciaPreco[], produtos: { nome: string; receitaId: string | null; preco: number | null }[] = [], inativos = false): AlertaPreco[] {
   const porId = new Map(refs.map((r) => [r.insumoId, r]))
-  const ativos = insumos.filter((i) => !foraDaConferencia(i))
+  const ativos = insumos.filter((i) => !foraDaConferencia(i, inativos))
   const grupos = new Map<string, number[]>()
   for (const i of ativos) {
     if (!i.preco) continue
