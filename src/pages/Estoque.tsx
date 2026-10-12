@@ -13,7 +13,7 @@ import {
   type CentroCusto, type ContaContabil, type ContaPagar, type FormaPagamento, type Fornecedor, type Insumo, type MovimentoEstoque, type NotaFiscal, type SaldoEstoque,
 } from '../lib/types'
 
-const ABAS = [
+export const ABAS_ESTOQUE = [
   { id: '', nome: 'Notas fiscais' },
   { id: 'saldo', nome: 'Saldo por loja' },
   { id: 'movimentos', nome: 'Movimentos' },
@@ -21,11 +21,11 @@ const ABAS = [
 
 // Módulo Estoque (09/10): tudo começa pela nota fiscal. #/estoque, #/estoque/nota/<id>, #/estoque/saldo, #/estoque/movimentos.
 export default function Estoque({ sub, param }: { sub?: string; param?: string }) {
-  const aba = sub === 'nota' ? '' : ABAS.some((a) => a.id && a.id === sub) ? sub! : ''
+  const aba = sub === 'nota' ? '' : ABAS_ESTOQUE.some((a) => a.id && a.id === sub) ? sub! : ''
   return (
     <div className="space-y-4">
       <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
-        {ABAS.map((a) => (
+        {ABAS_ESTOQUE.map((a) => (
           <button
             key={a.id}
             onClick={() => ir(a.id ? 'estoque/' + a.id : 'estoque')}

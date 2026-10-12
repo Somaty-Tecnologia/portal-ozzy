@@ -62,7 +62,7 @@ function pendencias(e: Evento): string[] {
   return p
 }
 
-const ABAS = [
+export const ABAS_EVENTOS = [
   { id: '', nome: 'Eventos' },
   { id: 'painel', nome: 'Painel' },
   { id: 'historico', nome: 'Comparativo' },
@@ -75,11 +75,11 @@ const ABAS = [
 
 // Módulo Eventos: eventos (#/eventos/<id>), fichas (#/eventos/fichas/<id>), insumos e fornecedores.
 export default function ModuloEventos({ sub, param }: { sub?: string; param?: string }) {
-  const aba = ABAS.some((a) => a.id && a.id === sub) ? sub! : ''
+  const aba = ABAS_EVENTOS.some((a) => a.id && a.id === sub) ? sub! : ''
   return (
     <div className="space-y-4">
       <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
-        {ABAS.map((a) => (
+        {ABAS_EVENTOS.map((a) => (
           <button
             key={a.id}
             onClick={() => ir(a.id ? 'eventos/' + a.id : 'eventos')}

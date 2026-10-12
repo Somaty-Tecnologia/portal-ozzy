@@ -1,7 +1,7 @@
 import type { IdIcone } from '../lib/modulos'
 
 // Ícones de traço simples, desenhados à mão para não depender de biblioteca.
-const CAMINHOS: Record<IdIcone | 'menu' | 'relogio' | 'pedidos' | 'avaliacoes', string> = {
+const CAMINHOS: Record<IdIcone | 'menu' | 'relogio' | 'pedidos' | 'avaliacoes' | 'busca', string> = {
   inicio: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
   rh: 'M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19v-1.5a3.5 3.5 0 0 0-2.5-3.4M15.5 4.6a3 3 0 0 1 0 5.8',
   freelancers: 'M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M4 19v-1.5A3.5 3.5 0 0 1 7.5 14h5M15 15h6M18 12v6',
@@ -19,6 +19,7 @@ const CAMINHOS: Record<IdIcone | 'menu' | 'relogio' | 'pedidos' | 'avaliacoes', 
   manutencao: 'M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.3 2.3-2.4-.6-.6-2.4z',
   eventos: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
   menu: 'M4 7h16M4 12h16M4 17h16',
+  busca: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4',
   relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2',
   pedidos: 'M6 3h12l1 18H5zM9 7a3 3 0 0 0 6 0',
   avaliacoes: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',

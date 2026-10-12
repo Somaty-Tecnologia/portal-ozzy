@@ -18,8 +18,8 @@ import Escala from './pages/Escala'
 import Equipe from './pages/Equipe'
 import Perfil from './pages/Perfil'
 import EmBreve from './pages/EmBreve'
-import Cadastros from './pages/Cadastros'
-import Compras from './pages/Compras'
+import Cadastros, { ABAS_CADASTROS } from './pages/Cadastros'
+import Compras, { ABAS_COMPRAS } from './pages/Compras'
 import Vencimentos from './pages/Vencimentos'
 import Caixinha from './pages/Caixinha'
 import Turnos from './pages/Turnos'
@@ -29,12 +29,13 @@ import Manutencao from './pages/Manutencao'
 import FichasEvento from './pages/FichasEvento'
 import Freelancers from './pages/Freelancers'
 import Motoboys from './pages/Motoboys'
-import Producao from './pages/Producao'
+import Producao, { ABAS_PRODUCAO } from './pages/Producao'
 import Fechamento from './pages/Fechamento'
 import Salarios from './pages/Salarios'
-import ModuloFinanceiro from './pages/ModuloFinanceiro'
-import Estoque from './pages/Estoque'
-import Eventos from './pages/Eventos'
+import ModuloFinanceiro, { ABAS_FINANCEIRO } from './pages/ModuloFinanceiro'
+import Estoque, { ABAS_ESTOQUE } from './pages/Estoque'
+import Eventos, { ABAS_EVENTOS } from './pages/Eventos'
+import IrPara, { type Destino } from './components/IrPara'
 import { MeuEvento } from './pages/EventoLogistica'
 import Icone from './components/Icone'
 import logo from './assets/logo.png'
@@ -142,6 +143,42 @@ function Casca({ aoSair }: { aoSair: () => void }) {
   ]
   const abaRh = abasRh.find((a) => a.id === sub)?.id ?? 'avisos'
 
+  // Abas de cada menu, com endereço próprio: aparecem embaixo do menu na lateral e no "Ir para" (Heitor, 12/10).
+  const abasDe = (id: string): { id: string; nome: string }[] =>
+    id === 'rh' ? abasRh
+      : id === 'cadastros' ? ABAS_CADASTROS
+      : id === 'producao' ? ABAS_PRODUCAO.filter((a) => !a.soGestao || podeGerenciar(eu.nivel))
+      : id === 'compras' ? ABAS_COMPRAS
+      : id === 'estoque' ? ABAS_ESTOQUE
+      : id === 'financeiro' ? ABAS_FINANCEIRO
+      : id === 'eventos' ? ABAS_EVENTOS
+      : []
+  const caminhoDe = (m: string, aba: string) => (aba ? `${m}/${aba}` : m)
+  const abaAtiva = (m: string) => (m === 'rh' ? abaRh : abasDe(m).some((a) => a.id && a.id === sub) ? sub! : '')
+  const [abertos, setAbertos] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('menu-abertos') ?? '[]') } catch { return [] }
+  })
+  const alternar = (id: string) => {
+    const novo = abertos.includes(id) ? abertos.filter((x) => x !== id) : [...abertos, id]
+    setAbertos(novo)
+    try { localStorage.setItem('menu-abertos', JSON.stringify(novo)) } catch { /* sem armazenamento */ }
+  }
+  const destinos = modulos.filter((m) => m.pronto).flatMap<Destino>((m) => {
+    const abas = abasDe(m.id)
+    return abas.length ? abas.map((a) => ({ caminho: caminhoDe(m.id, a.id), modulo: m.nome, aba: a.nome })) : [{ caminho: m.id, modulo: m.nome }]
+  })
+  const [irPara, setIrPara] = useState(false)
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (e.code === 'KeyK' && (e.altKey || e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        setIrPara(true)
+      }
+    }
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [])
+
   let conteudo
   // Quem está escalado num evento confere a separação e conta as sobras, mesmo sem ver o módulo Eventos.
   if (area === 'meu-evento') conteudo = <MeuEvento id={sub} aba={param} />
@@ -151,11 +188,11 @@ function Casca({ aoSair }: { aoSair: () => void }) {
   else if (modulo.id === 'fichas') conteudo = <FichasEvento area="lojas" id={sub} key={sub ?? 'lista'} />
   else if (modulo.id === 'financeiro') conteudo = <ModuloFinanceiro sub={sub} />
   else if (modulo.id === 'cadastros') conteudo = <Cadastros aba={sub} key={sub ?? 'cadastros'} />
-  else if (modulo.id === 'compras') conteudo = <Compras />
+  else if (modulo.id === 'compras') conteudo = <Compras sub={sub} />
   else if (modulo.id === 'estoque') conteudo = <Estoque sub={sub} param={param} />
   else if (modulo.id === 'freelancers') conteudo = <Freelancers />
   else if (modulo.id === 'motoboys') conteudo = <Motoboys />
-  else if (modulo.id === 'producao') conteudo = <Producao />
+  else if (modulo.id === 'producao') conteudo = <Producao sub={sub} />
   else if (modulo.id === 'fechamento') conteudo = <Fechamento />
   else if (modulo.id === 'eventos') conteudo = <Eventos sub={sub} param={param} />
   else if (modulo.id !== 'rh') conteudo = <EmBreve modulo={modulo} />
@@ -179,25 +216,56 @@ function Casca({ aoSair }: { aoSair: () => void }) {
           <div className="rotulo-marca text-[10px] text-ozzy-400">Portal do Time</div>
         </div>
       </button>
-      <div className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+      <div className="px-3 pt-3">
+        <button onClick={() => setIrPara(true)} className="flex w-full items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-left text-sm text-stone-400 hover:bg-white/15 hover:text-white">
+          <Icone nome="busca" tamanho={16} />
+          <span className="flex-1">Ir para…</span>
+          <kbd className="rounded bg-white/10 px-1.5 text-[10px] font-semibold">Alt K</kbd>
+        </button>
+      </div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {modulos.map((m) => {
           const ativo = m.id === modulo.id
+          const abas = m.pronto ? abasDe(m.id) : []
+          const aberto = abas.length > 0 && (ativo || abertos.includes(m.id))
           return (
-            <button
-              key={m.id}
-              onClick={() => ir(m.id === 'rh' ? 'rh/avisos' : m.id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
-                ativo ? 'bg-ozzy-500 text-carvao' : 'hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icone nome={m.id} />
-              <span className="flex-1">{m.nome}</span>
-              {!m.pronto && (
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${ativo ? 'bg-carvao/15' : 'bg-white/10 text-stone-400'}`}>
-                  em breve
-                </span>
+            <div key={m.id}>
+              <div className={`flex items-center rounded-xl transition ${ativo ? 'bg-ozzy-500 text-carvao' : 'hover:bg-white/10 hover:text-white'}`}>
+                <button
+                  onClick={() => ir(m.id === 'rh' ? 'rh/avisos' : m.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold"
+                >
+                  <Icone nome={m.id} />
+                  <span className="flex-1">{m.nome}</span>
+                  {!m.pronto && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${ativo ? 'bg-carvao/15' : 'bg-white/10 text-stone-400'}`}>
+                      em breve
+                    </span>
+                  )}
+                </button>
+                {abas.length > 0 && !ativo && (
+                  <button onClick={() => alternar(m.id)} className="px-3 py-2.5 text-xs opacity-60 hover:opacity-100" aria-label={`${aberto ? 'Fechar' : 'Abrir'} as abas de ${m.nome}`} aria-expanded={aberto}>
+                    {aberto ? '▾' : '▸'}
+                  </button>
+                )}
+              </div>
+              {aberto && (
+                <div className="my-0.5 ml-6 space-y-0.5 border-l border-white/10 pl-2">
+                  {abas.map((a) => {
+                    const essa = ativo && abaAtiva(m.id) === a.id
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => ir(caminhoDe(m.id, a.id))}
+                        className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] ${essa ? 'bg-white/15 font-semibold text-white' : 'hover:bg-white/10 hover:text-white'}`}
+                      >
+                        {a.nome}
+                      </button>
+                    )
+                  })}
+                </div>
               )}
-            </button>
+            </div>
           )
         })}
       </div>
@@ -244,6 +312,9 @@ function Casca({ aoSair }: { aoSair: () => void }) {
           </button>
           <img src={logo} alt="The Ozzy" className="h-8 w-8" />
           <span className="flex-1 truncate text-sm font-semibold text-stone-600">{modulo.id === 'inicio' ? '' : modulo.nome}</span>
+          <button onClick={() => setIrPara(true)} className="rounded-lg p-1.5 text-stone-700 hover:bg-stone-100" aria-label="Ir para">
+            <Icone nome="busca" tamanho={20} />
+          </button>
         </div>
       </header>
 
@@ -268,6 +339,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
       )}
 
       <main className="mx-auto max-w-5xl px-4 py-5 pb-12">{conteudo}</main>
+      <IrPara destinos={destinos} aberto={irPara} aoFechar={() => setIrPara(false)} />
     </div>
   )
 }

@@ -14,7 +14,7 @@ import Insumos from './Insumos'
 import Recorrentes from './Recorrentes'
 import { EditarConta, ImportarLote, type Dados } from './LancarContas'
 
-const ABAS = [
+export const ABAS_FINANCEIRO = [
   { id: '', nome: 'Contas a pagar' },
   { id: 'recorrentes', nome: 'Recorrentes' },
   { id: 'conciliacao', nome: 'Conciliação bancária' },
@@ -26,11 +26,11 @@ const ABAS = [
 
 // Financeiro (09/10): contas a pagar, despesas por conta contábil e loja (base da DRE), resultado do Lucro Fácil e plano de contas.
 export default function ModuloFinanceiro({ sub }: { sub?: string }) {
-  const aba = ABAS.some((a) => a.id && a.id === sub) ? sub! : ''
+  const aba = ABAS_FINANCEIRO.some((a) => a.id && a.id === sub) ? sub! : ''
   return (
     <div className="space-y-4">
       <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
-        {ABAS.map((a) => (
+        {ABAS_FINANCEIRO.map((a) => (
           <button
             key={a.id}
             onClick={() => ir(a.id ? 'financeiro/' + a.id : 'financeiro')}

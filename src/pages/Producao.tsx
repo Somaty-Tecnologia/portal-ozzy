@@ -3,6 +3,7 @@ import { Botao, Campo, Modal, Vazio, estiloEntrada } from '../components/ui'
 import { useOrdem } from '../components/Ordenar'
 import { agruparPorCategoria } from '../lib/categorias'
 import { useApp } from '../lib/contexto'
+import { ir } from '../lib/rota'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
@@ -20,11 +21,19 @@ const NOME_SETOR: Record<SetorFechamento, string> = { cozinha: 'Cozinha', atendi
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const q = (n: number | null) => (n === null || n === 0 ? '' : mostrarQtd(n))
 
-export default function Producao() {
+// Abas com endereço próprio (#/producao/<aba>); quem é da produção e não é gestão vê só pedidos e inventário.
+export const ABAS_PRODUCAO = [
+  { id: '', nome: 'Pedidos das lojas' },
+  { id: 'produzido', nome: 'Produzido', soGestao: true },
+  { id: 'inventario', nome: 'Inventário' },
+  { id: 'listas', nome: 'Listas', soGestao: true },
+]
+export default function Producao({ sub }: { sub?: string }) {
   const { eu } = useApp()
   const gestao = podeGerenciar(eu.nivel)
-  const [aba, setAba] = useState<Aba>('pedidos')
-  const abas: [Aba, string][] = gestao ? [['pedidos', 'Pedidos das lojas'], ['produzido', 'Produzido'], ['inventario', 'Inventário'], ['listas', 'Listas']] : [['pedidos', 'Pedidos das lojas'], ['inventario', 'Inventário']]
+  const visiveis = ABAS_PRODUCAO.filter((a) => gestao || !a.soGestao)
+  const aba: Aba = visiveis.some((a) => a.id && a.id === sub) ? (sub as Aba) : 'pedidos'
+  const abas: [Aba, string][] = visiveis.map((a) => [(a.id || 'pedidos') as Aba, a.nome])
   return (
     <div className="space-y-4">
       <div>
@@ -34,7 +43,7 @@ export default function Producao() {
       {abas.length > 1 && (
         <div className={`grid gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold ${abas.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
           {abas.map(([a, nome]) => (
-            <button key={a} onClick={() => setAba(a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
+            <button key={a} onClick={() => ir(a === 'pedidos' ? 'producao' : 'producao/' + a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
           ))}
         </div>
       )}

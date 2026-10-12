@@ -11,18 +11,25 @@ import Insumos from './Insumos'
 
 // Cadastros (Heitor, 09/10): materiais e produtos de venda da Eclética e os fornecedores, num lugar só.
 // Até a integração, a base veio das planilhas da Eclética (código de cada um); depois passa a vir dela pelo código.
-type Area = 'materiais' | 'categorias' | 'produtos' | 'fornecedores' | 'conferencia'
+// Abas com endereço próprio (#/cadastros/<aba>), para o menu lateral e o "Ir para" (Heitor, 12/10).
+export const ABAS_CADASTROS = [
+  { id: '', nome: 'Materiais' },
+  { id: 'categorias', nome: 'Categorias' },
+  { id: 'produtos', nome: 'Produtos de venda' },
+  { id: 'fornecedores', nome: 'Fornecedores' },
+  { id: 'conferencia', nome: 'Conferência de preços' },
+]
 export default function Cadastros({ aba }: { aba?: string }) {
-  const [area, setArea] = useState<Area>(aba === 'conferencia' ? 'conferencia' : 'materiais')
+  const area = ABAS_CADASTROS.some((a) => a.id && a.id === aba) ? aba! : ''
   return (
     <div className="space-y-4">
       <Titulo>Cadastros</Titulo>
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold sm:grid-cols-5">
-        {([['materiais', 'Materiais'], ['categorias', 'Categorias'], ['produtos', 'Produtos de venda'], ['fornecedores', 'Fornecedores'], ['conferencia', 'Conferência de preços']] as const).map(([a, nome]) => (
-          <button key={a} onClick={() => setArea(a)} className={`rounded-lg px-2 py-2 ${area === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
+        {ABAS_CADASTROS.map((a) => (
+          <button key={a.id} onClick={() => ir('cadastros' + (a.id ? '/' + a.id : ''))} className={`rounded-lg px-2 py-2 ${area === a.id ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{a.nome}</button>
         ))}
       </div>
-      {area === 'produtos' ? <ProdutosVenda /> : <Insumos key={area} aba={area === 'materiais' ? 'insumos' : area} />}
+      {area === 'produtos' ? <ProdutosVenda /> : <Insumos key={area} aba={(area || 'insumos') as 'insumos' | 'fornecedores' | 'categorias' | 'conferencia'} />}
     </div>
   )
 }
