@@ -10,6 +10,8 @@ export interface Catalogo {
   receitas: Map<string, Receita>
   // Versão atual de cada ficha.
   atual: Map<string, VersaoReceita>
+  // Material de estoque que é um pré-preparo → a ficha dele (receitas.insumo_id).
+  fichaDoInsumo: Map<string, string>
 }
 
 export function montarCatalogo(insumos: Insumo[], receitas: Receita[], versoes: VersaoReceita[]): Catalogo {
@@ -18,7 +20,9 @@ export function montarCatalogo(insumos: Insumo[], receitas: Receita[], versoes: 
     const v = versoes.find((x) => x.receitaId === r.id && x.numero === r.versaoAtual)
     if (v) atual.set(r.id, v)
   }
-  return { insumos: new Map(insumos.map((i) => [i.id, i])), receitas: new Map(receitas.map((r) => [r.id, r])), atual }
+  const fichaDoInsumo = new Map<string, string>()
+  for (const r of receitas) if (r.insumoId && atual.has(r.id)) fichaDoInsumo.set(r.insumoId, r.id)
+  return { insumos: new Map(insumos.map((i) => [i.id, i])), receitas: new Map(receitas.map((r) => [r.id, r])), atual, fichaDoInsumo }
 }
 
 export interface CustoItem {
@@ -46,7 +50,7 @@ export function custoItens(cat: Catalogo, itens: ItemReceita[], rendimento: numb
     const bruto = item.quantidade / (item.aproveitamento || 1)
     if (item.insumoId) {
       const ins = cat.insumos.get(item.insumoId)
-      const preco = ins?.preco ?? null
+      const preco = ins ? precoDoInsumo(cat, ins, pilha) : null
       if (preco === null) semPreco.push(ins?.nome ?? 'Insumo apagado')
       linhas.push({ item, nome: ins?.nome ?? '—', unidade: ins?.unidade ?? '', bruto, precoUnit: preco, custo: preco === null ? null : bruto * preco })
     } else if (item.subReceitaId) {
@@ -67,6 +71,19 @@ export function custoItens(cat: Catalogo, itens: ItemReceita[], rendimento: numb
   const total = linhas.reduce((s, l) => s + (l.custo ?? 0), 0)
   return { itens: linhas, total, porUnidade: total / (rendimento || 1), semPreco, ciclo }
 }
+
+// Custo de um material (Heitor, 12/10): pré-preparo com ficha custa o que a ficha diz (custo ÷ rendimento), não o
+// preço digitado no cadastro. Ficha sem custo completo, ou em ciclo, volta para o preço do cadastro.
+export function precoDoInsumo(cat: Catalogo, ins: Insumo, pilha: string[] = []): number | null {
+  const r = cat.fichaDoInsumo.get(ins.id)
+  if (r && !pilha.includes(r)) {
+    const v = cat.atual.get(r)!
+    const c = custoItens(cat, v.itens, v.rendimento, [...pilha, r])
+    if (!c.ciclo && c.semPreco.length === 0 && c.total > 0) return c.porUnidade
+  }
+  return ins.preco
+}
+export const precoPelaFicha = (cat: Catalogo, ins: Insumo) => cat.fichaDoInsumo.has(ins.id) && precoDoInsumo(cat, ins) !== ins.preco
 
 export function custoFicha(cat: Catalogo, receitaId: string): CustoFicha | null {
   const v = cat.atual.get(receitaId)

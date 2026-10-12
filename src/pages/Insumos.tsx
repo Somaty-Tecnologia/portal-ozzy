@@ -4,7 +4,7 @@ import { Botao, Campo, Modal, Selo, Vazio, estiloEntrada } from '../components/u
 import { useOrdem } from '../components/Ordenar'
 import EscolherConta from '../components/EscolherConta'
 import { useApp } from '../lib/contexto'
-import { montarCatalogo, nomeUnidade, reais, usadoEm, type Catalogo } from '../lib/custos'
+import { montarCatalogo, nomeUnidade, precoDoInsumo, precoPelaFicha, reais, usadoEm, type Catalogo } from '../lib/custos'
 import { dataLonga } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { ir } from '../lib/rota'
@@ -103,12 +103,12 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const nomeForn = (id: string | null) => fornecedores.find((f) => f.id === id)?.nome
   const termo = busca.trim().toLowerCase()
   const lista = insumos.filter(
-    (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!estoque || controlaDe(i) === (estoque === 'sim')) && (!semPreco || i.preco === null)
+    (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!estoque || controlaDe(i) === (estoque === 'sim')) && (!semPreco || precoDoInsumo(cat, i) === null)
       && (!termo || i.nome.toLowerCase().includes(termo) || i.ecleticaCodigo === termo),
   )
-  const faltando = insumos.filter((i) => i.ativo && i.preco === null).length
+  const faltando = insumos.filter((i) => i.ativo && precoDoInsumo(cat, i) === null).length
   const { ordenada, cabecalho } = useOrdem(lista, {
-    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo, estoque: (i) => (controlaDe(i) ? 1 : 0), curva: (i) => curva.get(i.id)?.valor,
+    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => precoDoInsumo(cat, i), fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo, estoque: (i) => (controlaDe(i) ? 1 : 0), curva: (i) => curva.get(i.id)?.valor,
   }, { col: 'nome' })
 
   return (
@@ -187,8 +187,11 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
                     <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{i.ecleticaCodigo ?? '—'}</td>
                     <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{i.categoria ?? '—'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {i.preco !== null ? `${reais(i.preco)}/${nomeUnidade(i.unidade)}` : <span className="font-semibold text-amber-700">sem preço</span>}
-                      {i.precoEm && <div className="text-xs text-stone-400">{dataLonga(i.precoEm)}</div>}
+                      {(() => {
+                        const p = precoDoInsumo(cat, i)
+                        return p !== null ? <>{reais(p)}/{nomeUnidade(i.unidade)}{precoPelaFicha(cat, i) && <div className="text-xs text-sky-700">custo da ficha</div>}</> : <span className="font-semibold text-amber-700">sem preço</span>
+                      })()}
+                      {i.precoEm && !precoPelaFicha(cat, i) && <div className="text-xs text-stone-400">{dataLonga(i.precoEm)}</div>}
                     </td>
                     <td className="hidden px-3 py-2 text-stone-600 lg:table-cell">{nomeForn(i.fornecedorId) ?? '—'}</td>
                     <td className="hidden px-3 py-2 text-center sm:table-cell" title={curva.get(i.id) ? `${String(curva.get(i.id)!.participacao).replace('.', ',')}% do valor comprado em 90 dias` : 'Sem compras em 90 dias'}>
@@ -348,9 +351,17 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar, ex
             </select>
           </Campo>
         </div>
-        <Campo rotulo={`Preço por ${nomeUnidade(f.unidade)} (R$)`} dica="Mudar o preço atualiza o custo das fichas e fica no histórico.">
-          <input className={estiloEntrada} inputMode="decimal" value={f.preco} onChange={mudar('preco')} placeholder="0,00" />
-        </Campo>
+        {i && precoPelaFicha(cat, i) ? (
+          // Pré-preparo com ficha (Heitor, 12/10): o custo é o da ficha; o preço do cadastro não vale.
+          <div className="rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900 ring-1 ring-sky-200">
+            Custo pela ficha: <b>{reais(precoDoInsumo(cat, i)!)}/{nomeUnidade(i.unidade)}</b>. É um pré-preparo, então o custo sai da ficha técnica dele
+            (ingredientes ÷ rendimento) e muda sozinho quando a ficha ou os preços dos ingredientes mudam.
+          </div>
+        ) : (
+          <Campo rotulo={`Preço por ${nomeUnidade(f.unidade)} (R$)`} dica="Mudar o preço atualiza o custo das fichas e fica no histórico.">
+            <input className={estiloEntrada} inputMode="decimal" value={f.preco} onChange={mudar('preco')} placeholder="0,00" />
+          </Campo>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Embalagem de compra">
             <input className={estiloEntrada} value={f.embalagem} onChange={mudar('embalagem')} placeholder="Fardo, caixa, pote…" />
