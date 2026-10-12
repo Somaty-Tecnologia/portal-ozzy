@@ -16,8 +16,10 @@ export function necessidade(cat: Catalogo, linhas: { receitaId: string; quantida
     const fator = unidades / (rendimento || 1)
     for (const i of itens) {
       const bruto = (i.quantidade / (i.aproveitamento || 1)) * fator
-      const v = i.subReceitaId ? cat.atual.get(i.subReceitaId) : undefined
-      if (i.subReceitaId && abrirPreparos && v && !pilha.includes(i.subReceitaId)) abrir(v.itens, v.rendimento, bruto, [...pilha, i.subReceitaId])
+      // Material de estoque que é pré-preparo (tem ficha) também abre, para as compras.
+      const sub = i.subReceitaId ?? (abrirPreparos && i.insumoId ? cat.fichaDoInsumo.get(i.insumoId) : undefined)
+      const v = sub ? cat.atual.get(sub) : undefined
+      if (sub && abrirPreparos && v && !pilha.includes(sub)) abrir(v.itens, v.rendimento, bruto, [...pilha, sub])
       else somar(total, chaveDe({ insumoId: i.insumoId, receitaId: i.subReceitaId })!, bruto)
     }
   }

@@ -6,6 +6,7 @@ import { dataCurta, diaSemana, hoje, tempoDesde } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { arredondarPara, consumoEvento, estoqueBase, quantoLevar, referenciasPadrao, semFicha, sugerirVendas, type LinhaLevar } from '../lib/logistica'
 import { posicaoEventos } from '../lib/painelEventos'
+import InsumosEvento from '../components/InsumosEvento'
 import { ir } from '../lib/rota'
 import { criarReconhecedor, lerContagem } from '../lib/voz'
 import {
@@ -126,6 +127,7 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
   const fatTotal = dias.reduce((s, x) => s + fatDia(x), 0)
   const custoTotal = dias.reduce((s, x) => s + custoDia(x), 0)
   const faltaFicha = semFicha(g.cat, cardapio.map((c) => c.receitaId))
+  const saldoBase = useMemo(() => estoqueBase(g.contagensBase, g.enviosTodos), [g.contagensBase, g.enviosTodos])
 
   const aplicarSugestao = () => {
     let card = cardapio
@@ -329,6 +331,8 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
         </p>
       )}
       {mudou && <p className="text-sm font-semibold text-amber-700">Alterações não salvas.</p>}
+      <InsumosEvento cat={g.cat} nomeEvento={e.nome} saldoBase={saldoBase}
+        linhas={cardapio.map((c) => ({ receitaId: c.receitaId, quantidade: dias.reduce((s, x) => s + q(c.receitaId, x), 0) }))} />
     </div>
   )
 }
