@@ -449,6 +449,17 @@ export interface Motoboy {
   // Responsável pelos motoboys (Heitor, 12/10): ganha o adicional toda semana, que entra sozinho como extra.
   responsavel?: boolean
   adicionalResponsavel?: number
+  // Pagamento por dia (Heitor, 12/10): a diária inclui as primeiras entregas; as seguintes pagam por entrega.
+  valorDiaria?: number
+  entregasIncluidas?: number
+  valorEntrega?: number
+}
+// Quanto um motoboy ganha na semana pelas entregas de cada dia (dia sem número = não trabalhou).
+export const calcularMotoboy = (m: Pick<Motoboy, 'valorDiaria' | 'entregasIncluidas' | 'valorEntrega'> | undefined, dias: Record<string, number>) => {
+  const valorDiaria = m?.valorDiaria ?? 100, incluidas = m?.entregasIncluidas ?? 10, valorEntrega = m?.valorEntrega ?? 4
+  const qtds = Object.values(dias)
+  const extras = qtds.reduce((t, q) => t + Math.max(0, q - incluidas), 0)
+  return { dias: qtds.length, entregasTotal: qtds.reduce((t, q) => t + q, 0), entregasExtras: extras, diarias: qtds.length * valorDiaria, entregas: Math.round(extras * valorEntrega * 100) / 100 }
 }
 // Horário dos motoboys por loja e dia (0 = segunda … 6 = domingo); dia sem turno = fechado.
 export interface TurnoMotoboy { unidadeId: string; dia: number; inicio: string; fim: string }
@@ -465,8 +476,9 @@ export interface SemanaMotoboy {
   total: number
   pagoEm: string | null
   conciliado: boolean
+  dias?: Record<string, number>
 }
-export interface LinhaSemanaMotoboy { motoboyId: string; diarias: number; entregas: number; extras: ExtraMotoboy[]; jaPago: boolean }
+export interface LinhaSemanaMotoboy { motoboyId: string; diarias: number; entregas: number; extras: ExtraMotoboy[]; jaPago: boolean; dias?: Record<string, number> }
 
 export interface Freelancer {
   id: string

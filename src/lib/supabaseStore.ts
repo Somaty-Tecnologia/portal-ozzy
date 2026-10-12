@@ -1301,6 +1301,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         nome: nomeProprio(m.nome), unidade_id: m.unidadeId || null, pix: texto(m.pix), telefone: m.telefone ? soDigitos(m.telefone) || null : null,
         cpf: m.cpf ? soDigitos(m.cpf) || null : null, observacao: texto(m.observacao), ativo: m.ativo,
         responsavel: !!m.responsavel, ...(m.adicionalResponsavel !== undefined ? { adicional_responsavel: m.adicionalResponsavel } : {}),
+        ...(m.valorDiaria !== undefined ? { valor_diaria: m.valorDiaria, entregas_incluidas: m.entregasIncluidas ?? 10, valor_entrega: m.valorEntrega ?? 4 } : {}),
       }
       if (!linha.nome) throw new Error('Diga o nome.')
       const r = m.id
@@ -1311,13 +1312,13 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async semanasMotoboys(de, ate) {
       return (ok(await sb.rpc('semanas_motoboys', { p_de: de, p_ate: ate })) ?? []).map((r: any) => ({
         id: r.id, motoboyId: r.motoboy_id, unidadeId: r.unidade_id, pagamento: r.pagamento, diarias: Number(r.diarias), entregas: Number(r.entregas),
-        extras: (r.extras ?? []).map((e: any) => ({ descricao: e.descricao ?? '', valor: Number(e.valor) })), total: Number(r.total), pagoEm: r.pago_em, conciliado: r.conciliado,
+        extras: (r.extras ?? []).map((e: any) => ({ descricao: e.descricao ?? '', valor: Number(e.valor) })), total: Number(r.total), pagoEm: r.pago_em, conciliado: r.conciliado, dias: r.dias ?? {},
       }))
     },
     async salvarSemanaMotoboys(pagamento, unidadeId, linhas) {
       ok(await sb.rpc('salvar_motoboys_semana', {
         p_pagamento: pagamento, p_unidade: unidadeId,
-        p_linhas: linhas.map((l) => ({ motoboy_id: l.motoboyId, diarias: l.diarias, entregas: l.entregas, extras: l.extras, ja_pago: l.jaPago })),
+        p_linhas: linhas.map((l) => ({ motoboy_id: l.motoboyId, diarias: l.diarias, entregas: l.entregas, extras: l.extras, ja_pago: l.jaPago, dias: l.dias ?? {} })),
       }))
     },
     async turnosMotoboys() {
@@ -1547,6 +1548,7 @@ const paraNota = (r: any): NotaFiscal => ({
 const paraMotoboy = (r: any): Motoboy => ({
   id: r.id, nome: r.nome, unidadeId: r.unidade_id, pix: r.pix, telefone: r.telefone, cpf: r.cpf, observacao: r.observacao, ativo: r.ativo,
   responsavel: !!r.responsavel, adicionalResponsavel: numeroOuNulo(r.adicional_responsavel) ?? 125,
+  valorDiaria: numeroOuNulo(r.valor_diaria) ?? 100, entregasIncluidas: numeroOuNulo(r.entregas_incluidas) ?? 10, valorEntrega: numeroOuNulo(r.valor_entrega) ?? 4,
 })
 const paraContaPagar = (r: any): ContaPagar => ({
   id: r.id, centroCustoId: r.centro_custo_id, contaId: r.conta_id, fornecedorId: r.fornecedor_id, funcionarioId: r.funcionario_id ?? null, motoboyId: r.motoboy_id ?? null, favorecido: r.favorecido, descricao: r.descricao,

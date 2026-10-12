@@ -4,7 +4,7 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, hoje, indiceSemana, inicioDaSemana } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { soDigitos } from '../lib/store'
-import { apelidoUnidade, nomeCurto, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
+import { apelidoUnidade, calcularMotoboy, nomeCurto, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
 import { reais } from '../lib/financeiro'
 import ArquivoBanco from '../components/ArquivoBanco'
 
@@ -13,7 +13,8 @@ import ArquivoBanco from '../components/ArquivoBanco'
 
 type Aba = 'escala' | 'semana' | 'cadastro'
 const EXTRA_RESPONSAVEL = 'Responsável pelos motoboys'
-interface Linha { motoboyId: string; diarias: string; entregas: string; extras: { descricao: string; valor: string }[]; jaPago: boolean }
+interface Linha { motoboyId: string; diarias: string; entregas: string; extras: { descricao: string; valor: string }[]; jaPago: boolean; dias: Record<string, string> }
+const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 const num = (s: string) => lerNumero(s) ?? 0
 const texto = (n: number) => (n ? String(n).replace('.', ',') : '')
@@ -126,6 +127,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
       const adicional = !s && m?.responsavel && m.unidadeId === loja ? [{ descricao: EXTRA_RESPONSAVEL, valor: texto(m.adicionalResponsavel ?? 125) }] : []
       return {
         motoboyId: id, diarias: texto(s?.diarias ?? 0), entregas: texto(s?.entregas ?? 0),
+        dias: Object.fromEntries(Object.entries(s?.dias ?? {}).map(([d, q]) => [d, String(q)])),
         extras: s ? s.extras.map((e) => ({ descricao: e.descricao, valor: texto(e.valor) })) : adicional, jaPago: !!s?.pagoEm,
       }
     }).sort((a, b) => (porId.get(a.motoboyId)?.nome ?? '').localeCompare(porId.get(b.motoboyId)?.nome ?? ''))
@@ -139,10 +141,20 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
   useEffect(() => {
     setLinhas((ls) => {
       const novos = motoboys.filter((m) => m.ativo && m.unidadeId === loja && !ls.some((l) => l.motoboyId === m.id))
-      return novos.length ? [...ls, ...novos.map((m) => ({ motoboyId: m.id, diarias: '', entregas: '', extras: [], jaPago: false }))] : ls
+      return novos.length ? [...ls, ...novos.map((m) => ({ motoboyId: m.id, diarias: '', entregas: '', extras: [], jaPago: false, dias: {} }))] : ls
     })
   }, [motoboys, loja])
 
+  const semana = Array.from({ length: 7 }, (_, k) => addDias(pagamento, k - 7))
+  const diasNumero = (l: Linha) => Object.fromEntries(Object.entries(l.dias).filter(([, q]) => q.trim() !== '' && lerNumero(q) !== null).map(([d, q]) => [d, Math.max(0, Math.round(lerNumero(q)!))]))
+  // Entregas de um dia: recalcula diárias e entregas pela regra do motoboy (diária inclui as primeiras entregas).
+  const mudarDia = (i: number, data: string, valor: string) => {
+    const l = linhas[i]
+    const dias = { ...l.dias, [data]: valor }
+    const c = calcularMotoboy(porId.get(l.motoboyId), diasNumero({ ...l, dias }))
+    mudar(i, { dias, diarias: texto(c.diarias), entregas: texto(c.entregas) })
+  }
+  const naEscala = (id: string, data: string) => escalados.some((e) => e.motoboyId === id && e.data === data)
   const diasEscala = (id: string) => escalados.filter((e) => e.motoboyId === id).length
   const fechada = (id: string) => desta.find((s) => s.motoboyId === id)?.conciliado ?? false
   const mudar = (i: number, l: Partial<Linha>) => { setMexeu(true); setLinhas(linhas.map((x, j) => (j === i ? { ...x, ...l } : x))) }
@@ -158,7 +170,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
     setSalvando(true)
     try {
       await store.salvarSemanaMotoboys(pagamento, loja, linhas.filter((l) => !fechada(l.motoboyId)).map((l) => ({
-        motoboyId: l.motoboyId, diarias: num(l.diarias), entregas: num(l.entregas), jaPago: l.jaPago,
+        motoboyId: l.motoboyId, diarias: num(l.diarias), entregas: num(l.entregas), jaPago: l.jaPago, dias: diasNumero(l),
         extras: l.extras.map((e): ExtraMotoboy => ({ descricao: e.descricao.trim(), valor: num(e.valor) })).filter((e) => e.valor),
       })))
       setMexeu(false)
@@ -216,6 +228,25 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
                     value={l.entregas} onChange={(e) => mudar(i, { entregas: e.target.value })} />
                   <div className={`col-span-2 text-right text-sm font-bold sm:col-span-1 ${Number.isFinite(t) ? '' : 'text-red-700'}`}>{Number.isFinite(t) ? reais(t) : 'confira'}</div>
                 </div>
+                {!travada && (
+                  <div className="grid grid-cols-7 gap-1">
+                    {semana.map((d, k) => (
+                      <label key={d} className="text-center text-[11px] text-stone-500">
+                        <span className={naEscala(l.motoboyId, d) ? 'font-bold text-carvao' : ''}>{DIAS_CURTOS[k]} {d.slice(8)}</span>
+                        <input className={`${estiloEntrada} mt-0.5 px-1! py-1! text-center`} inputMode="numeric" placeholder={naEscala(l.motoboyId, d) ? 'escala' : ''}
+                          aria-label={`Entregas de ${m?.nome} em ${dataCurta(d)}`} value={l.dias[d] ?? ''} onChange={(e) => mudarDia(i, d, e.target.value)} />
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {(() => {
+                  const c = calcularMotoboy(m, diasNumero(l))
+                  return c.dias > 0 && (
+                    <p className="text-xs text-stone-500">
+                      {c.dias} {c.dias === 1 ? 'diária' : 'diárias'} × {reais(m?.valorDiaria ?? 100)} · {c.entregasTotal} entregas, {c.entregasExtras} além das {m?.entregasIncluidas ?? 10} do dia × {reais(m?.valorEntrega ?? 4)}
+                    </p>
+                  )
+                })()}
                 {l.extras.map((e, k) => (
                   <div key={k} className="flex items-center gap-2">
                     <input className={estiloEntrada + ' py-1.5! min-w-0 flex-1'} placeholder="Extra (adiantamento, supervisão…)" disabled={travada} value={e.descricao}
@@ -245,7 +276,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
       <div className="flex flex-wrap items-center gap-2">
         {outros.length > 0 && (
           <select className={estiloEntrada + ' w-auto! py-1.5!'} value="" aria-label="Pôr motoboy de outra loja"
-            onChange={(e) => { if (e.target.value) { setMexeu(true); setLinhas([...linhas, { motoboyId: e.target.value, diarias: '', entregas: '', extras: [], jaPago: false }]) } }}>
+            onChange={(e) => { if (e.target.value) { setMexeu(true); setLinhas([...linhas, { motoboyId: e.target.value, diarias: '', entregas: '', extras: [], jaPago: false, dias: {} }]) } }}>
             <option value="">+ Motoboy de outra loja</option>
             {outros.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
           </select>
@@ -477,6 +508,7 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     nome: existente?.nome ?? '', unidadeId: existente?.unidadeId ?? lojaPadrao, pix: existente?.pix ?? '', telefone: existente?.telefone ?? '',
     cpf: existente?.cpf ?? '', observacao: existente?.observacao ?? '', ativo: existente?.ativo ?? true,
     responsavel: existente?.responsavel ?? false, adicional: texto(existente?.adicionalResponsavel ?? 125),
+    valorDiaria: texto(existente?.valorDiaria ?? 100), incluidas: String(existente?.entregasIncluidas ?? 10), valorEntrega: texto(existente?.valorEntrega ?? 4),
   })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -487,9 +519,10 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     setErro('')
     setSalvando(true)
     try {
-      const { adicional, ...resto } = f
+      const { adicional, valorDiaria, incluidas, valorEntrega, ...resto } = f
+      if ([valorDiaria, incluidas, valorEntrega].some((x) => lerNumero(x) === null)) { setSalvando(false); return setErro('Confira diária, entregas incluídas e valor por entrega.') }
       if (f.responsavel && lerNumero(adicional) === null) { setSalvando(false); return setErro('Diga o valor do adicional do responsável.') }
-      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
+      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, valorDiaria: lerNumero(valorDiaria)!, entregasIncluidas: Math.round(lerNumero(incluidas)!), valorEntrega: lerNumero(valorEntrega)!, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
       aoSalvar()
     } catch (err) {
       setErro((err as Error).message)
@@ -510,6 +543,11 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Celular (opcional)"><input className={estiloEntrada} inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} /></Campo>
           <Campo rotulo="CPF (opcional)" dica="Precisa para o Pix em lote."><input className={estiloEntrada} inputMode="numeric" value={f.cpf} onChange={(e) => setF({ ...f, cpf: e.target.value })} /></Campo>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Campo rotulo="Diária (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorDiaria} onChange={(e) => setF({ ...f, valorDiaria: e.target.value })} /></Campo>
+          <Campo rotulo="Entregas na diária"><input className={estiloEntrada} inputMode="numeric" value={f.incluidas} onChange={(e) => setF({ ...f, incluidas: e.target.value })} /></Campo>
+          <Campo rotulo="Por entrega a mais (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorEntrega} onChange={(e) => setF({ ...f, valorEntrega: e.target.value })} /></Campo>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.checked })} /> Responsável pelos motoboys

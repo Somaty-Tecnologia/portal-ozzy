@@ -1660,7 +1660,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
           if (ci >= 0) contasPagarDemo.splice(ci, 1)
           continue
         }
-        const semana: SemanaMotoboy = { id: si >= 0 ? semanasMotoboyDemo[si].id : novoId('ms'), motoboyId: mb.id, unidadeId, pagamento, diarias: l.diarias, entregas: l.entregas, extras, total, pagoEm: null, conciliado: false }
+        const semana: SemanaMotoboy = { id: si >= 0 ? semanasMotoboyDemo[si].id : novoId('ms'), motoboyId: mb.id, unidadeId, pagamento, diarias: l.diarias, entregas: l.entregas, extras, total, pagoEm: null, conciliado: false, dias: l.dias ?? {} }
         if (si >= 0) semanasMotoboyDemo[si] = semana
         else semanasMotoboyDemo.push(semana)
         const conta = contaDemo(ci >= 0 ? contasPagarDemo[ci].id : novoId('cp'), {
