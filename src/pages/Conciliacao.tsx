@@ -68,16 +68,29 @@ export default function Conciliacao() {
     if (!files?.length) return
     setLendo(true)
     setAviso('')
-    const partes: string[] = []
+    const lidos: { nome: string; texto: string; chaves?: Set<string> }[] = []
     for (const f of Array.from(files)) {
       try {
         const e = await lerArquivoOfx(f)
         const r = await store.importarExtrato(e)
-        partes.push(`${f.name}: ${r.novos} lançamentos novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`)
+        lidos.push({ nome: f.name, texto: `${r.novos} lançamentos novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`, chaves: new Set(e.movimentos.map((m) => `${e.banco}|${e.agencia}|${e.conta}|${m.fitid}`)) })
       } catch (e) {
-        partes.push(`${f.name}: ${(e as Error).message}`)
+        lidos.push({ nome: f.name, texto: (e as Error).message })
       }
     }
+    // Diz em que pé está o que veio no arquivo (Heitor, 12/10: "importei 3 e só apareceu uma"): o que já estava
+    // costuma estar conciliado, ignorado ou ser entrada, e por isso não aparece em "A conciliar".
+    const todos = await store.extrato().catch(() => [] as MovimentoExtrato[])
+    const partes = lidos.map((l) => {
+      if (!l.chaves) return `${l.nome}: ${l.texto}`
+      const doArquivo = todos.filter((m) => l.chaves!.has(`${m.banco}|${m.agencia}|${m.conta}|${m.fitid}`))
+      const conta = (f: (m: MovimentoExtrato) => boolean) => doArquivo.filter(f).length
+      const pe = [
+        [conta((m) => m.status === 'pendente' && m.valor < 0), 'a conciliar'], [conta((m) => m.status === 'pendente' && m.valor > 0), 'entradas'],
+        [conta((m) => m.status === 'conciliado'), 'já conciliados'], [conta((m) => m.status === 'ignorado'), 'ignorados'],
+      ].filter(([n]) => n).map(([n, t]) => `${n} ${t}`).join(', ')
+      return `${l.nome}: ${l.texto}${pe ? ` (${pe})` : ''}`
+    })
     if (arquivo.current) arquivo.current.value = ''
     setLendo(false)
     setAviso(partes.join(' · '))
