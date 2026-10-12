@@ -106,3 +106,28 @@ export function partesExtrato(descricao: string): { tipo: string | null; nome: s
   }
   return { tipo: null, nome: d, documento }
 }
+
+// O que é novo neste extrato (Heitor, 12/10). O Itaú numera o FITID pelo dia (20261013001, 002…): importado no
+// meio do dia, um lançamento que entra depois pode mudar a numeração, e o mesmo FITID passa a ser outro lançamento.
+// Por isso o repetido é reconhecido pelo dia + valor + texto (contando repetições iguais), não só pelo FITID;
+// e um lançamento novo cujo FITID já foi usado ganha um sufixo, para não ser descartado.
+type Mov = ExtratoOfx['movimentos'][number]
+export function movimentosNovos(movs: Mov[], existentes: { fitid: string; data: string; valor: number; descricao: string | null }[]): Mov[] {
+  const chave = (m: { data: string; valor: number; descricao: string | null }) => `${m.data}|${Math.round(m.valor * 100)}|${m.descricao ?? ''}`
+  const restam = new Map<string, number>()
+  for (const x of existentes) restam.set(chave(x), (restam.get(chave(x)) ?? 0) + 1)
+  const usados = new Set(existentes.map((x) => x.fitid))
+  const novos: Mov[] = []
+  for (const m of movs) {
+    const n = restam.get(chave(m)) ?? 0
+    if (n > 0) {
+      restam.set(chave(m), n - 1)
+      continue
+    }
+    let fitid = m.fitid
+    for (let k = 1; usados.has(fitid); k++) fitid = `${m.fitid}~${Math.round(m.valor * 100)}${k > 1 ? `#${k}` : ''}`
+    usados.add(fitid)
+    novos.push({ ...m, fitid })
+  }
+  return novos
+}

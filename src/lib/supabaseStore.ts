@@ -3,6 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeProprio, soDigitos, t
 import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
+import { movimentosNovos } from './ofx'
 import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
@@ -1381,7 +1382,10 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       }))
     },
     async importarExtrato(e) {
-      const linhas = e.movimentos.map((m) => ({
+      const datas = e.movimentos.map((m) => m.data).sort()
+      const existentes = (await todas((de, ate) => sb.from('extrato_movimentos').select('fitid, data, valor, descricao').eq('banco', e.banco).eq('agencia', e.agencia).eq('conta', e.conta)
+        .gte('data', datas[0]).lte('data', datas[datas.length - 1]).order('id').range(de, ate))).map((r: any) => ({ fitid: r.fitid, data: r.data, valor: Number(r.valor), descricao: r.descricao }))
+      const linhas = movimentosNovos(e.movimentos, existentes).map((m) => ({
         banco: e.banco, agencia: e.agencia, conta: e.conta, fitid: m.fitid, data: m.data, valor: m.valor, descricao: m.descricao, documento: m.documento, tipo: m.tipo,
       }))
       let novos = 0
