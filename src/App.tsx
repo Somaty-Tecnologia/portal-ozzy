@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ligarAtalhoSalvar } from './lib/atalhoSalvar'
 import { ProvedorApp, useApp } from './lib/contexto'
 import { criarDemoStore } from './lib/demoStore'
 import { criarSupabaseStore } from './lib/supabaseStore'
@@ -58,6 +59,7 @@ export default function App() {
   const [motoboy, setMotoboy] = useState(() => /^#\/?motoboy\b/.test(location.hash))
   // Link curto da guia de exame (#/g/<código>), mandado no WhatsApp: abre sem login.
   const [guia, setGuia] = useState(() => location.hash.match(/^#\/?g\/([A-Za-z0-9]+)/))
+  useEffect(() => ligarAtalhoSalvar(), [])
   useEffect(() => {
     const ouvir = () => {
       setDiaria(location.hash.match(/^#\/?diaria(?!-evento)(?:\/([\w-]+))?/))
