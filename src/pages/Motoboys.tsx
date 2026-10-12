@@ -339,7 +339,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, envios, con
       </div>
       {erro && <p className="text-sm text-red-700">{erro}</p>}
       <p className="text-xs text-stone-500">
-        Cada motoboy vira uma conta a pagar (conta 3.1 Motoboys, loja {apelidoUnidade(nomeUnidade(loja))}) vencendo na segunda. Na conciliação, o Pix de cada um acha a conta dele,
+        Nos dias (Seg a Dom), coloque o total de entregas do dia; a diária e as entregas além das incluídas são calculadas sozinhas. Cada motoboy vira uma conta a pagar (conta 3.1 Motoboys, loja {apelidoUnidade(nomeUnidade(loja))}) vencendo na segunda. Na conciliação, o Pix de cada um acha a conta dele,
         e o Pix em lote acha a semana inteira. Valor zerado tira a pessoa da semana. Extra negativo é desconto.
       </p>
       {pix && (
