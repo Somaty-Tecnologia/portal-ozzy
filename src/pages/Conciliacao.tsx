@@ -73,7 +73,7 @@ export default function Conciliacao() {
       try {
         const e = await lerArquivoOfx(f)
         const r = await store.importarExtrato(e)
-        lidos.push({ nome: f.name, texto: `${r.novos} lançamentos novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`, chaves: new Set(e.movimentos.map((m) => `${e.banco}|${e.agencia}|${e.conta}|${m.fitid}`)) })
+        lidos.push({ nome: f.name, texto: `cc ${e.conta}, ${e.movimentos.length} lançamentos de ${e.inicio ? dataCurta(e.inicio) : '?'} a ${e.fim ? dataCurta(e.fim) : '?'}: ${r.novos} novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`, chaves: new Set(e.movimentos.map((m) => `${e.banco}|${e.agencia}|${e.conta}|${m.fitid}`)) })
       } catch (e) {
         lidos.push({ nome: f.name, texto: (e as Error).message })
       }
