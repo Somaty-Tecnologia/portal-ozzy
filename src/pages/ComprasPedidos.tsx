@@ -251,7 +251,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
   }
 
   const termo = busca.trim().toLowerCase()
-  const achados = termo.length >= 2 ? insumos.filter((i) => i.ativo && i.nome.toLowerCase().includes(termo)).slice(0, 8) : []
+  const achados = termo.length >= 2 ? insumos.filter((i) => i.nome.toLowerCase().includes(termo)).sort((a, b) => Number(b.ativo) - Number(a.ativo)).slice(0, 8) : []
   // Sugestões pelo histórico deste fornecedor (o que costuma comprar e quanto); depois os outros já comprados dele.
   const sugeridos = historico
     .map((c) => ({ c, ins: insumos.find((i) => i.id === c.insumoId) }))
@@ -282,6 +282,9 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
     try {
       const p: NovoPedidoCompra = { ...v, id: pedido?.id, status, itens, formaPagamento: v.formaPagamento || null, observacao: v.observacao || null }
       await store.salvarPedidoCompra(p)
+      // Comprou um material inativo (Heitor, 12/10): ele volta a ficar ativo.
+      const inativos = status === 'cancelado' || status === 'rascunho' ? [] : itens.filter((i) => i.quantidade > 0 && insumos.find((x) => x.id === i.insumoId)?.ativo === false).map((i) => i.insumoId)
+      if (inativos.length) await store.ativarInsumos(inativos, true)
       // Primeiro pedido com este fornecedor: o prazo vira o padrão dele.
       if (fornecedor && fornecedor.prazoEntregaDias == null && status === 'pedido') {
         await store.salvarFornecedor({ ...fornecedor, prazoEntregaDias: diasEntre(v.dataPedido, v.previsaoEntrega) }).catch(() => undefined)
@@ -356,7 +359,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
           return (
             <div key={l.chave} className="rounded-xl bg-stone-50 p-2">
               <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{ins?.nome ?? 'Item'}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{ins?.nome ?? 'Item'}{ins && !ins.ativo && <span className="font-normal text-amber-700"> · inativo, volta a ficar ativo ao fazer o pedido</span>}</span>
                 {editavel && <button className="text-xs font-semibold text-stone-500 underline hover:text-red-700" onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}>Tirar</button>}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -391,7 +394,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar item para adicionar" aria-label="Procurar item" className={estiloEntrada} />
             {achados.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {achados.map((i) => <button key={i.id} onClick={() => adicionar(i)} className="rounded-full bg-stone-100 px-3 py-1 text-sm hover:bg-stone-200">+ {i.nome}</button>)}
+                {achados.map((i) => <button key={i.id} onClick={() => adicionar(i)} className="rounded-full bg-stone-100 px-3 py-1 text-sm hover:bg-stone-200">+ {i.nome}{!i.ativo && <span className="text-stone-400"> (inativo)</span>}</button>)}
               </div>
             )}
             {termo.length >= 2 && !insumos.some((i) => i.nome.toLowerCase() === termo) && (
