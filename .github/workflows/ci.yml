@@ -1,0 +1,35 @@
+# Conferência automática do código (Etapa 1 de "deixar replicável", 12/10).
+# Só lê o código e monta o portal: não fala com nenhum banco e não publica nada (quem publica é a Vercel).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Conferir tipos (TypeScript)
+        run: npm run typecheck
+
+      - name: Montar o portal
+        run: npm run build
+
+      - name: Montar a prévia (modo demonstração)
+        run: npm run build:preview

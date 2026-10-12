@@ -1,0 +1,51 @@
+# Teste mensal de restauração do backup (Etapa 1 de "deixar replicável", 12/10).
+# Baixa o backup mais recente gerado por backup.yml e restaura num Postgres DESCARTÁVEL, criado só para este teste.
+# Nunca conecta no banco real e não usa o secret SUPABASE_DB_URL. Resultado no resumo da execução.
+name: Teste de restauração do backup
+
+on:
+  schedule:
+    - cron: "0 9 1 * *" # dia 1 de cada mês, 6h (horário de Brasília)
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  restaurar:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17 # espelho da imagem oficial (o Docker Hub falhou em 09/10)
+        env:
+          POSTGRES_PASSWORD: descartavel
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar o backup mais recente
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --paginate \
+            --jq '.artifacts[] | select((.name | startswith("backup-")) and (.expired | not)) | [.created_at, .id] | @tsv' \
+            | sort -r | head -1 | cut -f2)
+          if [ -z "$id" ]; then echo "::error title=Sem backup::Nenhum artefato backup-* disponível."; exit 1; fi
+          mkdir -p backup
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$id/zip" > backup/artefato.zip
+          unzip -q backup/artefato.zip -d backup
+          arquivo=$(ls backup/*.sql.gz | sort | tail -1)
+          test -s "$arquivo"
+          echo "ARQUIVO=$arquivo" >> "$GITHUB_ENV"
+          echo "Artefato $id: $(basename "$arquivo")"
+
+      - name: Restaurar e conferir
+        env:
+          # psql de dentro do próprio Postgres descartável (mesma versão 17 do backup).
+          PSQL: docker exec -i ${{ job.services.postgres.id }} psql -U postgres
+        run: scripts/testar-restauracao.sh "$ARQUIVO" supabase/migrations
