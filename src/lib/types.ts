@@ -446,7 +446,13 @@ export interface Motoboy {
   cpf: string | null
   observacao: string | null
   ativo: boolean
+  // Responsável pelos motoboys (Heitor, 12/10): ganha o adicional toda semana, que entra sozinho como extra.
+  responsavel?: boolean
+  adicionalResponsavel?: number
 }
+// Horário dos motoboys por loja e dia (0 = segunda … 6 = domingo); dia sem turno = fechado.
+export interface TurnoMotoboy { unidadeId: string; dia: number; inicio: string; fim: string }
+export interface EscalaMotoboy { id: string; motoboyId: string; unidadeId: string; data: string }
 export interface ExtraMotoboy { descricao: string; valor: number }
 export interface SemanaMotoboy {
   id: string

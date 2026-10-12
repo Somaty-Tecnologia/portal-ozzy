@@ -1,7 +1,7 @@
 import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
-import type { CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -434,10 +434,15 @@ const dataCurtaDemo = (d: string) => d.slice(8, 10) + '/' + d.slice(5, 7)
 // Motoboys de EXEMPLO (nomes e Pix inventados).
 const motoboysDemo: Motoboy[] = [
   { id: 'mb1', nome: 'Mateus Exemplo Rocha', unidadeId: 'burger-psd', pix: '11955554444', telefone: '11955554444', cpf: null, observacao: null, ativo: true },
-  { id: 'mb2', nome: 'Renan Exemplo Dias', unidadeId: 'burger-psd', pix: 'renan@email.com', telefone: null, cpf: null, observacao: 'Supervisiona os motoboys', ativo: true },
+  { id: 'mb2', nome: 'Renan Exemplo Dias', unidadeId: 'burger-psd', pix: 'renan@email.com', telefone: null, cpf: null, observacao: 'Supervisiona os motoboys', ativo: true, responsavel: true, adicionalResponsavel: 125 },
   { id: 'mb3', nome: 'Tiago Exemplo Lima', unidadeId: 'burger-va', pix: '11944443333', telefone: '11944443333', cpf: null, observacao: null, ativo: true },
 ]
 const semanasMotoboyDemo: SemanaMotoboy[] = []
+const turnosMotoboyDemo: TurnoMotoboy[] = [
+  ...[1, 2, 3, 4, 5, 6].map((dia) => ({ unidadeId: 'burger-psd', dia, inicio: '18:00', fim: dia === 4 || dia === 5 ? '23:30' : '22:30' })),
+  ...[1, 2, 3, 4, 5, 6].map((dia) => ({ unidadeId: 'burger-va', dia, inicio: '18:00', fim: '23:00' })),
+]
+const escalaMotoboyDemo: EscalaMotoboy[] = []
 
 const freelas: Freelancer[] = [
   { id: 'fl1', nome: 'Rafael Mendes Teixeira', cpf: '52998224725', pix: '11988887777', celular: '11988887777', ativo: true, funcionarioId: null },
@@ -1609,6 +1614,28 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       if (i >= 0) motoboysDemo[i] = novo
       else motoboysDemo.push(novo)
       return espera(novo)
+    },
+    async turnosMotoboys() {
+      exigeGestao()
+      return espera([...turnosMotoboyDemo])
+    },
+    async salvarTurnoMotoboy(unidadeId, dia, horario) {
+      exigeGestao()
+      const i = turnosMotoboyDemo.findIndex((t) => t.unidadeId === unidadeId && t.dia === dia)
+      if (i >= 0) turnosMotoboyDemo.splice(i, 1)
+      if (horario) turnosMotoboyDemo.push({ unidadeId, dia, ...horario })
+      return espera(undefined)
+    },
+    async escalaMotoboys(de, ate) {
+      exigeGestao()
+      return espera(escalaMotoboyDemo.filter((e) => e.data >= de && e.data <= ate))
+    },
+    async escalarMotoboy(motoboyId, unidadeId, data, escalado) {
+      exigeGestao()
+      const i = escalaMotoboyDemo.findIndex((e) => e.motoboyId === motoboyId && e.data === data)
+      if (i >= 0) escalaMotoboyDemo.splice(i, 1)
+      if (escalado) escalaMotoboyDemo.push({ id: novoId('esc'), motoboyId, unidadeId, data })
+      return espera(undefined)
     },
     async semanasMotoboys(de, ate) {
       exigeGestao()

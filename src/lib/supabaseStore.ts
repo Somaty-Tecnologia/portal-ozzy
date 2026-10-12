@@ -3,7 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeProprio, soDigitos, t
 import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
-import type { CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1300,6 +1300,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       const linha = {
         nome: nomeProprio(m.nome), unidade_id: m.unidadeId || null, pix: texto(m.pix), telefone: m.telefone ? soDigitos(m.telefone) || null : null,
         cpf: m.cpf ? soDigitos(m.cpf) || null : null, observacao: texto(m.observacao), ativo: m.ativo,
+        responsavel: !!m.responsavel, ...(m.adicionalResponsavel !== undefined ? { adicional_responsavel: m.adicionalResponsavel } : {}),
       }
       if (!linha.nome) throw new Error('Diga o nome.')
       const r = m.id
@@ -1318,6 +1319,24 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         p_pagamento: pagamento, p_unidade: unidadeId,
         p_linhas: linhas.map((l) => ({ motoboy_id: l.motoboyId, diarias: l.diarias, entregas: l.entregas, extras: l.extras, ja_pago: l.jaPago })),
       }))
+    },
+    async turnosMotoboys() {
+      return (ok(await sb.from('motoboy_turnos').select('*').order('unidade_id').order('dia')) ?? []).map((r: any): TurnoMotoboy => ({
+        unidadeId: r.unidade_id, dia: r.dia, inicio: String(r.inicio).slice(0, 5), fim: String(r.fim).slice(0, 5),
+      }))
+    },
+    async salvarTurnoMotoboy(unidadeId, dia, horario) {
+      if (!horario) ok(await sb.from('motoboy_turnos').delete().eq('unidade_id', unidadeId).eq('dia', dia))
+      else ok(await sb.from('motoboy_turnos').upsert({ unidade_id: unidadeId, dia, inicio: horario.inicio, fim: horario.fim }))
+    },
+    async escalaMotoboys(de, ate) {
+      return (ok(await sb.from('motoboy_escala').select('id, motoboy_id, unidade_id, data').gte('data', de).lte('data', ate)) ?? []).map((r: any): EscalaMotoboy => ({
+        id: r.id, motoboyId: r.motoboy_id, unidadeId: r.unidade_id, data: r.data,
+      }))
+    },
+    async escalarMotoboy(motoboyId, unidadeId, data, escalado) {
+      if (!escalado) ok(await sb.from('motoboy_escala').delete().eq('motoboy_id', motoboyId).eq('data', data))
+      else ok(await sb.from('motoboy_escala').upsert({ motoboy_id: motoboyId, unidade_id: unidadeId, data }, { onConflict: 'motoboy_id,data' }))
     },
     async regrasExtrato() {
       return (ok(await sb.from('extrato_regras').select('*')) ?? []).map((r: any) => ({
@@ -1527,6 +1546,7 @@ const paraNota = (r: any): NotaFiscal => ({
 })
 const paraMotoboy = (r: any): Motoboy => ({
   id: r.id, nome: r.nome, unidadeId: r.unidade_id, pix: r.pix, telefone: r.telefone, cpf: r.cpf, observacao: r.observacao, ativo: r.ativo,
+  responsavel: !!r.responsavel, adicionalResponsavel: numeroOuNulo(r.adicional_responsavel) ?? 125,
 })
 const paraContaPagar = (r: any): ContaPagar => ({
   id: r.id, centroCustoId: r.centro_custo_id, contaId: r.conta_id, fornecedorId: r.fornecedor_id, funcionarioId: r.funcionario_id ?? null, motoboyId: r.motoboy_id ?? null, favorecido: r.favorecido, descricao: r.descricao,
