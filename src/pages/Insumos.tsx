@@ -212,7 +212,10 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
       )}
       {editando && (
         <EditarInsumo
+          key={editando === 'novo' ? 'novo' : editando.id}
           i={editando === 'novo' ? null : editando}
+          existentes={insumos}
+          abrir={setEditando}
           fornecedores={fornecedores}
           categorias={categorias}
           cat={cat}
@@ -229,8 +232,10 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   )
 }
 
-function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: {
+function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar, existentes = [], abrir }: {
   i: Insumo | null
+  existentes?: Insumo[]
+  abrir?: (i: Insumo) => void
   fornecedores: Fornecedor[]
   categorias: string[]
   cat: Catalogo
@@ -297,6 +302,16 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar }: 
         <Campo rotulo="Nome">
           <input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} required />
         </Campo>
+        {(() => {
+          // Nome já usado (muitas vezes por um material inativo, que não aparece na lista): leva até ele.
+          const igual = existentes.find((x) => x.id !== i?.id && x.nome.trim().toLowerCase() === f.nome.trim().toLowerCase())
+          return igual && (
+            <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+              Já existe <b>{igual.nome}</b>{igual.ativo ? '' : ' (inativo)'}{igual.ecleticaCodigo ? `, cód. ${igual.ecleticaCodigo}` : ''}.{' '}
+              {abrir && <button type="button" className="font-semibold underline" onClick={() => abrir(igual.ativo ? igual : { ...igual, ativo: true })}>{igual.ativo ? 'Abrir o cadastro' : 'Abrir e reativar'}</button>}
+            </div>
+          )
+        })()}
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Categoria" dica="Novas categorias em Cadastros › Categorias.">
             <select className={estiloEntrada} value={f.categoria} onChange={mudar('categoria')}>
