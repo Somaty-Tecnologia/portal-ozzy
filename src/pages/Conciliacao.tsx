@@ -29,6 +29,11 @@ const FILTROS = [
 ] as const
 type Filtro = (typeof FILTROS)[number]['id']
 
+// O Itaú põe a agência (1633) na frente da conta e não manda a agência separada: 1633354285 → 35428-5.
+const contaBancaria = (c: string) => {
+  const n = c.replace(/^1633/, '')
+  return /^\d{6}$/.test(n) ? `${n.slice(0, 5)}-${n.slice(5)}` : c
+}
 const MOTIVOS = ['Transferência entre contas da empresa', 'Aplicação ou resgate', 'Pagamento já lançado em outra conta', 'Outro']
 
 // Conciliação bancária (09/10): extrato OFX do Itaú × contas a pagar.
@@ -73,7 +78,7 @@ export default function Conciliacao() {
       try {
         const e = await lerArquivoOfx(f)
         const r = await store.importarExtrato(e)
-        lidos.push({ nome: f.name, texto: `cc ${e.conta}, ${e.movimentos.length} lançamentos de ${e.inicio ? dataCurta(e.inicio) : '?'} a ${e.fim ? dataCurta(e.fim) : '?'}: ${r.novos} novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`, chaves: new Set(e.movimentos.map((m) => `${e.banco}|${e.agencia}|${e.conta}|${m.fitid}`)) })
+        lidos.push({ nome: f.name, texto: `conta ${contaBancaria(e.conta)}, ${e.movimentos.length} lançamentos de ${e.inicio ? dataCurta(e.inicio) : '?'} a ${e.fim ? dataCurta(e.fim) : '?'}: ${r.novos} novos${r.repetidos ? `, ${r.repetidos} já estavam` : ''}`, chaves: new Set(e.movimentos.map((m) => `${e.banco}|${e.agencia}|${e.conta}|${m.fitid}`)) })
       } catch (e) {
         lidos.push({ nome: f.name, texto: (e as Error).message })
       }
@@ -185,7 +190,7 @@ export default function Conciliacao() {
           {contasBanco.length > 1 && (
             <select className={`${estiloEntrada} w-auto!`} value={contaBanco} onChange={(e) => setContaBanco(e.target.value)}>
               <option value="">Todas as contas</option>
-              {contasBanco.map((m) => <option key={m.id} value={`${m.banco}|${m.agencia}|${m.conta}`}>Banco {m.banco} · ag. {m.agencia} · cc {m.conta}</option>)}
+              {contasBanco.map((m) => <option key={m.id} value={`${m.banco}|${m.agencia}|${m.conta}`}>Conta {contaBancaria(m.conta)}</option>)}
             </select>
           )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
