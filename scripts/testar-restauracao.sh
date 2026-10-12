@@ -114,7 +114,9 @@ fi
   echo
   if [ $falhas -gt 0 ]; then echo "**Resultado: FALHOU** ($falhas problema(s), $avisos aviso(s))."
   else echo "**Resultado: OK** ($avisos aviso(s))."; fi
-} >> "$RESUMO"
+} > "$TMP/resumo.md"
+cat "$TMP/resumo.md"
+[ "$RESUMO" = /dev/stdout ] || cat "$TMP/resumo.md" >> "$RESUMO"
 
 rm -rf "$TMP"
 [ $falhas -eq 0 ]
