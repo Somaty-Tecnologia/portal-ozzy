@@ -1405,7 +1405,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       return linhas.map(paraPedidoCompra)
     },
     async salvarPedidoCompra(p) {
-      const itens = p.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumo_id: i.insumoId, quantidade: i.quantidade, unidade: i.unidade, preco: i.preco }))
+      const itens = p.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumo_id: i.insumoId, quantidade: i.quantidade, unidade: i.unidade, preco: i.preco, ...(i.fator && i.fator > 1 ? { embalagem: i.embalagem, fator: i.fator } : {}) }))
       const linha = {
         fornecedor_id: p.fornecedorId, centro_custo_id: p.centroCustoId, categoria: p.categoria, status: p.status, data_pedido: p.dataPedido,
         previsao_entrega: p.previsaoEntrega, itens, total: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.preco ?? 0), 0) * 100) / 100,
@@ -1526,7 +1526,7 @@ const paraPedidoCompra = (r: any): PedidoCompra => ({
   id: r.id, numero: r.numero, fornecedorId: r.fornecedor_id, centroCustoId: r.centro_custo_id, categoria: r.categoria, status: r.status,
   dataPedido: r.data_pedido, previsaoEntrega: r.previsao_entrega, total: Number(r.total), formaPagamento: r.forma_pagamento, observacao: r.observacao,
   recebidoEm: r.recebido_em, criadoEm: r.criado_em, criadoPor: r.criado_por,
-  itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), unidade: i.unidade ?? '', preco: numeroOuNulo(i.preco) })),
+  itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), unidade: i.unidade ?? '', preco: numeroOuNulo(i.preco), embalagem: i.embalagem ?? null, fator: numeroOuNulo(i.fator) })),
 })
 const paraFornecedor = (r: any): Fornecedor => ({
   id: r.id, nome: r.nome, contato: r.contato, telefone: r.telefone, observacao: r.observacao, ativo: r.ativo, cnpj: r.cnpj ?? null, contaPadraoId: r.conta_padrao_id ?? null, razaoSocial: r.razao_social ?? null,

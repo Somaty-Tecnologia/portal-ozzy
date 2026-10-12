@@ -1531,6 +1531,10 @@ export interface ItemCompra {
   quantidade: number
   unidade: string
   preco: number | null
+  // Comprado em embalagem (Heitor, 12/10): quantidade e preço continuam na unidade do estoque; a tela mostra
+  // "2 fardos (24 un)" e o preço do fardo. fator = unidades por embalagem.
+  embalagem?: string | null
+  fator?: number | null
 }
 export interface PedidoCompra {
   id: string
