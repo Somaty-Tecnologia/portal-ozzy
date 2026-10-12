@@ -1912,6 +1912,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
         return [{ insumoId: id, nome: i.nome, excluido: true, motivo: null }]
       })
     },
+    async controlarEstoque(ids, controla) {
+      exigeGestao()
+      for (const i of insumosDemo) if (ids.includes(i.id)) i.controlaEstoque = controla
+      return espera(undefined)
+    },
     async conferirPrecoInsumo(id, preco) {
       exigeGestao()
       const i = insumosDemo.find((x) => x.id === id)

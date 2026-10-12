@@ -936,6 +936,8 @@ export interface Insumo {
   prePreparo?: boolean
   // Preço que a gestão conferiu na Conferência de preços ("está certo"); enquanto for o atual, não é apontado.
   precoConferido?: number | null
+  // Entra no inventário (Heitor, 12/10); falta = true.
+  controlaEstoque?: boolean
 }
 // Dados do banco para a conferência de preços: preço anterior e custo da última entrada no estoque.
 export interface ReferenciaPreco {

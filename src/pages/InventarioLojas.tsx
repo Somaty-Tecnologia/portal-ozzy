@@ -19,7 +19,8 @@ const segundaDaSemana = () => {
   return addDias(hoje(), -((d.getDay() + 6) % 7))
 }
 const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
-const entraNoInventario = (i: Insumo) => i.ativo && i.categoria !== 'Observações do PDV'
+// Só material ativo e marcado "Controla estoque" em Cadastros › Materiais (Heitor, 12/10).
+const entraNoInventario = (i: Insumo) => i.ativo && i.controlaEstoque !== false && i.categoria !== 'Observações do PDV'
 
 export default function InventarioLojas() {
   const { store, eu } = useApp()

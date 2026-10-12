@@ -54,12 +54,26 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const [categoria, setCategoria] = useState('')
   const [semPreco, setSemPreco] = useState(false)
   const [inativos, setInativos] = useState(false)
+  const [estoque, setEstoque] = useState<'' | 'sim' | 'nao'>('')
+  // Marcar "controla estoque" na hora, sem recarregar a lista inteira a cada clique.
+  const [controla, setControla] = useState<Record<string, boolean>>({})
+  const controlaDe = (i: Insumo) => controla[i.id] ?? i.controlaEstoque !== false
   const [limite, setLimite] = useState(150)
   const [editando, setEditando] = useState<Insumo | 'novo' | null>(null)
   const { store } = useApp()
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [excluindo, setExcluindo] = useState(false)
   const [resultado, setResultado] = useState<Awaited<ReturnType<typeof store.excluirInsumos>> | null>(null)
+  const mudarEstoque = async (ids: string[], valor: boolean) => {
+    const antes = controla
+    setControla((c) => ({ ...c, ...Object.fromEntries(ids.map((id) => [id, valor])) }))
+    try {
+      await store.controlarEstoque(ids, valor)
+    } catch (e) {
+      setControla(antes)
+      avisar((e as Error).message)
+    }
+  }
   const marcar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const excluirSelecionados = async () => {
     if (!confirm(`Excluir ${sel.size} ${sel.size === 1 ? 'material' : 'materiais'} do cadastro? O que estiver em ficha, nota ou produção só é inativado.`)) return
@@ -76,12 +90,12 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const nomeForn = (id: string | null) => fornecedores.find((f) => f.id === id)?.nome
   const termo = busca.trim().toLowerCase()
   const lista = insumos.filter(
-    (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!semPreco || i.preco === null)
+    (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!estoque || controlaDe(i) === (estoque === 'sim')) && (!semPreco || i.preco === null)
       && (!termo || i.nome.toLowerCase().includes(termo) || i.ecleticaCodigo === termo),
   )
   const faltando = insumos.filter((i) => i.ativo && i.preco === null).length
   const { ordenada, cabecalho } = useOrdem(lista, {
-    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo,
+    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo, estoque: (i) => (controlaDe(i) ? 1 : 0),
   }, { col: 'nome' })
 
   return (
@@ -92,12 +106,19 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
           <option value="">Todas as categorias</option>
           {categorias.map((c) => <option key={c}>{c}</option>)}
         </select>
+        <select className={`${estiloEntrada} w-auto! py-2!`} value={estoque} onChange={(e) => setEstoque(e.target.value as '' | 'sim' | 'nao')} aria-label="Controle de estoque">
+          <option value="">Controla ou não o estoque</option>
+          <option value="sim">Controla estoque</option>
+          <option value="nao">Não controla estoque</option>
+        </select>
         <Botao onClick={() => setEditando('novo')}>+ Material</Botao>
       </div>
       {sel.size > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl bg-carvao px-4 py-2.5 text-sm text-white shadow-lg">
           <span className="font-semibold">{sel.size} {sel.size === 1 ? 'selecionado' : 'selecionados'}</span>
           <button className="underline" onClick={() => setSel(new Set())}>limpar</button>
+          <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarEstoque([...sel], true)}>Controla estoque</button>
+          <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarEstoque([...sel], false)}>Não controla</button>
           <Botao variante="perigo" className="ml-auto py-1.5!" disabled={excluindo} onClick={excluirSelecionados}>{excluindo ? 'Excluindo…' : 'Excluir'}</Botao>
         </div>
       )}
@@ -127,6 +148,7 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
                 {cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}
                 {cabecalho('preco', 'Preço', 'text-right', true)}
                 {cabecalho('fornecedor', 'Fornecedor', 'hidden lg:table-cell')}
+                {cabecalho('estoque', 'Controla estoque', 'w-24 text-center', true)}
               </tr>
             </thead>
             <tbody>
@@ -153,6 +175,9 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
                       {i.precoEm && <div className="text-xs text-stone-400">{dataLonga(i.precoEm)}</div>}
                     </td>
                     <td className="hidden px-3 py-2 text-stone-600 lg:table-cell">{nomeForn(i.fornecedorId) ?? '—'}</td>
+                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="size-5 accent-carvao" aria-label={`${i.nome} controla estoque`} checked={controlaDe(i)} onChange={(e) => mudarEstoque([i.id], e.target.checked)} />
+                    </td>
                   </tr>
                 )
               })}
