@@ -11,7 +11,7 @@ import { formatarCnpj } from '../lib/nfe'
 import { conferirPrecos, type AlertaPreco } from '../lib/conferencia'
 
 import ImportarFornecedores from './ImportarFornecedores'
-import { SETORES_ENVIO, type ContaContabil, type Fornecedor, type Insumo, type PrecoInsumo, type SetorEnvio, type UnidadeMedida } from '../lib/types'
+import { SETORES_ENVIO, type ContaContabil, type CurvaAbc, type Fornecedor, type Insumo, type PrecoInsumo, type SetorEnvio, type UnidadeMedida } from '../lib/types'
 
 const numero = lerNumero
 const doNumero = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
@@ -49,18 +49,20 @@ export default function Insumos({ aba }: { aba: 'insumos' | 'fornecedores' | 'ca
 }
 
 function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { insumos: Insumo[]; fornecedores: Fornecedor[]; categorias: string[]; cat: Catalogo; aoMudar: () => Promise<void> }) {
-  const { avisar } = useApp()
+  const { avisar, store } = useApp()
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('')
   const [semPreco, setSemPreco] = useState(false)
   const [inativos, setInativos] = useState(false)
   const [estoque, setEstoque] = useState<'' | 'sim' | 'nao'>('')
+  // Curva ABC das compras dos últimos 90 dias (0077): mostra o que pesa no valor comprado.
+  const [curva, setCurva] = useState<Map<string, CurvaAbc>>(new Map())
+  useEffect(() => { store.curvaAbc().then((c) => setCurva(new Map(c.map((x) => [x.insumoId, x]))), () => {}) }, [store])
   // Marcar "controla estoque" na hora, sem recarregar a lista inteira a cada clique.
   const [controla, setControla] = useState<Record<string, boolean>>({})
   const controlaDe = (i: Insumo) => controla[i.id] ?? i.controlaEstoque !== false
   const [limite, setLimite] = useState(150)
   const [editando, setEditando] = useState<Insumo | 'novo' | null>(null)
-  const { store } = useApp()
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [excluindo, setExcluindo] = useState(false)
   const [resultado, setResultado] = useState<Awaited<ReturnType<typeof store.excluirInsumos>> | null>(null)
@@ -95,7 +97,7 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   )
   const faltando = insumos.filter((i) => i.ativo && i.preco === null).length
   const { ordenada, cabecalho } = useOrdem(lista, {
-    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo, estoque: (i) => (controlaDe(i) ? 1 : 0),
+    nome: (i) => i.nome, categoria: (i) => i.categoria, preco: (i) => i.preco, fornecedor: (i) => nomeForn(i.fornecedorId), codigo: (i) => i.ecleticaCodigo, estoque: (i) => (controlaDe(i) ? 1 : 0), curva: (i) => curva.get(i.id)?.valor,
   }, { col: 'nome' })
 
   return (
@@ -148,6 +150,7 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
                 {cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}
                 {cabecalho('preco', 'Preço', 'text-right', true)}
                 {cabecalho('fornecedor', 'Fornecedor', 'hidden lg:table-cell')}
+                {cabecalho('curva', 'Curva', 'hidden w-16 text-center sm:table-cell', true)}
                 {cabecalho('estoque', 'Controla estoque', 'w-24 text-center', true)}
               </tr>
             </thead>
@@ -175,6 +178,9 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
                       {i.precoEm && <div className="text-xs text-stone-400">{dataLonga(i.precoEm)}</div>}
                     </td>
                     <td className="hidden px-3 py-2 text-stone-600 lg:table-cell">{nomeForn(i.fornecedorId) ?? '—'}</td>
+                    <td className="hidden px-3 py-2 text-center sm:table-cell" title={curva.get(i.id) ? `${String(curva.get(i.id)!.participacao).replace('.', ',')}% do valor comprado em 90 dias` : 'Sem compras em 90 dias'}>
+                      {curva.get(i.id) ? <Selo cor={curva.get(i.id)!.classe === 'A' ? 'vermelho' : curva.get(i.id)!.classe === 'B' ? 'ambar' : 'cinza'}>{curva.get(i.id)!.classe}</Selo> : <span className="text-stone-300">—</span>}
+                    </td>
                     <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" className="size-5 accent-carvao" aria-label={`${i.nome} controla estoque`} checked={controlaDe(i)} onChange={(e) => mudarEstoque([i.id], e.target.checked)} />
                     </td>

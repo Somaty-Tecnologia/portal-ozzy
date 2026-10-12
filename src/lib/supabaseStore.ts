@@ -3,7 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeProprio, soDigitos, t
 import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
-import type { InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1443,6 +1443,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         enviadoEm: r.enviado_em, enviadoPor: r.enviado_por,
         itens: (r.inventario_estoque_itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), saldoSistema: Number(i.saldo_sistema), custoUnit: numeroOuNulo(i.custo_unit) })),
       }))
+    },
+    async curvaAbc(dias = 90) {
+      return (ok(await sb.rpc('curva_abc', { p_dias: dias })) ?? []).map((r: any): CurvaAbc => ({ insumoId: r.insumo_id, valor: Number(r.valor), participacao: Number(r.participacao), classe: r.classe }))
     },
     async enviarInventario(e) {
       return ok(await sb.rpc('enviar_inventario', {

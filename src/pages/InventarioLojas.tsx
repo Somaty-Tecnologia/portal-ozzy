@@ -5,7 +5,7 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
-import type { CentroCusto, Insumo, InventarioEstoque, ItemContagem } from '../lib/types'
+import type { CentroCusto, CurvaAbc, Insumo, InventarioEstoque, ItemContagem } from '../lib/types'
 import { criarReconhecedor, lerContagem } from '../lib/voz'
 
 // Inventário semanal (Heitor, 12/10): toda segunda cada loja conta todos os materiais ativos, pode ser falando.
@@ -59,7 +59,10 @@ export default function InventarioLojas() {
 function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: string; nomeLoja: string; data: string; aoTrocarData: (d: string) => void }) {
   const { store, eu, avisar, nomeDe } = useApp()
   const gestao = podeGerenciar(eu.nivel)
-  const [insumos, setInsumos] = useState<Insumo[] | null>(null)
+  const [todos, setTodos] = useState<Insumo[] | null>(null)
+  const [curva, setCurva] = useState<Map<string, CurvaAbc>>(new Map())
+  // Semanal = só a curva A das compras (o que pesa no CMV); uma vez por mês, tudo.
+  const [modo, setModo] = useState<'a' | 'tudo'>('a')
   const [saldos, setSaldos] = useState<Map<string, number> | null>(null)
   const [historico, setHistorico] = useState<InventarioEstoque[]>([])
   const [erro, setErro] = useState('')
@@ -80,10 +83,15 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
 
   const carregar = useCallback(async () => {
     try {
-      const [ins, hist] = await Promise.all([store.insumos(), store.inventariosEstoque(centro)])
-      setInsumos(ins.filter(entraNoInventario).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
+      const [ins, hist, abc] = await Promise.all([store.insumos(), store.inventariosEstoque(centro), store.curvaAbc().catch(() => [] as CurvaAbc[])])
+      const lista = ins.filter(entraNoInventario).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      const mapa = new Map(abc.map((c) => [c.insumoId, c]))
+      setTodos(lista)
+      setCurva(mapa)
       setHistorico(hist)
       const feito = hist.find((h) => h.data === data)
+      // Sem curva (sem compras ainda) não há o que filtrar; contagem já feita com itens fora da A abre em "tudo".
+      if (!abc.length || feito?.itens.some((i) => mapa.get(i.insumoId)?.classe !== 'A')) setModo('tudo')
       if (feito) {
         setCont(Object.fromEntries(feito.itens.map((i) => [i.insumoId, numTexto(i.quantidade)])))
         setResponsavel(feito.responsavel ?? '')
@@ -107,6 +115,7 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
     return saldos ? saldos.get(id) ?? 0 : null
   }
 
+  const insumos = useMemo(() => (todos ? (modo === 'a' ? todos.filter((i) => curva.get(i.id)?.classe === 'A') : todos) : null), [todos, curva, modo])
   const itensVoz: ItemContagem[] = useMemo(() => (insumos ?? []).map((i) => ({ chave: i.id, nome: i.nome, categoria: i.categoria, unidade: i.unidade, embalagem: i.embalagem, embalagemQtd: i.embalagemQtd })), [insumos])
   const ler = (texto: string) => {
     const r = lerContagem(texto, itensVoz)
@@ -148,7 +157,6 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
 
   if (erro) return <p className="text-red-700">{erro}</p>
   if (!insumos) return <p className="text-stone-400">Carregando…</p>
-  if (!insumos.length) return <Vazio>Nenhum material ativo no cadastro.</Vazio>
 
   const contados = insumos.filter((i) => lerValor(cont[i.id] ?? '') !== null)
   const termo = busca.trim().toLowerCase()
@@ -197,6 +205,19 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
           ? <>Enviado {new Date(feito.enviadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}{feito.enviadoPor ? ` por ${nomeDe(feito.enviadoPor)}` : ''}. Se corrigir algo, envie de novo: substitui o anterior.</>
           : 'Ainda não enviado.'}
       </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-200">
+          <button onClick={() => setModo('a')} disabled={!curva.size} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${modo === 'a' ? 'bg-carvao text-white' : 'text-stone-600'}`}>Semanal: curva A</button>
+          <button onClick={() => setModo('tudo')} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${modo === 'tudo' ? 'bg-carvao text-white' : 'text-stone-600'}`}>Mensal: tudo</button>
+        </div>
+        <p className="text-sm text-stone-500">
+          {modo === 'a'
+            ? `Os ${insumos.length} itens que somam 80% do valor comprado nos últimos 90 dias (carne, pão, batata…). Uma vez por mês, conte tudo.`
+            : `Todos os ${insumos.length} materiais que controlam estoque.`}
+        </p>
+      </div>
+      {insumos.length === 0 && <Vazio>Nenhum material {modo === 'a' ? 'da curva A' : 'ativo que controla estoque'}.</Vazio>}
 
       <Cartao>
         <div className="flex flex-wrap items-center gap-3">
@@ -249,7 +270,7 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
                 <div key={i.id} className={`flex items-center gap-2 px-3 py-2 ${destaque.has(i.id) ? 'bg-ozzy-50' : ''}`}>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{i.nome}</div>
-                    <div className="truncate text-xs text-stone-500">{i.unidade}{i.ecleticaCodigo ? ` · cód. ${i.ecleticaCodigo}` : ''}{gestao && s !== null ? <span className="sm:hidden"> · sistema {mostrarQtd(s)}</span> : ''}</div>
+                    <div className="truncate text-xs text-stone-500">{curva.get(i.id) && <b className={curva.get(i.id)!.classe === 'A' ? 'text-carvao' : ''}>curva {curva.get(i.id)!.classe} · </b>}{i.unidade}{i.ecleticaCodigo ? ` · cód. ${i.ecleticaCodigo}` : ''}{gestao && s !== null ? <span className="sm:hidden"> · sistema {mostrarQtd(s)}</span> : ''}</div>
                   </div>
                   {gestao && <span className="hidden w-20 text-right text-sm text-stone-500 sm:block">{s === null ? '' : mostrarQtd(s)}</span>}
                   <input inputMode="decimal" aria-label={`Quanto tem de ${i.nome}`} value={cont[i.id] ?? ''} onChange={(e) => setCont((v) => ({ ...v, [i.id]: e.target.value }))}

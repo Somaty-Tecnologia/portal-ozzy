@@ -1451,6 +1451,8 @@ export interface EnvioFechamento {
   itens: { itemId: string; contagem: number | null; sugestao: number | null; pedido: number | null }[]
 }
 // Inventário semanal das lojas (Heitor, 12/10): contagem de todos os materiais ativos; a diferença vira ajuste no estoque.
+// Curva ABC das compras (0077): A = itens que somam até 80% do valor comprado no período.
+export interface CurvaAbc { insumoId: string; valor: number; participacao: number; classe: 'A' | 'B' | 'C' }
 export interface InventarioEstoque {
   id: string
   centroCustoId: string

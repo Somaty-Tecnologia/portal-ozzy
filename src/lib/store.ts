@@ -1,4 +1,4 @@
-import type { EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
+import type { CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
 export type NovoMovimentoEstoque = Omit<MovimentoEstoque, 'id' | 'criadoEm' | 'notaItemId' | 'custoUnit'> & { custoUnit?: number | null }
@@ -350,6 +350,7 @@ export interface Store {
   fechamentos(de: string, ate: string): Promise<Fechamento[]>
   enviarFechamento(f: EnvioFechamento): Promise<string>
   inventariosEstoque(centroCustoId: string): Promise<InventarioEstoque[]>
+  curvaAbc(dias?: number): Promise<CurvaAbc[]>
   enviarInventario(e: EnvioInventario): Promise<string>
   pedidosProducao(para: string): Promise<PedidoProducao[]>
   // Só os itens informados: lança a diferença para o saldo da Central.
