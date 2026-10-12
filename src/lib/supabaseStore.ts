@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeProprio, soDigitos, type Store } from './store'
+import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
@@ -857,7 +857,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     },
     async salvarInsumo(i) {
       const linha = {
-        nome: i.nome.trim(), categoria: texto(i.categoria), unidade: i.unidade, embalagem: texto(i.embalagem), embalagem_qtd: i.embalagemQtd,
+        nome: nomeItem(i.nome), categoria: texto(i.categoria), unidade: i.unidade, embalagem: texto(i.embalagem), embalagem_qtd: i.embalagemQtd,
         preco: i.preco, fornecedor_id: i.fornecedorId, observacao: texto(i.observacao), ativo: i.ativo,
         ...(i.setorEnvio !== undefined && { setor_envio: i.setorEnvio }),
         ...(i.contaId !== undefined && { conta_id: i.contaId }),
@@ -1346,6 +1346,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async motoboyQuemSou(celular) {
       return ok(await sb.rpc('motoboy_quem_sou', { p_celular: celular }))
     },
+    async motoboyCadastrar(c) {
+      return ok(await sb.rpc('motoboy_cadastrar', { p_celular: c.celular, p_nome: c.nome, p_cpf: c.cpf, p_pix: c.pix, p_unidade: c.unidadeId || null }))
+    },
     async enviarDiaMotoboy(e) {
       const fotos: string[] = []
       for (const f of e.fotos) {
@@ -1471,7 +1474,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     },
     async salvarProdutoVenda(p) {
       const linha = {
-        ecletica_codigo: texto(p.ecleticaCodigo), nome: p.nome.trim(), grupo: texto(p.grupo), subgrupo: texto(p.subgrupo), tipo: p.tipo, unidade: p.unidade,
+        ecletica_codigo: texto(p.ecleticaCodigo), nome: nomeItem(p.nome), grupo: texto(p.grupo), subgrupo: texto(p.subgrupo), tipo: p.tipo, unidade: p.unidade,
         preco: p.preco, preco_pizza: p.precoPizza, receita_id: p.receitaId, ativo: p.ativo, atualizado_em: new Date().toISOString(),
       }
       return paraProdutoVenda(p.id

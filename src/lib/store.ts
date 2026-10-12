@@ -228,6 +228,7 @@ export interface Store {
   escalarMotoboy(motoboyId: string, unidadeId: string, data: string, escalado: boolean): Promise<void>
   // Link do motoboy (0080, sem login): manda o dia com as fotos das notinhas; a gestão confere em Motoboys › Conferir.
   motoboyQuemSou(celular: string): Promise<QuemSouMotoboy>
+  motoboyCadastrar(c: { celular: string; nome: string; cpf: string; pix: string; unidadeId: string }): Promise<QuemSouMotoboy>
   enviarDiaMotoboy(e: NovoEnvioMotoboy): Promise<void>
   enviosMotoboys(de: string, ate: string): Promise<EnvioMotoboy[]>
   fotosEnvioMotoboy(caminhos: string[]): Promise<string[]>
@@ -423,6 +424,35 @@ export const nomeProprio = (nome: string) =>
     .split(' ')
     .map((p, i) => (i > 0 && PARTICULAS.has(p) ? p : p.replace(/(^|[-'’])(\p{L})/gu, (_, a: string, l: string) => a + l.toLocaleUpperCase('pt-BR'))))
     .join(' ')
+
+// Nome de material ou produto (Heitor, 12/10): primeira letra de cada palavra maiúscula, o resto como foi digitado
+// (siglas como BBQ ficam). Preposições do meio e unidades ficam minúsculas. O banco faz o mesmo (0082).
+const MINUSCULAS_ITEM = new Set(['a', 'as', 'o', 'os', 'da', 'das', 'de', 'di', 'do', 'dos', 'du', 'e', 'em', 'com', 'sem', 'para', 'p/', 'c/', 's/'])
+const UNIDADES_ITEM = new Set(['kg', 'g', 'gr', 'mg', 'ml', 'l', 'lt', 'un', 'und', 'cm', 'mm', 'x'])
+export const nomeItem = (nome: string) =>
+  nome
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((p, i) => {
+      const m = p.toLocaleLowerCase('pt-BR')
+      if ((i > 0 && MINUSCULAS_ITEM.has(m)) || UNIDADES_ITEM.has(m)) return m
+      return p.replace(/^([("[]*)(.)/u, (_, a: string, l: string) => a + l.toLocaleUpperCase('pt-BR'))
+    })
+    .join(' ')
+
+// Máscaras enquanto digita: celular (11) 90000-0000 e CPF 000.000.000-00.
+export const mascaraCelular = (s: string) => {
+  const d = soDigitos(s).slice(0, 11)
+  if (d.length <= 2) return d.length ? `(${d}` : ''
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+export const mascaraCpf = (s: string) => {
+  const d = soDigitos(s).slice(0, 11)
+  return d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
+}
 
 // Localização do celular (com até 12 s de espera). null quando a pessoa nega ou o aparelho não consegue.
 export const pegarLocalizacao = () =>

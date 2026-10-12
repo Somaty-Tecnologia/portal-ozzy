@@ -4,7 +4,8 @@ import logo from '../assets/logo.png'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { lerNumero, reais } from '../lib/financeiro'
 import { reduzirFoto } from '../lib/imagem'
-import { soDigitos, type Store } from '../lib/store'
+import { mascaraCelular, mascaraCpf, nomeProprio, soDigitos, type Store } from '../lib/store'
+import { cpfValido } from '../lib/cpf'
 import type { QuemSouMotoboy, Unidade } from '../lib/types'
 
 // Link dos motoboys (#/motoboy, Heitor 12/10), sem login: no fim do turno o motoboy manda quantas entregas fez,
@@ -26,6 +27,9 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
+  // Motoboy novo (Heitor, 12/10): se cadastra aqui mesmo, com nome, CPF e Pix obrigatórios.
+  const [novo, setNovo] = useState(false)
+  const [cad, setCad] = useState({ nome: '', cpf: '', pix: '', loja: '' })
 
   useEffect(() => {
     store.lojasParaDiaria().then((us) => setLojas(us.filter((u) => u.id !== 'central' && u.id !== 'eventos')), () => undefined)
@@ -38,9 +42,30 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
     setEnviando(true)
     try {
       const q = await store.motoboyQuemSou(soDigitos(celular))
-      if (q.tipo !== 'motoboy') return setErro('Não achamos esse celular no cadastro dos motoboys. Fale com a gerente para cadastrar.')
+      if (q.tipo !== 'motoboy') return setNovo(true)
       setQuem(q)
       setLoja(q.unidadeId ?? '')
+    } catch (err) {
+      setErro((err as Error).message)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const cadastrar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (nomeProprio(cad.nome).split(' ').length < 2) return setErro('Coloque o nome completo.')
+    if (!cpfValido(cad.cpf)) return setErro('CPF inválido. Confira os números.')
+    if (!cad.pix.trim()) return setErro('Coloque a chave Pix.')
+    if (!cad.loja) return setErro('Escolha a loja em que você roda.')
+    setErro('')
+    setEnviando(true)
+    try {
+      const q = await store.motoboyCadastrar({ celular: soDigitos(celular), nome: nomeProprio(cad.nome), cpf: soDigitos(cad.cpf), pix: cad.pix.trim(), unidadeId: cad.loja })
+      if (q.tipo !== 'motoboy') return setErro('Não deu para cadastrar. Fale com a gerente.')
+      setNovo(false)
+      setQuem(q)
+      setLoja(q.unidadeId ?? cad.loja)
     } catch (err) {
       setErro((err as Error).message)
     } finally {
@@ -116,11 +141,34 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
             <p className="text-xs text-stone-500">Mandou algo errado? Mande de novo o mesmo dia: o último envio vale, enquanto a gerente não conferiu.</p>
             <Botao variante="secundario" className="w-full" onClick={recomecar}>Mandar outro dia</Botao>
           </div>
+        ) : novo && !quem ? (
+          <form onSubmit={cadastrar} className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-stone-200">
+            <h1 className="text-lg font-bold">Primeira vez por aqui?</h1>
+            <p className="text-sm text-stone-600">Não achamos o celular {mascaraCelular(celular)} no cadastro. Preencha seus dados uma vez só; das próximas, é só o celular.</p>
+            <Campo rotulo="Nome completo">
+              <input className={estiloEntrada} autoComplete="name" value={cad.nome} onChange={(e) => setCad({ ...cad, nome: e.target.value })} onBlur={() => setCad((c) => ({ ...c, nome: nomeProprio(c.nome) }))} required />
+            </Campo>
+            <Campo rotulo="CPF">
+              <input className={estiloEntrada} inputMode="numeric" placeholder="000.000.000-00" value={cad.cpf} onChange={(e) => setCad({ ...cad, cpf: mascaraCpf(e.target.value) })} required />
+            </Campo>
+            <Campo rotulo="Chave Pix" dica="CPF, celular, e-mail ou chave aleatória. Precisa estar no seu nome.">
+              <input className={estiloEntrada} value={cad.pix} onChange={(e) => setCad({ ...cad, pix: e.target.value })} required />
+            </Campo>
+            <Campo rotulo="Loja em que você roda">
+              <select className={estiloEntrada} value={cad.loja} onChange={(e) => setCad({ ...cad, loja: e.target.value })} required>
+                <option value="">Escolha</option>
+                {lojas.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </Campo>
+            {erro && <p className="text-sm text-red-600">{erro}</p>}
+            <Botao className="w-full" disabled={enviando}>{enviando ? 'Cadastrando…' : 'Cadastrar e continuar'}</Botao>
+            <button type="button" className="w-full text-sm font-semibold text-stone-500" onClick={() => { setNovo(false); setErro('') }}>Errei o celular</button>
+          </form>
         ) : !quem ? (
           <form onSubmit={identificar} className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-stone-200">
             <p className="text-sm text-stone-600">Terminou o turno? Mande aqui quantas entregas você fez e as fotos das notinhas.</p>
             <Campo rotulo="Seu celular (com DDD)" dica="O mesmo que está no cadastro com a gerente.">
-              <input className={estiloEntrada} inputMode="tel" autoComplete="tel" placeholder="(11) 90000-0000" value={celular} onChange={(e) => setCelular(e.target.value)} required />
+              <input className={estiloEntrada} inputMode="tel" autoComplete="tel" placeholder="(11) 90000-0000" value={celular} onChange={(e) => setCelular(mascaraCelular(e.target.value))} required />
             </Campo>
             {erro && <p className="text-sm text-red-600">{erro}</p>}
             <Botao className="w-full" disabled={enviando}>{enviando ? 'Conferindo…' : 'Continuar'}</Botao>

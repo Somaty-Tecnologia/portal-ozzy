@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { nomeItem } from '../lib/store'
 import { Botao, Campo, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
 import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
@@ -157,7 +158,7 @@ function EditarProduto({ p, grupos, receitas, aoFechar, aoSalvar }: { p: Produto
   return (
     <Modal titulo={p ? p.nome : 'Novo produto de venda'} aberto aoFechar={aoFechar}>
       <form onSubmit={salvar} className="space-y-4">
-        <Campo rotulo="Nome (como no PDV)"><input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} required /></Campo>
+        <Campo rotulo="Nome (como no PDV)"><input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} onBlur={() => setF((x) => ({ ...x, nome: nomeItem(x.nome) }))} required /></Campo>
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Código na Eclética"><input className={estiloEntrada} inputMode="numeric" value={f.ecleticaCodigo} onChange={mudar('ecleticaCodigo')} /></Campo>
           <Campo rotulo="Tipo">

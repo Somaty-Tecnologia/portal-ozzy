@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { nomeItem } from '../lib/store'
 import { Botao, Campo, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
 import { useOrdem } from '../components/Ordenar'
 import EscolherConta from '../components/EscolherConta'
@@ -320,7 +321,7 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar, ex
           </div>
         )}
         <Campo rotulo="Nome">
-          <input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} required />
+          <input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} onBlur={() => setF((x) => ({ ...x, nome: nomeItem(x.nome) }))} required />
         </Campo>
         {(() => {
           // Nome já usado (muitas vezes por um material inativo, que não aparece na lista): leva até ele.

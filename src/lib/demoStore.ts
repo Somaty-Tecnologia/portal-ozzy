@@ -1,5 +1,5 @@
 import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
-import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeProprio, soDigitos, type Store } from './store'
+import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
 import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
@@ -1650,6 +1650,15 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
       return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4 } : { tipo: 'nao_achei' as const })
     },
+    async motoboyCadastrar(c) {
+      const atual = await this.motoboyQuemSou(c.celular)
+      if (atual.tipo === 'motoboy') return atual
+      if (nomeProprio(c.nome).split(' ').length < 2) throw new Error('Coloque o nome completo.')
+      if (!cpfValido(c.cpf)) throw new Error('CPF inválido. Confira os números.')
+      if (!c.pix.trim()) throw new Error('Coloque a chave Pix.')
+      motoboysDemo.push({ id: novoId('mb'), nome: nomeProprio(c.nome), unidadeId: c.unidadeId || null, pix: c.pix.trim(), telefone: soDigitos(c.celular), cpf: soDigitos(c.cpf), observacao: 'Cadastro feito pelo próprio motoboy no link', ativo: true })
+      return this.motoboyQuemSou(c.celular)
+    },
     async enviarDiaMotoboy(e) {
       const cel = e.celular.replace(/\D/g, '').slice(-11)
       const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
@@ -1929,7 +1938,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async salvarInsumo(i) {
       const u = exigeGestao()
-      const nome = i.nome.trim()
+      const nome = nomeItem(i.nome)
       if (insumosDemo.some((x) => x.id !== i.id && x.nome.toLowerCase() === nome.toLowerCase())) throw new Error('Já existe um insumo com esse nome.')
       const atual = insumosDemo.find((x) => x.id === i.id)
       const mudouPreco = !atual || atual.preco !== i.preco
@@ -2714,7 +2723,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       if (!p.nome.trim()) throw new Error('Dê um nome ao produto.')
       if (p.ecleticaCodigo && produtosVendaDemo.some((x) => x.ecleticaCodigo === p.ecleticaCodigo && x.id !== p.id)) throw new Error('duplicate key: código já usado')
       const atual = p.id ? produtosVendaDemo.find((x) => x.id === p.id) : undefined
-      const novo: ProdutoVenda = { ...p, id: atual?.id ?? novoId('pv'), nome: p.nome.trim() }
+      const novo: ProdutoVenda = { ...p, id: atual?.id ?? novoId('pv'), nome: nomeItem(p.nome) }
       if (atual) Object.assign(atual, novo)
       else produtosVendaDemo.push(novo)
       return espera(structuredClone(novo))
