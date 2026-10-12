@@ -1,7 +1,7 @@
 import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
-import type { TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -443,6 +443,12 @@ const turnosMotoboyDemo: TurnoMotoboy[] = [
   ...[1, 2, 3, 4, 5, 6].map((dia) => ({ unidadeId: 'burger-va', dia, inicio: '18:00', fim: '23:00' })),
 ]
 const escalaMotoboyDemo: EscalaMotoboy[] = []
+// Uma notinha de exemplo (desenho) para a conferência na demonstração.
+const notinhaDemo = (n: number) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="300" height="420" fill="#fffef6"/><g font-family="monospace" font-size="18" fill="#222"><text x="20" y="40">THE OZZY BURGER</text><text x="20" y="80">Pedido #${4810 + n}</text><text x="20" y="120">Entrega - Rua Exemplo, ${n * 37}</text><text x="20" y="160">1x Ozzy Classic</text><text x="20" y="190">1x Batata média</text><text x="20" y="240">Total R$ ${(48 + n * 3).toFixed(2)}</text></g></svg>`)
+const enviosMotoboyDemo: EnvioMotoboy[] = [
+  { id: 'emb1', motoboyId: 'mb1', unidadeId: 'burger-psd', data: addDias(hoje(), -1), entregas: 13, extras: [{ descricao: 'Entrega longe (Osasco)', valor: 8 }], observacao: 'Choveu bastante',
+    fotos: [1, 2, 3].map(notinhaDemo), status: 'pendente', entregasConferidas: null, motivo: null, enviadoEm: new Date().toISOString() },
+]
 
 const freelas: Freelancer[] = [
   { id: 'fl1', nome: 'Rafael Mendes Teixeira', cpf: '52998224725', pix: '11988887777', celular: '11988887777', ativo: true, funcionarioId: null },
@@ -1635,6 +1641,43 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const i = escalaMotoboyDemo.findIndex((e) => e.motoboyId === motoboyId && e.data === data)
       if (i >= 0) escalaMotoboyDemo.splice(i, 1)
       if (escalado) escalaMotoboyDemo.push({ id: novoId('esc'), motoboyId, unidadeId, data })
+      return espera(undefined)
+    },
+    async motoboyQuemSou(celular) {
+      const cel = celular.replace(/\D/g, '').slice(-11)
+      if (cel.length < 10) return espera({ tipo: 'invalido' as const })
+      const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
+      return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4 } : { tipo: 'nao_achei' as const })
+    },
+    async enviarDiaMotoboy(e) {
+      const cel = e.celular.replace(/\D/g, '').slice(-11)
+      const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
+      if (!m) throw new Error('Celular não encontrado no cadastro dos motoboys. Fale com a gerente.')
+      const atual = enviosMotoboyDemo.find((x) => x.motoboyId === m.id && x.unidadeId === e.unidadeId && x.data === e.data && x.status !== 'recusado')
+      if (atual?.status === 'aprovado') throw new Error('Esse dia já foi conferido e aprovado. Se precisar mudar, fale com a gerente.')
+      const fotos = e.fotos.map((f) => URL.createObjectURL(f))
+      const dados = { entregas: e.entregas, extras: e.extras.filter((x) => x.descricao.trim() && x.valor), observacao: e.observacao.trim() || null, enviadoEm: new Date().toISOString() }
+      if (atual) Object.assign(atual, dados, { fotos: [...atual.fotos, ...fotos] })
+      else enviosMotoboyDemo.push({ id: novoId('emb'), motoboyId: m.id, unidadeId: e.unidadeId, data: e.data, fotos, status: 'pendente', entregasConferidas: null, motivo: null, ...dados })
+      return espera(undefined)
+    },
+    async enviosMotoboys(de, ate) {
+      exigeGestao()
+      return espera(enviosMotoboyDemo.filter((x) => x.data >= de && x.data <= ate).map((x) => ({ ...x })))
+    },
+    async fotosEnvioMotoboy(caminhos) {
+      return espera(caminhos)
+    },
+    async resolverEnvioMotoboy(id, aprovar, entregas, motivo) {
+      exigeGestao()
+      const x = enviosMotoboyDemo.find((e) => e.id === id)
+      if (x) Object.assign(x, { status: aprovar ? 'aprovado' : 'recusado', entregasConferidas: aprovar ? entregas : null, motivo: motivo.trim() || null })
+      return espera(undefined)
+    },
+    async reabrirEnvioMotoboy(id) {
+      exigeGestao()
+      const x = enviosMotoboyDemo.find((e) => e.id === id)
+      if (x) Object.assign(x, { status: 'pendente', entregasConferidas: null, motivo: null })
       return espera(undefined)
     },
     async semanasMotoboys(de, ate) {

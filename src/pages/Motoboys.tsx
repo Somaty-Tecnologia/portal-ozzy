@@ -4,20 +4,22 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, hoje, indiceSemana, inicioDaSemana } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { soDigitos } from '../lib/store'
-import { apelidoUnidade, calcularMotoboy, nomeCurto, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
+import { apelidoUnidade, calcularMotoboy, nomeCurto, type EnvioMotoboy, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
 import { reais } from '../lib/financeiro'
 import ArquivoBanco from '../components/ArquivoBanco'
+import ConferirMotoboys from '../components/ConferirMotoboys'
 
 // Motoboys (Heitor, 09/10): não são da equipe, mas têm cadastro (nome, Pix). Todo domingo a gestão lança a semana
 // de cada loja (diárias, entregas com taxas, extras); vira conta a pagar na segunda e entra na conciliação.
 
-type Aba = 'escala' | 'semana' | 'cadastro'
+type Aba = 'conferir' | 'escala' | 'semana' | 'cadastro'
 const EXTRA_RESPONSAVEL = 'Responsável pelos motoboys'
 interface Linha { motoboyId: string; diarias: string; entregas: string; extras: { descricao: string; valor: string }[]; jaPago: boolean; dias: Record<string, string> }
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 const num = (s: string) => lerNumero(s) ?? 0
 const texto = (n: number) => (n ? String(n).replace('.', ',') : '')
+const diasNumero = (l: Linha) => Object.fromEntries(Object.entries(l.dias).filter(([, q]) => q.trim() !== '' && lerNumero(q) !== null).map(([d, q]) => [d, Math.max(0, Math.round(lerNumero(q)!))]))
 const totalLinha = (l: Linha) => num(l.diarias) + num(l.entregas) + l.extras.reduce((t, e) => t + num(e.valor), 0)
 // Segunda do pagamento: amanhã se hoje é domingo, hoje se é segunda, senão a próxima.
 const proximaSegunda = () => (inicioDaSemana(hoje()) === hoje() ? hoje() : addDias(inicioDaSemana(hoje()), 7))
@@ -31,13 +33,18 @@ export default function Motoboys() {
   const [motoboys, setMotoboys] = useState<Motoboy[] | null>(null)
   const [semanas, setSemanas] = useState<SemanaMotoboy[]>([])
   const [escalados, setEscalados] = useState<EscalaMotoboy[]>([])
+  const [envios, setEnvios] = useState<EnvioMotoboy[]>([])
+  const [pendentes, setPendentes] = useState(0)
   const [editando, setEditando] = useState<Motoboy | 'novo' | null>(null)
 
   const carregar = useCallback(async () => {
-    const [m, s, e] = await Promise.all([store.motoboys(), store.semanasMotoboys(addDias(pagamento, -84), pagamento), store.escalaMotoboys(addDias(pagamento, -7), addDias(pagamento, -1)).catch(() => [])])
+    const [m, s, e, ev, pend] = await Promise.all([store.motoboys(), store.semanasMotoboys(addDias(pagamento, -84), pagamento), store.escalaMotoboys(addDias(pagamento, -7), addDias(pagamento, -1)).catch(() => []),
+      store.enviosMotoboys(addDias(pagamento, -7), addDias(pagamento, -1)).catch(() => []), store.enviosMotoboys(addDias(hoje(), -30), hoje()).catch(() => [])])
     setMotoboys(m)
     setSemanas(s)
     setEscalados(e)
+    setEnvios(ev)
+    setPendentes(pend.filter((x) => x.status === 'pendente').length)
   }, [store, pagamento])
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { if (!loja && lojas.length) setLoja(lojas[0].id) }, [loja, lojas])
@@ -54,9 +61,11 @@ export default function Motoboys() {
         {aba === 'cadastro' && <Botao onClick={() => setEditando('novo')}>+ Novo motoboy</Botao>}
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold">
-        {([['escala', 'Escala'], ['semana', 'Pagamento'], ['cadastro', 'Cadastro']] as const).map(([a, nome]) => (
-          <button key={a} onClick={() => setAba(a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold">
+        {([['conferir', 'Conferir'], ['escala', 'Escala'], ['semana', 'Pagamento'], ['cadastro', 'Cadastro']] as const).map(([a, nome]) => (
+          <button key={a} onClick={() => setAba(a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>
+            {nome}{a === 'conferir' && pendentes > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 text-xs text-white">{pendentes}</span>}
+          </button>
         ))}
       </div>
 
@@ -83,7 +92,9 @@ export default function Motoboys() {
           </div>
           {loja && (
             <SemanaLoja
-              key={pagamento + loja}
+              key={pagamento + loja + envios.filter((x) => x.status === 'aprovado').length}
+              envios={envios}
+              conferir={() => setAba('conferir')}
               pagamento={pagamento}
               loja={loja}
               motoboys={motoboys}
@@ -95,6 +106,8 @@ export default function Motoboys() {
           )}
         </>
       )}
+
+      {aba === 'conferir' && <ConferirMotoboys motoboys={motoboys} aoMudar={carregar} />}
 
       {aba === 'escala' && <Escala motoboys={motoboys} lojas={lojas.filter((u) => u.id !== 'pizza')} />}
 
@@ -112,28 +125,48 @@ export default function Motoboys() {
   )
 }
 
-function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSalvar }: {
-  pagamento: string; loja: string; motoboys: Motoboy[]; semanas: SemanaMotoboy[]; escalados: EscalaMotoboy[]; novo: () => void; aoSalvar: () => Promise<void>
+function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, envios, conferir, novo, aoSalvar }: {
+  pagamento: string; loja: string; motoboys: Motoboy[]; semanas: SemanaMotoboy[]; escalados: EscalaMotoboy[]; envios: EnvioMotoboy[]; conferir: () => void; novo: () => void; aoSalvar: () => Promise<void>
 }) {
   const { store, nomeUnidade, avisar } = useApp()
   const desta = semanas.filter((s) => s.pagamento === pagamento && s.unidadeId === loja)
   const porId = new Map(motoboys.map((m) => [m.id, m]))
+  const daLoja = envios.filter((e) => e.unidadeId === loja)
+  const aprovados = daLoja.filter((e) => e.status === 'aprovado')
+  // Dias conferidos em Motoboys › Conferir entram sozinhos (dia ainda vazio) com as entregas conferidas e os valores a mais.
+  const [veioDosEnvios] = useState(() => ({ n: 0 }))
   const inicial = (): Linha[] => {
-    const ids = [...new Set([...desta.map((s) => s.motoboyId), ...motoboys.filter((m) => m.ativo && m.unidadeId === loja).map((m) => m.id)])]
+    const ids = [...new Set([...desta.map((s) => s.motoboyId), ...motoboys.filter((m) => m.ativo && m.unidadeId === loja).map((m) => m.id), ...aprovados.map((e) => e.motoboyId)])]
     return ids.map((id) => {
       const s = desta.find((x) => x.motoboyId === id)
       const m = porId.get(id)
       // Semana ainda não salva do responsável: o adicional já vem preenchido (dá para tirar).
       const adicional = !s && m?.responsavel && m.unidadeId === loja ? [{ descricao: EXTRA_RESPONSAVEL, valor: texto(m.adicionalResponsavel ?? 125) }] : []
-      return {
+      const l: Linha = {
         motoboyId: id, diarias: texto(s?.diarias ?? 0), entregas: texto(s?.entregas ?? 0),
         dias: Object.fromEntries(Object.entries(s?.dias ?? {}).map(([d, q]) => [d, String(q)])),
         extras: s ? s.extras.map((e) => ({ descricao: e.descricao, valor: texto(e.valor) })) : adicional, jaPago: !!s?.pagoEm,
       }
+      if (s?.conciliado) return l
+      let veio = false
+      for (const e of aprovados.filter((x) => x.motoboyId === id)) {
+        if ((l.dias[e.data] ?? '').trim() === '') { l.dias[e.data] = String(e.entregasConferidas ?? e.entregas); veio = true }
+        for (const x of e.extras) {
+          const descricao = `${dataCurta(e.data)} ${x.descricao}`
+          if (!l.extras.some((y) => y.descricao === descricao)) { l.extras.push({ descricao, valor: texto(x.valor) }); veio = true }
+        }
+      }
+      if (veio) {
+        const c = calcularMotoboy(m, diasNumero(l))
+        l.diarias = texto(c.diarias)
+        l.entregas = texto(c.entregas)
+        veioDosEnvios.n++
+      }
+      return l
     }).sort((a, b) => (porId.get(a.motoboyId)?.nome ?? '').localeCompare(porId.get(b.motoboyId)?.nome ?? ''))
   }
   const [linhas, setLinhas] = useState<Linha[]>(inicial)
-  const [mexeu, setMexeu] = useState(false)
+  const [mexeu, setMexeu] = useState(() => veioDosEnvios.n > 0)
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [pix, setPix] = useState(false)
@@ -146,13 +179,17 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
   }, [motoboys, loja])
 
   const semana = Array.from({ length: 7 }, (_, k) => addDias(pagamento, k - 7))
-  const diasNumero = (l: Linha) => Object.fromEntries(Object.entries(l.dias).filter(([, q]) => q.trim() !== '' && lerNumero(q) !== null).map(([d, q]) => [d, Math.max(0, Math.round(lerNumero(q)!))]))
   // Entregas de um dia: recalcula diárias e entregas pela regra do motoboy (diária inclui as primeiras entregas).
   const mudarDia = (i: number, data: string, valor: string) => {
     const l = linhas[i]
     const dias = { ...l.dias, [data]: valor }
     const c = calcularMotoboy(porId.get(l.motoboyId), diasNumero({ ...l, dias }))
     mudar(i, { dias, diarias: texto(c.diarias), entregas: texto(c.entregas) })
+  }
+  // ✓ dia conferido pelas notinhas; • mandado e ainda não conferido.
+  const marca = (id: string, data: string) => {
+    const e = daLoja.find((x) => x.motoboyId === id && x.data === data && x.status !== 'recusado')
+    return e ? (e.status === 'aprovado' ? ' ✓' : ' •') : ''
   }
   const naEscala = (id: string, data: string) => escalados.some((e) => e.motoboyId === id && e.data === data)
   const diasEscala = (id: string) => escalados.filter((e) => e.motoboyId === id).length
@@ -198,8 +235,15 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
     return { nome: m.nome, cpf: m.cpf ?? '', chavePix: m.pix ?? '', valor: Math.round(totalLinha(l) * 100) / 100, seuNumero: `MOTO ${pagamento}` }
   })
 
+  const aConferir = daLoja.filter((e) => e.status === 'pendente').length
   return (
     <div className="space-y-3">
+      {(aConferir > 0 || veioDosEnvios.n > 0) && (
+        <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+          {veioDosEnvios.n > 0 && <>Os dias conferidos que os motoboys mandaram já estão preenchidos (✓). Confira e salve a semana. </>}
+          {aConferir > 0 && <>{aConferir} {aConferir === 1 ? 'dia mandado ainda não foi conferido' : 'dias mandados ainda não foram conferidos'} (•). <button className="font-semibold underline" onClick={conferir}>Conferir</button></>}
+        </div>
+      )}
       {linhas.length === 0 ? (
         <Vazio>Nenhum motoboy desta loja. <button className="font-semibold underline" onClick={novo}>Cadastrar</button></Vazio>
       ) : (
@@ -232,7 +276,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, novo, aoSal
                   <div className="grid grid-cols-7 gap-1">
                     {semana.map((d, k) => (
                       <label key={d} className="text-center text-[11px] text-stone-500">
-                        <span className={naEscala(l.motoboyId, d) ? 'font-bold text-carvao' : ''}>{DIAS_CURTOS[k]} {d.slice(8)}</span>
+                        <span className={naEscala(l.motoboyId, d) ? 'font-bold text-carvao' : ''}>{DIAS_CURTOS[k]} {d.slice(8)}{marca(l.motoboyId, d)}</span>
                         <input className={`${estiloEntrada} mt-0.5 px-1! py-1! text-center`} inputMode="numeric" placeholder={naEscala(l.motoboyId, d) ? 'escala' : ''}
                           aria-label={`Entregas de ${m?.nome} em ${dataCurta(d)}`} value={l.dias[d] ?? ''} onChange={(e) => mudarDia(i, d, e.target.value)} />
                       </label>
@@ -541,7 +585,7 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
         </Campo>
         <Campo rotulo="Chave Pix" dica="Celular, CPF, e-mail ou chave aleatória."><input className={estiloEntrada} value={f.pix} onChange={(e) => setF({ ...f, pix: e.target.value })} /></Campo>
         <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Celular (opcional)"><input className={estiloEntrada} inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} /></Campo>
+          <Campo rotulo="Celular" dica="É com ele que o motoboy entra no link para mandar o dia."><input className={estiloEntrada} inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} /></Campo>
           <Campo rotulo="CPF (opcional)" dica="Precisa para o Pix em lote."><input className={estiloEntrada} inputMode="numeric" value={f.cpf} onChange={(e) => setF({ ...f, cpf: e.target.value })} /></Campo>
         </div>
         <div className="grid grid-cols-3 gap-3">

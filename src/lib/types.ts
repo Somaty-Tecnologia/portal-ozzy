@@ -465,6 +465,23 @@ export const calcularMotoboy = (m: Pick<Motoboy, 'valorDiaria' | 'entregasInclui
 export interface TurnoMotoboy { unidadeId: string; dia: number; inicio: string; fim: string }
 export interface EscalaMotoboy { id: string; motoboyId: string; unidadeId: string; data: string }
 export interface ExtraMotoboy { descricao: string; valor: number }
+// Dia mandado pelo próprio motoboy no link (0080): entregas, fotos das notinhas, extras; a gestão confere e aprova.
+export interface EnvioMotoboy {
+  id: string
+  motoboyId: string
+  unidadeId: string
+  data: string
+  entregas: number
+  extras: ExtraMotoboy[]
+  observacao: string | null
+  fotos: string[]
+  status: 'pendente' | 'aprovado' | 'recusado'
+  entregasConferidas: number | null
+  motivo: string | null
+  enviadoEm: string
+}
+export type QuemSouMotoboy = { tipo: 'invalido' | 'nao_achei' } | { tipo: 'motoboy'; nome: string; unidadeId: string | null; valorDiaria: number; entregasIncluidas: number; valorEntrega: number }
+export interface NovoEnvioMotoboy { celular: string; unidadeId: string; data: string; entregas: number; extras: ExtraMotoboy[]; observacao: string; fotos: Blob[] }
 export interface SemanaMotoboy {
   id: string
   motoboyId: string

@@ -3,7 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, nomeProprio, soDigitos, t
 import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
-import type { TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1341,6 +1341,39 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async escalarMotoboy(motoboyId, unidadeId, data, escalado) {
       if (!escalado) ok(await sb.from('motoboy_escala').delete().eq('motoboy_id', motoboyId).eq('data', data))
       else ok(await sb.from('motoboy_escala').upsert({ motoboy_id: motoboyId, unidade_id: unidadeId, data }, { onConflict: 'motoboy_id,data' }))
+    },
+    async motoboyQuemSou(celular) {
+      return ok(await sb.rpc('motoboy_quem_sou', { p_celular: celular }))
+    },
+    async enviarDiaMotoboy(e) {
+      const fotos: string[] = []
+      for (const f of e.fotos) {
+        const caminho = `envios/${e.data}/${crypto.randomUUID()}.jpg`
+        ok(await sb.storage.from('motoboys').upload(caminho, f, { contentType: f.type || 'image/jpeg' }))
+        fotos.push(caminho)
+      }
+      ok(await sb.rpc('motoboy_enviar', {
+        p_celular: e.celular, p_unidade: e.unidadeId, p_data: e.data, p_entregas: e.entregas,
+        p_extras: e.extras.map((x) => ({ descricao: x.descricao, valor: String(x.valor) })), p_obs: e.observacao, p_fotos: fotos,
+      }))
+    },
+    async enviosMotoboys(de, ate) {
+      return (ok(await sb.from('motoboy_envios').select('*').gte('data', de).lte('data', ate).order('data').order('enviado_em')) ?? []).map((r: any): EnvioMotoboy => ({
+        id: r.id, motoboyId: r.motoboy_id, unidadeId: r.unidade_id, data: r.data, entregas: r.entregas,
+        extras: (r.extras ?? []).map((x: any) => ({ descricao: x.descricao, valor: Number(x.valor) })), observacao: r.observacao, fotos: r.fotos ?? [],
+        status: r.status, entregasConferidas: r.entregas_conferidas, motivo: r.motivo, enviadoEm: r.enviado_em,
+      }))
+    },
+    async fotosEnvioMotoboy(caminhos) {
+      if (!caminhos.length) return []
+      const { data } = await sb.storage.from('motoboys').createSignedUrls(caminhos, 60 * 60)
+      return caminhos.map((c) => data?.find((d) => d.path === c)?.signedUrl ?? '')
+    },
+    async resolverEnvioMotoboy(id, aprovar, entregas, motivo) {
+      ok(await sb.rpc('motoboy_resolver_envio', { p_id: id, p_aprovar: aprovar, p_entregas: entregas, p_motivo: motivo }))
+    },
+    async reabrirEnvioMotoboy(id) {
+      ok(await sb.rpc('motoboy_reabrir_envio', { p_id: id }))
     },
     async regrasExtrato() {
       return (ok(await sb.from('extrato_regras').select('*')) ?? []).map((r: any) => ({
