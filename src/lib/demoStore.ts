@@ -1,7 +1,7 @@
 import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
-import type { CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -937,6 +937,8 @@ const contagensFechDemo: { fechamentoId: string; itemId: string; contagem: numbe
   { fechamentoId: 'fc1', itemId: 'fi14', contagem: 0.5, sugestao: 1.5, pedido: 2 },
   { fechamentoId: 'fc1', itemId: 'fi10', contagem: 2, sugestao: 6, pedido: 6 },
 ]
+const invLojasDemo: InventarioEstoque[] = []
+const movsInventarioDemo = new Map<string, string[]>()
 const movimentosDemo: MovimentoEstoque[] = [
   { id: 'mv1', centroCustoId: 'burger-psd', insumoId: 'in3', data: addDias(hoje(), -9), tipo: 'entrada_nf', quantidade: 5, custoUnit: 40, notaItemId: 'ni5', observacao: 'NF 10198 · Distribuidora Exemplo', criadoEm: haHoras(24 * 8) },
   { id: 'mv2', centroCustoId: 'burger-psd', insumoId: 'in2', data: addDias(hoje(), -9), tipo: 'entrada_nf', quantidade: 2, custoUnit: 148, notaItemId: 'ni6', observacao: 'NF 10198 · Distribuidora Exemplo', criadoEm: haHoras(24 * 8) },
@@ -2664,6 +2666,32 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const id = f.id
       for (let j = contagensFechDemo.length - 1; j >= 0; j--) if (contagensFechDemo[j].fechamentoId === id) contagensFechDemo.splice(j, 1)
       for (const i of e.itens) contagensFechDemo.push({ fechamentoId: id, itemId: i.itemId, contagem: i.contagem, sugestao: i.sugestao, pedido: i.pedido || null })
+      return espera(id)
+    },
+    async inventariosEstoque(centroCustoId) {
+      return espera(invLojasDemo.filter((x) => x.centroCustoId === centroCustoId).sort((a, b) => b.data.localeCompare(a.data)).slice(0, 12))
+    },
+    async enviarInventario(e) {
+      const u = exigeEu()
+      if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.unidadeId === e.centroCustoId)) throw new Error('Seu nível de acesso não permite esta ação.')
+      let v = invLojasDemo.find((x) => x.centroCustoId === e.centroCustoId && x.data === e.data)
+      const dados = { responsavel: e.responsavel.trim() || null, observacao: e.observacao.trim() || null, fala: e.fala.trim() || null, enviadoEm: agora(), enviadoPor: u.id }
+      if (v) Object.assign(v, dados)
+      else invLojasDemo.push((v = { id: novoId('inv'), centroCustoId: e.centroCustoId, data: e.data, ...dados, itens: [] }))
+      const id = v.id
+      const antigos = new Set(movsInventarioDemo.get(id) ?? [])
+      for (let j = movimentosDemo.length - 1; j >= 0; j--) if (antigos.has(movimentosDemo[j].id)) movimentosDemo.splice(j, 1)
+      const novos: string[] = []
+      const saldo = (insumoId: string) => movimentosDemo.filter((m) => m.centroCustoId === e.centroCustoId && m.insumoId === insumoId).reduce((t, m) => t + m.quantidade, 0)
+      v.itens = e.itens.map((i) => ({ insumoId: i.insumoId, quantidade: i.quantidade, saldoSistema: saldo(i.insumoId), custoUnit: insumosDemo.find((x) => x.id === i.insumoId)?.preco ?? null }))
+      for (const i of v.itens) {
+        const dif = i.quantidade - i.saldoSistema
+        if (Math.abs(dif) <= 0.0001) continue
+        const mid = novoId('mv')
+        novos.push(mid)
+        movimentosDemo.push({ id: mid, centroCustoId: e.centroCustoId, insumoId: i.insumoId, data: e.data, tipo: 'ajuste', quantidade: dif, custoUnit: i.custoUnit, notaItemId: null, observacao: `Inventário ${e.data.slice(8)}/${e.data.slice(5, 7)}`, criadoEm: agora() })
+      }
+      movsInventarioDemo.set(id, novos)
       return espera(id)
     },
     async pedidosProducao(para) {

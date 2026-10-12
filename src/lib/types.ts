@@ -1448,6 +1448,26 @@ export interface EnvioFechamento {
   fala: string
   itens: { itemId: string; contagem: number | null; sugestao: number | null; pedido: number | null }[]
 }
+// Inventário semanal das lojas (Heitor, 12/10): contagem de todos os materiais ativos; a diferença vira ajuste no estoque.
+export interface InventarioEstoque {
+  id: string
+  centroCustoId: string
+  data: string
+  responsavel: string | null
+  observacao: string | null
+  fala: string | null
+  enviadoEm: string
+  enviadoPor: string | null
+  itens: { insumoId: string; quantidade: number; saldoSistema: number; custoUnit: number | null }[]
+}
+export interface EnvioInventario {
+  centroCustoId: string
+  data: string
+  responsavel: string
+  observacao: string
+  fala: string
+  itens: { insumoId: string; quantidade: number }[]
+}
 export interface PedidoProducao {
   insumoId: string
   nome: string

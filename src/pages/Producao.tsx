@@ -7,13 +7,14 @@ import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
 import { LOJAS_FECHAMENTO } from '../lib/types'
+import InventarioLojas from './InventarioLojas'
 import type { CentroCusto, Fechamento, Insumo, ItemListaFechamento, PedidoProducao, Producao as ProducaoT, Receita, SetorFechamento, VersaoReceita } from '../lib/types'
 
 // Menu Produção (Heitor, 09/10): pedidos das lojas (vindos do fechamento), lista de preparo descontando o que
 // já tem na Central, lançar o que foi produzido (entra o preparo, saem os ingredientes da ficha) e as listas.
 
 interface Dados { insumos: Insumo[]; receitas: Receita[]; versoes: VersaoReceita[]; centros: CentroCusto[]; producoes: ProducaoT[] }
-type Aba = 'pedidos' | 'produzido' | 'listas'
+type Aba = 'pedidos' | 'produzido' | 'inventario' | 'listas'
 const NOME_LOJA: Record<string, string> = { 'burger-psd': 'PSD', 'burger-va': 'Vila' }
 const NOME_SETOR: Record<SetorFechamento, string> = { cozinha: 'Cozinha', atendimento: 'Atendimento' }
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -23,15 +24,15 @@ export default function Producao() {
   const { eu } = useApp()
   const gestao = podeGerenciar(eu.nivel)
   const [aba, setAba] = useState<Aba>('pedidos')
-  const abas: [Aba, string][] = gestao ? [['pedidos', 'Pedidos das lojas'], ['produzido', 'Produzido'], ['listas', 'Listas']] : [['pedidos', 'Pedidos das lojas']]
+  const abas: [Aba, string][] = gestao ? [['pedidos', 'Pedidos das lojas'], ['produzido', 'Produzido'], ['inventario', 'Inventário'], ['listas', 'Listas']] : [['pedidos', 'Pedidos das lojas'], ['inventario', 'Inventário']]
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold">Produção</h1>
-        <p className="text-sm text-stone-500">Os pedidos que as lojas mandaram no fechamento, o que precisa preparar e o que foi produzido.</p>
+        <p className="text-sm text-stone-500">Os pedidos que as lojas mandaram no fechamento, o que precisa preparar, o que foi produzido e o inventário de segunda.</p>
       </div>
       {abas.length > 1 && (
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold">
+        <div className={`grid gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold ${abas.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
           {abas.map(([a, nome]) => (
             <button key={a} onClick={() => setAba(a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
           ))}
@@ -39,6 +40,7 @@ export default function Producao() {
       )}
       {aba === 'pedidos' && <Pedidos />}
       {aba === 'produzido' && <Produzido />}
+      {aba === 'inventario' && <InventarioLojas />}
       {aba === 'listas' && <Listas />}
     </div>
   )
