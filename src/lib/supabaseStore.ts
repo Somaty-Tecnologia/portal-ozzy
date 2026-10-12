@@ -885,6 +885,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async controlarEstoque(ids, controla) {
       ok(await sb.from('insumos').update({ controla_estoque: controla }).in('id', ids))
     },
+    async ativarInsumos(ids, ativo) {
+      ok(await sb.from('insumos').update({ ativo }).in('id', ids))
+    },
     async conferirPrecoInsumo(id, preco) {
       ok(await sb.from('insumos').update({ preco_conferido: preco }).eq('id', id))
     },

@@ -1944,6 +1944,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       for (const i of insumosDemo) if (ids.includes(i.id)) i.controlaEstoque = controla
       return espera(undefined)
     },
+    async ativarInsumos(ids, ativo) {
+      exigeGestao()
+      for (const i of insumosDemo) if (ids.includes(i.id)) i.ativo = ativo
+      return espera(undefined)
+    },
     async conferirPrecoInsumo(id, preco) {
       exigeGestao()
       const i = insumosDemo.find((x) => x.id === id)

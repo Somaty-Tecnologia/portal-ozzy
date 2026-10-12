@@ -272,6 +272,7 @@ export interface Store {
   referenciasPreco(): Promise<ReferenciaPreco[]>
   conferirPrecoInsumo(insumoId: string, preco: number | null): Promise<void>
   controlarEstoque(insumoIds: string[], controla: boolean): Promise<void>
+  ativarInsumos(insumoIds: string[], ativo: boolean): Promise<void>
   // Exclui de vez o material sem história; o que tem (ficha, nota, produção…) é inativado e volta com o motivo.
   excluirInsumos(ids: string[]): Promise<{ insumoId: string; nome: string; excluido: boolean; motivo: string | null }[]>
   receitas(): Promise<Receita[]>

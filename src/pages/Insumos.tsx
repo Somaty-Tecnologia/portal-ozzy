@@ -76,6 +76,16 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
       avisar((e as Error).message)
     }
   }
+  const mudarAtivo = async (ids: string[], ativo: boolean) => {
+    try {
+      await store.ativarInsumos(ids, ativo)
+      setSel(new Set())
+      await aoMudar()
+      avisar(ativo ? 'Reativado' : 'Inativado')
+    } catch (e) {
+      avisar((e as Error).message)
+    }
+  }
   const marcar = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const excluirSelecionados = async () => {
     if (!confirm(`Excluir ${sel.size} ${sel.size === 1 ? 'material' : 'materiais'} do cadastro? O que estiver em ficha, nota ou produção só é inativado.`)) return
@@ -121,6 +131,8 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
           <button className="underline" onClick={() => setSel(new Set())}>limpar</button>
           <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarEstoque([...sel], true)}>Controla estoque</button>
           <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarEstoque([...sel], false)}>Não controla</button>
+          <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarAtivo([...sel], true)}>Reativar</button>
+          <button className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold hover:bg-white/20" onClick={() => mudarAtivo([...sel], false)}>Inativar</button>
           <Botao variante="perigo" className="ml-auto py-1.5!" disabled={excluindo} onClick={excluirSelecionados}>{excluindo ? 'Excluindo…' : 'Excluir'}</Botao>
         </div>
       )}
@@ -299,6 +311,14 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar, ex
   return (
     <Modal titulo={i ? `${i.nome}${i.ecleticaCodigo ? ` · cód. ${i.ecleticaCodigo}` : ''}` : 'Novo material'} aberto aoFechar={aoFechar}>
       <form onSubmit={salvar} className="space-y-4">
+        {i && (
+          <div className={`flex flex-wrap items-center gap-3 rounded-xl px-3 py-2 text-sm ring-1 ${ativo ? 'bg-stone-50 ring-stone-200' : 'bg-amber-50 text-amber-900 ring-amber-200'}`}>
+            <span className="font-semibold">{ativo ? 'Ativo' : 'Inativo: não aparece na lista, nas fichas novas nem no inventário'}</span>
+            <button type="button" className="ml-auto rounded-lg bg-white px-3 py-1.5 font-semibold ring-1 ring-stone-300 hover:bg-stone-100" onClick={() => setAtivo(!ativo)}>
+              {ativo ? 'Inativar' : 'Reativar'}
+            </button>
+          </div>
+        )}
         <Campo rotulo="Nome">
           <input className={estiloEntrada} value={f.nome} onChange={mudar('nome')} required />
         </Campo>
@@ -365,12 +385,6 @@ function EditarInsumo({ i, fornecedores, categorias, cat, aoFechar, aoSalvar, ex
         <Campo rotulo="Observação">
           <textarea className={estiloEntrada} rows={2} value={f.observacao} onChange={mudar('observacao')} />
         </Campo>
-        {i && (
-          <label className="flex items-center gap-3 text-sm">
-            <input type="checkbox" className="size-5 accent-carvao" checked={!ativo} onChange={(ev) => setAtivo(!ev.target.checked)} />
-            Inativar (não aparece para novas fichas)
-          </label>
-        )}
         {erro && <p className="text-sm text-red-600">{erro}</p>}
         <Botao className="w-full" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>
         {i && (
