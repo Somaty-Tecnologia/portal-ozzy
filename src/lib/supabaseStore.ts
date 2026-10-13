@@ -1344,7 +1344,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       else ok(await sb.from('motoboy_escala').upsert({ motoboy_id: motoboyId, unidade_id: unidadeId, data }, { onConflict: 'motoboy_id,data' }))
     },
     async refeicoes(de, ate) {
-      return (ok(await sb.from('refeicoes').select('id, data, centro_custo_id, prato, acompanhamentos, observacao').gte('data', de).lte('data', ate).order('data')) ?? []).map(paraRefeicao)
+      return (ok(await sb.from('refeicoes').select('id, data, centro_custo_id, prato, acompanhamentos, observacao, pessoas, peso_kg').gte('data', de).lte('data', ate).order('data')) ?? []).map(paraRefeicao)
     },
     async refeicoesCozinha(de, ate) {
       return (ok(await sb.rpc('refeicoes_cozinha', { p_de: de, p_ate: ate })) ?? []).map(paraRefeicao)
@@ -1352,7 +1352,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async salvarRefeicao(r) {
       return ok(await sb.rpc('salvar_refeicao', { p: {
         id: r.id ?? null, data: r.data, centro_custo_id: r.centroCustoId, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
-        pessoas: r.pessoas === null ? '' : String(r.pessoas), itens: r.itens.map((i) => ({ insumo_id: i.insumoId, quantidade: String(i.quantidade) })),
+        pessoas: r.pessoas === null ? '' : String(r.pessoas), peso_kg: r.pesoKg === null ? '' : String(r.pesoKg), itens: r.itens.map((i) => ({ insumo_id: i.insumoId, quantidade: String(i.quantidade) })),
       } }))
     },
     async excluirRefeicao(id) {
@@ -1594,8 +1594,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
 
 const paraRefeicao = (r: any): Refeicao => ({
   id: r.id, data: r.data, centroCustoId: r.centro_custo_id, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
+  pessoas: r.pessoas ?? null, pesoKg: numeroOuNulo(r.peso_kg),
   ...('itens' in r ? {
-    pessoas: r.pessoas, custoTotal: numeroOuNulo(r.custo_total),
+    custoTotal: numeroOuNulo(r.custo_total),
     itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), custoUnit: numeroOuNulo(i.custo_unit) })),
   } : {}),
 })

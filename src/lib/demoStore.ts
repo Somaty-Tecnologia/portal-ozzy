@@ -456,7 +456,7 @@ const escalaMotoboyDemo: EscalaMotoboy[] = [
   { id: 'esc2', motoboyId: 'mb3', unidadeId: 'burger-va', data: hoje() },
 ]
 const refeicoesDemo: (Refeicao & { pessoas: number | null; itens: ItemRefeicao[]; custoTotal: number })[] = [
-  { id: 'rf1', data: addDias(hoje(), -1), centroCustoId: 'burger-psd', prato: 'Escondidinho de Carne Moída', acompanhamentos: 'Arroz, feijão e salada', observacao: null, pessoas: 14,
+  { id: 'rf1', data: addDias(hoje(), -1), centroCustoId: 'burger-psd', prato: 'Escondidinho de Carne Moída', acompanhamentos: 'Arroz, feijão e salada', observacao: null, pessoas: 14, pesoKg: 7.2,
     itens: [{ insumoId: 'in26', quantidade: 2.1, custoUnit: 32 }, { insumoId: 'in27', quantidade: 3.5, custoUnit: 5 }, { insumoId: 'in24', quantidade: 1.1, custoUnit: 6 }, { insumoId: 'in25', quantidade: 0.8, custoUnit: 8 }],
     custoTotal: 2.1 * 32 + 3.5 * 5 + 1.1 * 6 + 0.8 * 8 },
   { id: 'rf2', data: addDias(hoje(), -2), centroCustoId: 'burger-psd', prato: 'Frango Grelhado', acompanhamentos: 'Arroz, feijão e legumes', observacao: null, pessoas: 12,
@@ -1682,7 +1682,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async refeicoes(de, ate) {
       exigeEu()
       return espera(refeicoesDemo.filter((x) => x.data >= de && x.data <= ate).sort((a, b) => a.data.localeCompare(b.data))
-        .map(({ id, data, centroCustoId, prato, acompanhamentos, observacao }) => ({ id, data, centroCustoId, prato, acompanhamentos, observacao })))
+        .map(({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg }) => ({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg })))
     },
     async refeicoesCozinha(de, ate) {
       exigeCozinha()
@@ -1694,7 +1694,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const itens = r.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumoId: i.insumoId, quantidade: i.quantidade, custoUnit: insumosDemo.find((x) => x.id === i.insumoId)?.preco ?? null }))
       const dados = {
         data: r.data, centroCustoId: r.centroCustoId, prato: nomeItem(r.prato), acompanhamentos: r.acompanhamentos.trim() || null, observacao: r.observacao.trim() || null,
-        pessoas: r.pessoas, itens, custoTotal: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.custoUnit ?? 0), 0) * 100) / 100,
+        pessoas: r.pessoas, pesoKg: r.pesoKg, itens, custoTotal: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.custoUnit ?? 0), 0) * 100) / 100,
       }
       const outra = refeicoesDemo.find((x) => x.data === r.data && x.centroCustoId === r.centroCustoId && x.id !== r.id)
       if (outra) throw new Error('Já existe uma refeição neste dia e local.')

@@ -1619,8 +1619,10 @@ export interface Refeicao {
   prato: string
   acompanhamentos: string | null
   observacao: string | null
-  // Só para quem cozinha e a gestão.
+  // Peso total da comida pronta (preenchido no fim) e pessoas: todos veem a porção.
+  pesoKg?: number | null
   pessoas?: number | null
+  // Só para quem cozinha e a gestão.
   itens?: ItemRefeicao[]
   custoTotal?: number | null
 }
@@ -1632,6 +1634,7 @@ export interface NovaRefeicao {
   acompanhamentos: string
   observacao: string
   pessoas: number | null
+  pesoKg: number | null
   itens: { insumoId: string; quantidade: number }[]
 }
 export type TipoModeloRefeicao = 'prato' | 'acompanhamento' | 'salada'

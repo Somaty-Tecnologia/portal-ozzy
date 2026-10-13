@@ -29,6 +29,8 @@ const nomeLocal = (id: string) => LOCAIS.find(([x]) => x === id)?.[1] ?? (id ===
 const juntos = (local: string) => (local === 'burger-va' ? ['burger-va', 'pizza'] : [local])
 const sem = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const diaLongo = (d: string) => `${diaSemana(d)}, ${dataCurta(d)}`
+// Porção por pessoa em gramas, pelo peso total da comida pronta.
+const porcaoG = (pesoKg?: number | null, pessoas?: number | null) => (pesoKg && pessoas ? Math.round((pesoKg * 1000) / pessoas) : null)
 const pct = (p: number, n: number) => (p + n ? Math.round((p / (p + n)) * 100) : null)
 
 export default function Refeicoes({ sub, param }: { sub?: string; param?: string }) {
@@ -100,6 +102,7 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
           {grande && <div className="text-xs font-semibold tracking-wide text-stone-500 uppercase">Hoje{deHoje.length > 1 ? ` · ${nomeLocal(r.centroCustoId)}` : ''}</div>}
           <div className={grande ? 'text-lg font-bold' : 'font-semibold'}>{r.prato}</div>
           {r.acompanhamentos && <div className="text-sm text-stone-600">{r.acompanhamentos}</div>}
+          {grande && porcaoG(r.pesoKg, r.pessoas) && <div className="text-sm font-semibold text-stone-700">Porção: cerca de {porcaoG(r.pesoKg, r.pessoas)} g por pessoa</div>}
           {grande && r.observacao && <div className="text-sm text-stone-500">{r.observacao}</div>}
           {!grande && <div className="text-xs text-stone-500">{diaLongo(r.data)}{lista.some((x) => x.data === r.data && x.id !== r.id) ? ` · ${nomeLocal(r.centroCustoId)}` : ''}</div>}
           {v?.positivos !== null && v?.positivos !== undefined && (
@@ -163,6 +166,7 @@ function Montar({ inicial }: { inicial?: string }) {
   const [acomp, setAcomp] = useState('')
   const [obs, setObs] = useState('')
   const [pessoas, setPessoas] = useState<number | null>(null)
+  const [peso, setPeso] = useState<number | null>(null)
   const [linhas, setLinhas] = useState<Linha[]>([])
   const [usados, setUsados] = useState<ModeloRefeicao[]>([])
   const [salvando, setSalvando] = useState(false)
@@ -185,6 +189,7 @@ function Montar({ inicial }: { inicial?: string }) {
       setUsados([])
       const daqui = q ? q.equipe.filter((p) => juntos(local).includes(p.local)).length + q.motoboys.filter((m) => juntos(local).includes(m.local)).length : 0
       setPessoas(r?.pessoas ?? (daqui || null))
+      setPeso(r?.pesoKg ?? null)
       setLinhas((r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })))
     }, (e) => avisar((e as Error).message))
     return () => { vivo = false }
@@ -221,7 +226,7 @@ function Montar({ inicial }: { inicial?: string }) {
     setSalvando(true)
     try {
       await store.salvarRefeicao({
-        id: refeicao?.id, data, centroCustoId: local, prato, acompanhamentos: acomp, observacao: obs, pessoas,
+        id: refeicao?.id, data, centroCustoId: local, prato, acompanhamentos: acomp, observacao: obs, pessoas, pesoKg: peso,
         itens: linhas.filter((l) => l.insumoId && l.quantidade).map((l) => ({ insumoId: l.insumoId, quantidade: l.quantidade! })),
       })
       const rs = await store.refeicoesCozinha(data, data)
@@ -320,6 +325,16 @@ function Montar({ inicial }: { inicial?: string }) {
             <Botao variante="secundario" className="mt-2 py-1.5!" onClick={() => setLinhas((ls) => [...ls, novaLinha()])}>+ Ingrediente</Botao>
           </div>
 
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-stone-700">Peso total pronto (kg)</span>
+              <CampoNumero className={`${estiloEntrada} w-32!`} valor={peso} aoMudar={setPeso} inputMode="decimal" aria-label="Peso total pronto em kg" />
+            </label>
+            <p className="pb-2 text-sm text-stone-600">
+              {porcaoG(peso, pessoas) ? <>Dá <b>{porcaoG(peso, pessoas)} g por pessoa</b> ({pessoas} pessoas)</> : 'Pese tudo depois de pronto e salve de novo: o portal mostra quanto dá por pessoa.'}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl bg-stone-50 px-3 py-2 text-sm">
             <span>Custo total: <b>{reais(total)}</b></span>
             <span>Por refeição: <b>{pessoas ? reais(total / pessoas) : '—'}</b></span>
@@ -409,7 +424,7 @@ function Historico() {
   const linhas = useHistorico(dias)
   const { ordenada, cabecalho } = useOrdem(linhas ?? [], {
     data: (r) => r.data, local: (r) => nomeLocal(r.centroCustoId), prato: (r) => r.prato, pessoas: (r) => r.pessoas, total: (r) => r.custoTotal,
-    por: (r) => r.porRefeicao, pos: (r) => r.positivos, neg: (r) => r.negativos, apr: (r) => r.aprovacao,
+    por: (r) => r.porRefeicao, porcao: (r) => porcaoG(r.pesoKg, r.pessoas), pos: (r) => r.positivos, neg: (r) => r.negativos, apr: (r) => r.aprovacao,
   }, { col: 'data', desc: true })
   if (!linhas) return <p className="text-stone-400">Carregando…</p>
   const total = linhas.reduce((t, r) => t + (r.custoTotal ?? 0), 0)
@@ -435,6 +450,7 @@ function Historico() {
                 {cabecalho('pessoas', 'Pessoas', 'text-right', true)}
                 {cabecalho('total', 'Custo', 'text-right', true)}
                 {cabecalho('por', 'Por refeição', 'text-right', true)}
+                {cabecalho('porcao', 'Porção', 'text-right', true)}
                 {cabecalho('pos', '👍', 'text-right', true)}
                 {cabecalho('neg', '👎', 'text-right', true)}
                 {cabecalho('apr', 'Aprovação', 'text-right', true)}
@@ -449,6 +465,7 @@ function Historico() {
                   <td className="px-3 py-1.5 text-right">{r.pessoas ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right whitespace-nowrap">{r.custoTotal != null ? reais(r.custoTotal) : '—'}</td>
                   <td className="px-3 py-1.5 text-right whitespace-nowrap font-semibold">{r.porRefeicao != null ? reais(r.porRefeicao) : '—'}</td>
+                  <td className="px-3 py-1.5 text-right whitespace-nowrap">{porcaoG(r.pesoKg, r.pessoas) ? `${porcaoG(r.pesoKg, r.pessoas)} g` : '—'}</td>
                   <td className="px-3 py-1.5 text-right">{r.positivos}</td>
                   <td className="px-3 py-1.5 text-right">{r.negativos}</td>
                   <td className={`px-3 py-1.5 text-right font-semibold ${r.aprovacao === null ? 'text-stone-400' : r.aprovacao >= 70 ? 'text-emerald-700' : r.aprovacao < 50 ? 'text-red-700' : ''}`}>{r.aprovacao === null ? '—' : `${r.aprovacao}%`}</td>
