@@ -134,7 +134,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
   const { ordenada, cabecalho } = useOrdem(lista, {
     nome: (x) => x.nome, categoria: (x) => x.categoria, fornecedor: (x) => x.fornecedor,
     precisa: (x) => x.precisa, embalagens: (x) => x.nEmbalagens, estoque: (x) => x.estoque, providenciar: (x) => x.providenciar, final: (x) => x.final, custo: (x) => x.custo,
-  }, { col: 'categoria' })
+  }, { col: 'nome' })
 
   const faltaFicha = semFicha(cat, linhas.filter((l) => l.quantidade > 0).map((l) => l.receitaId))
   // Pré-preparos sem ficha não abrem nos ingredientes.
