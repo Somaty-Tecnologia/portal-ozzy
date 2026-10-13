@@ -191,11 +191,16 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
   // Planilha de compras (Heitor, 13/10): quem recebe só precisa saber o que comprar e onde, do jeito que a
   // tela mostra (ex.: "4 fardos de 12 un"). Sem pré-preparos (vão para a produção) e sem o que não precisa pedir.
   const planilha = () => {
-    const xs = lista.filter((x) => !ehPreparo(x) && x.pedir > 0)
+    // Heitor (13/10): também o que não precisa comprar, com o estoque, para quem compra conferir.
+    const xs = lista.filter((x) => !ehPreparo(x))
       .sort((a, b) => (a.fornecedor || '~').localeCompare(b.fornecedor || '~', 'pt-BR') || (a.categoria || '~').localeCompare(b.categoria || '~', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'))
-    const rows: Celula[][] = [['Fornecedor', 'Categoria', 'Insumo', 'Comprar', 'Comprado'].map((v) => ({ v, s: 'cabecalho' as const }))]
-    for (const x of xs) rows.push([x.fornecedor || 'Sem fornecedor', x.categoria || 'Sem categoria', x.nome, textoEmb(x) ?? `${qtd(x.pedir)} ${x.unidade}`, ''])
-    baixarXlsx(`Compras ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Compras', rows, [28, 22, 36, 24, 11])
+    const rows: Celula[][] = [['Fornecedor', 'Categoria', 'Insumo', 'Unidade', 'Precisa', 'Em estoque', 'Comprar', 'Comprado'].map((v) => ({ v, s: 'cabecalho' as const }))]
+    for (const x of xs)
+      rows.push([
+        x.fornecedor || 'Sem fornecedor', x.categoria || 'Sem categoria', x.nome, x.unidade, x.precisa, Math.max(0, x.estoque ?? 0),
+        x.pedir > 0 ? textoEmb(x) ?? `${qtd(x.pedir)} ${x.unidade}` : 'Não precisa', '',
+      ])
+    baixarXlsx(`Compras ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Compras', rows, [26, 20, 34, 9, 10, 11, 22, 11])
   }
 
   if (!linhas.some((l) => l.quantidade > 0)) return null
