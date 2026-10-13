@@ -12,7 +12,9 @@ type Linha = { chave: string; dia: string | null; quantidade: number }
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const texto = (n: number) => String(n).replace('.', ',')
 
-export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento, automaticos }: {
+export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento, automaticos, necessidades }: {
+  // Quanto o evento precisa de cada item da lista de insumos: vale para o item posto à mão (Heitor, 13/10).
+  necessidades: Map<string, number>
   cat: Catalogo
   eventoId: string
   nomeEvento: string
@@ -43,7 +45,12 @@ export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento
     const x = chave.startsWith('i:') ? cat.insumos.get(id) : cat.receitas.get(id)
     return x ? { nome: x.nome, unidade: nomeUnidade(x.unidade) } : null
   }
-  const precisa = new Map(automaticos.map((a) => [a.chave, arredondar ? Math.ceil(a.quantidade - 1e-9) : a.quantidade]))
+  const arred = (q: number) => (arredondar ? Math.ceil(q - 1e-9) : q)
+  const manuaisAntes = new Set((linhas ?? []).filter((l) => l.dia === null).map((l) => l.chave))
+  const precisa = new Map([
+    ...[...manuaisAntes].flatMap((k) => (necessidades.get(k) ? [[k, arred(necessidades.get(k)!)] as const] : [])),
+    ...automaticos.map((a) => [a.chave, arred(a.quantidade)] as const),
+  ])
   const manuais = new Set((linhas ?? []).filter((l) => l.dia === null).map((l) => l.chave))
   const chaves = [...new Set([...automaticos.map((a) => a.chave), ...manuais, ...(linhas ?? []).filter((l) => l.dia).map((l) => l.chave)])]
     .filter((k) => info(k))

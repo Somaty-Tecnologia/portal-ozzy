@@ -234,7 +234,8 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
       )}
       {inicioEvento && (
         <ProducaoEvento cat={cat} eventoId={eventoId} nomeEvento={nomeEvento} inicioEvento={inicioEvento}
-          automaticos={paraProduzir.map((x) => ({ chave: x.id.startsWith('r:') ? x.id : 'i:' + x.id, quantidade: x.pedir }))} />
+          automaticos={paraProduzir.map((x) => ({ chave: x.id.startsWith('r:') ? x.id : 'i:' + x.id, quantidade: x.pedir }))}
+          necessidades={new Map(lista.map((x) => [x.id.startsWith('r:') ? x.id : 'i:' + x.id, x.precisa]))} />
       )}
       {lista.length === 0 ? (
         <p className="text-sm text-stone-500">As fichas dos produtos da previsão não têm insumos.</p>
