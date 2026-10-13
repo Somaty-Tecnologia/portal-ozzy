@@ -188,12 +188,26 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
 
   // Planilha para mexer à vontade (Heitor, 13/10): Providenciar e Custo são fórmulas, então mudar a quantidade,
   // o que tem na base ou o preço já refaz a conta.
-  // Heitor (13/10): na planilha só categoria, insumo, fornecedor, unidade e quanto precisa.
+  // Heitor (13/10, depois): a planilha volta com todas as colunas.
   const planilha = () => {
+    const nomeEstoque = estoqueDe === 'base' ? 'base de eventos' : centros.find((c) => c.id === estoqueDe)?.nome ?? 'estoque'
     const xs = [...lista].sort((a, b) => (a.categoria || '~').localeCompare(b.categoria || '~', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'))
-    const rows: Celula[][] = [['Categoria', 'Insumo', 'Fornecedor', 'Unidade', 'Precisa'].map((v) => ({ v, s: 'cabecalho' as const }))]
-    for (const x of xs) rows.push([x.categoria || 'Sem categoria', x.nome, x.fornecedor, x.unidade, x.precisa])
-    baixarXlsx(`Insumos ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Insumos', rows, [22, 36, 26, 9, 12])
+    const cab = ['Categoria', 'Insumo', 'Fornecedor', 'Unidade', 'Precisa', `Estoque (${nomeEstoque})`, 'Providenciar', 'Pedir (final)', 'Embalagem', 'Qtd na embalagem', 'Nº de embalagens', 'Preço unit.', 'Custo']
+    const rows: Celula[][] = [cab.map((v) => ({ v, s: 'cabecalho' as const }))]
+    xs.forEach((x, i) => {
+      const r = i + 2
+      // Pedir (final) em branco = usa o Providenciar.
+      const pedir = `IF(H${r}="",G${r},H${r})`
+      rows.push([
+        x.categoria || 'Sem categoria', x.nome, x.fornecedor, x.unidade, x.precisa, Math.max(0, x.estoque ?? 0),
+        { f: descontar ? `MAX(0,E${r}-F${r})` : `E${r}`, s: 'numero' }, x.final, x.embalagem ?? '', x.porEmbalagem,
+        { f: `IF(N(J${r})>0,ROUNDUP(${pedir}/J${r},0),"")`, s: 'numero' },
+        { v: x.preco, s: 'reais' }, { f: `${pedir}*L${r}`, s: 'reais' },
+      ])
+    })
+    const n = xs.length + 1
+    rows.push([{ v: 'Total', s: 'total' }, null, null, null, null, null, null, null, null, null, null, null, { f: `SUM(M2:M${n})`, s: 'totalReais' }])
+    baixarXlsx(`Insumos ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Insumos', rows, [18, 34, 24, 9, 11, 14, 13, 13, 12, 10, 12, 13, 14])
   }
 
   if (!linhas.some((l) => l.quantidade > 0)) return null
