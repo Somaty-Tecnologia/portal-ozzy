@@ -235,7 +235,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
       const nome = prompt('Como vem do fornecedor? (fardo, caixa, pacote…)', ins.embalagem ?? 'fardo')?.trim().toLowerCase()
       if (!nome) return
       const n = lerValor(prompt(`Quantos ${ins.unidade} vêm em 1 ${nome}?`, ins.embalagemQtd ? numTexto(ins.embalagemQtd) : '') ?? '')
-      if (!n || n <= 0 || n === 1) return avisar(`Coloque quantos ${ins.unidade} vêm na embalagem (ex.: 12, ou 0,330 para 330 g).`)
+      if (!n || n <= 0) return avisar(`Coloque quantos ${ins.unidade} vêm na embalagem (ex.: 12, 1 ou 0,330 para 330 g).`)
       try {
         const salvo = await store.salvarInsumo({ ...ins, embalagem: nome, embalagemQtd: n })
         setInsumos((is) => is.map((x) => (x.id === ins.id ? salvo : x)))

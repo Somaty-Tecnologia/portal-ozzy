@@ -64,7 +64,7 @@ export default function InsumosEvento({ cat, linhas, saldoBase, nomeEvento }: {
       const providenciar = Math.max(0, descontarBase ? arredondarPara(ins.unidade, q - (naBase ?? 0)) : precisa) || 0
       const preco = precoDoInsumo(cat, ins)
       const e = embs.get(ins.id) ?? ins
-      const por = e.embalagem && e.embalagemQtd && e.embalagemQtd > 0 && e.embalagemQtd !== 1 ? e.embalagemQtd : null
+      const por = e.embalagem && e.embalagemQtd && e.embalagemQtd > 0 ? e.embalagemQtd : null
       r.push({
         id: ins.id, nome: ins.nome, categoria: ins.categoria ?? '', fornecedor: ins.fornecedorId ? nomeForn.get(ins.fornecedorId) ?? '' : '',
         unidade: ins.unidade, precisa, naBase, providenciar, embalagem: por ? e.embalagem : null, porEmbalagem: por,
@@ -96,7 +96,7 @@ export default function InsumosEvento({ cat, linhas, saldoBase, nomeEvento }: {
     const nome = prompt(`${x.nome}: como vem do fornecedor? (fardo, caixa, pacote…)`, x.embalagem ?? 'fardo')?.trim().toLowerCase()
     if (!nome) return
     const n = lerValor(prompt(`Quantos ${x.unidade} vêm em 1 ${nome}?`, x.porEmbalagem ? String(x.porEmbalagem).replace('.', ',') : '') ?? '')
-    if (!n || n <= 0 || n === 1) return avisar(`Coloque quantos ${x.unidade} vêm na embalagem (ex.: 12, ou 0,330 para 330 g).`)
+    if (!n || n <= 0) return avisar(`Coloque quantos ${x.unidade} vêm na embalagem (ex.: 12, 1 ou 0,330 para 330 g).`)
     try {
       await store.salvarInsumo({ ...ins, ...embs.get(ins.id), embalagem: nome, embalagemQtd: n })
       setEmbs((m) => new Map(m).set(ins.id, { embalagem: nome, embalagemQtd: n }))
