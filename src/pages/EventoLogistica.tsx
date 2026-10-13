@@ -949,6 +949,8 @@ export function Contagem({
   const [destaque, setDestaque] = useState<Set<string>>(new Set())
   const [obs, setObs] = useState(inicial?.observacao ?? '')
   const [busca, setBusca] = useState('')
+  // Heitor (13/10): quem não quiser falar preenche item por item; sem nada enviado, já abre com todos.
+  const [todos, setTodos] = useState(() => primeiro.length === 0 && !inicial?.itens.length)
   const [salvando, setSalvando] = useState(false)
   const rec = useRef<ReturnType<typeof criarReconhecedor>>(null)
   const suportaVoz = typeof window !== 'undefined' && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
@@ -998,8 +1000,12 @@ export function Contagem({
   }
   useEffect(() => () => rec.current?.stop(), [])
 
-  const visiveis = lista.map((k) => infoItem(itens, k)).filter(Boolean) as ItemContagem[]
-  const achados = busca.trim().length >= 2 ? itens.filter((i) => !lista.includes(i.chave) && i.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 8) : []
+  const daLista = lista.map((k) => infoItem(itens, k)).filter(Boolean) as ItemContagem[]
+  const filtro = busca.trim().toLowerCase()
+  const visiveis = todos
+    ? [...daLista, ...itens.filter((i) => !lista.includes(i.chave)).sort((a, b) => a.nome.localeCompare(b.nome))].filter((i) => !filtro || i.nome.toLowerCase().includes(filtro))
+    : daLista
+  const achados = !todos && busca.trim().length >= 2 ? itens.filter((i) => !lista.includes(i.chave) && i.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 8) : []
   const preenchidos = Object.entries(valores).filter(([, v]) => numero(v) !== null)
 
   const salvar = async () => {
@@ -1047,8 +1053,16 @@ export function Contagem({
       </Cartao>
 
       <div className="rounded-2xl bg-white ring-1 ring-stone-200">
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-3 py-2">
+          <h3 className="font-bold">Ou preencha item por item</h3>
+          <span className="text-sm text-stone-500">{todos ? `todos os itens (${itens.length})` : 'o que foi para o evento'}</span>
+          <button className="ml-auto text-sm font-semibold text-sky-700 underline" onClick={() => setTodos((t) => !t)}>
+            {todos ? 'Só o que foi para o evento' : 'Mostrar todos os itens'}
+          </button>
+          {todos && <input className={`${estiloEntrada} sm:w-64!`} placeholder="Filtrar a lista" value={busca} onChange={(ev) => setBusca(ev.target.value)} aria-label="Filtrar itens" />}
+        </div>
         <ul className="divide-y divide-stone-100">
-          {visiveis.length === 0 && <li className="px-3 py-4 text-sm text-stone-500">Fale ou busque os itens abaixo para contar.</li>}
+          {visiveis.length === 0 && <li className="px-3 py-4 text-sm text-stone-500">{todos ? 'Nenhum item com esse nome.' : 'Fale, busque abaixo ou toque em Mostrar todos os itens.'}</li>}
           {visiveis.map((i) => (
             <li key={i.chave} className={`flex items-center gap-3 px-3 py-2 ${destaque.has(i.chave) ? 'bg-ozzy-400/15' : ''}`}>
               <span className="min-w-0 flex-1">
@@ -1067,7 +1081,7 @@ export function Contagem({
             </li>
           ))}
         </ul>
-        <div className="border-t border-stone-100 p-3">
+        {!todos && <div className="border-t border-stone-100 p-3">
           <input className={estiloEntrada} placeholder="Buscar outro item para contar" value={busca} onChange={(ev) => setBusca(ev.target.value)} aria-label="Buscar item" />
           {achados.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1078,7 +1092,7 @@ export function Contagem({
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
       <textarea className={estiloEntrada} rows={2} placeholder="Observação (opcional)" value={obs} onChange={(ev) => setObs(ev.target.value)} aria-label="Observação da contagem" />
       <p className="text-xs text-stone-500">Item sem número não entra na contagem. Para dizer que acabou, ponha 0.</p>
