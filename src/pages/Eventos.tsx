@@ -11,7 +11,7 @@ import ComparativoEventos from './ComparativoEventos'
 import PainelEventos from './PainelEventos'
 import EquipeEvento from './EquipeEvento'
 import FreelasEventos, { FreelasDoEvento } from './FreelasEventos'
-import { AbasEvento, CardapioPrevisao, Separacao, Sobras, VendasEvento, useDadosLogistica } from './EventoLogistica'
+import { ABAS_EVENTO, AbasEvento, CardapioPrevisao, Separacao, Sobras, VendasEvento, useDadosLogistica } from './EventoLogistica'
 import { STATUS_EVENTO, nomeStatusEvento, type DiaEvento, type Evento, type HistoricoEvento, type NovoEvento, type Operacao, type StatusEvento } from '../lib/types'
 
 const numero = lerNumero
@@ -73,6 +73,34 @@ export const ABAS_EVENTOS = [
   { id: 'fornecedores', nome: 'Fornecedores' },
 ]
 
+// Último evento aberto (Heitor, 13/10): ao sair para Insumos, Fichas etc., uma barra leva de volta às abas dele
+// sem passar pela lista. Fica só neste aparelho.
+interface EventoRecente { id: string; nome: string; aba: string }
+const CHAVE_RECENTE = 'evento-recente'
+const lerRecente = (): EventoRecente | null => {
+  try { return JSON.parse(localStorage.getItem(CHAVE_RECENTE) ?? 'null') } catch { return null }
+}
+const gravarRecente = (r: EventoRecente | null) => {
+  try { if (r) localStorage.setItem(CHAVE_RECENTE, JSON.stringify(r)); else localStorage.removeItem(CHAVE_RECENTE) } catch { /* sem armazenamento */ }
+}
+function VoltarAoEvento({ aqui }: { aqui?: string }) {
+  const [r, setR] = useState(lerRecente)
+  useEffect(() => { setR(lerRecente()) }, [aqui])
+  if (!r || r.id === aqui) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-ozzy-50 px-3 py-2 text-sm ring-1 ring-ozzy-400/60 print:hidden">
+      <span className="mr-1 font-semibold">{r.nome}:</span>
+      {ABAS_EVENTO.map((a) => (
+        <button key={a.id} onClick={() => ir(`eventos/${r.id}${a.id ? '/' + a.id : ''}`)}
+          className={`rounded-lg px-2.5 py-1 font-semibold ${a.id === r.aba ? 'bg-carvao text-white' : 'bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-stone-100'}`}>
+          {a.nome}
+        </button>
+      ))}
+      <button className="ml-auto rounded-full px-2 text-stone-400 hover:text-carvao" title="Esconder" aria-label="Esconder atalho do evento" onClick={() => { gravarRecente(null); setR(null) }}>✕</button>
+    </div>
+  )
+}
+
 // Módulo Eventos: eventos (#/eventos/<id>), fichas (#/eventos/fichas/<id>), insumos e fornecedores.
 export default function ModuloEventos({ sub, param }: { sub?: string; param?: string }) {
   const aba = ABAS_EVENTOS.some((a) => a.id && a.id === sub) ? sub! : ''
@@ -89,6 +117,7 @@ export default function ModuloEventos({ sub, param }: { sub?: string; param?: st
           </button>
         ))}
       </div>
+      <VoltarAoEvento aqui={aba === '' ? sub : undefined} />
       {aba === 'fichas' ? <FichasEvento id={param} />
         : aba === 'insumos' || aba === 'fornecedores' ? <Insumos aba={aba} />
         : aba === 'estoque' ? <EstoqueBase />
@@ -219,6 +248,7 @@ function ListaEventos({ lista, operacoes, aoMudar }: { lista: Evento[]; operacoe
 }
 
 function PaginaEvento({ e, eventos, operacoes, aoMudar, aba }: { e: Evento; eventos: Evento[]; operacoes: Operacao[]; aoMudar: () => Promise<void>; aba: string }) {
+  useEffect(() => { gravarRecente({ id: e.id, nome: e.nome, aba }) }, [e.id, e.nome, aba])
   return (
     <div className="space-y-4">
       <button onClick={() => ir('eventos')} className="text-sm font-semibold text-stone-500 hover:text-carvao">← Eventos</button>
