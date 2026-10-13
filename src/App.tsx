@@ -149,7 +149,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
     id === 'rh' ? abasRh
       : id === 'cadastros' ? ABAS_CADASTROS
       : id === 'producao' ? ABAS_PRODUCAO.filter((a) => !a.soGestao || podeGerenciar(eu.nivel))
-      : id === 'compras' ? ABAS_COMPRAS
+      : id === 'compras' ? ABAS_COMPRAS.filter((a) => a.id === 'semana' || podeGerenciar(eu.nivel))
       : id === 'estoque' ? ABAS_ESTOQUE
       : id === 'financeiro' ? ABAS_FINANCEIRO
       : id === 'eventos' ? ABAS_EVENTOS

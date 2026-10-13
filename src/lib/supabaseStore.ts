@@ -1499,7 +1499,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       return linhas.map(paraPedidoCompra)
     },
     async salvarPedidoCompra(p) {
-      const itens = p.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumo_id: i.insumoId, quantidade: i.quantidade, unidade: i.unidade, preco: i.preco, ...(i.fator && i.fator > 1 ? { embalagem: i.embalagem, fator: i.fator } : {}) }))
+      const itens = p.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumo_id: i.insumoId, quantidade: i.quantidade, unidade: i.unidade, preco: i.preco, ...(i.fator && i.fator > 0 && i.fator !== 1 ? { embalagem: i.embalagem, fator: i.fator } : {}) }))
       const linha = {
         fornecedor_id: p.fornecedorId, centro_custo_id: p.centroCustoId, categoria: p.categoria, status: p.status, data_pedido: p.dataPedido,
         previsao_entrega: p.previsaoEntrega, itens, total: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.preco ?? 0), 0) * 100) / 100,
@@ -1510,7 +1510,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         : ok(await sb.from('compras_pedidos').insert(linha).select().single()))
     },
     async receberPedidoCompra(id, recebido) {
-      ok(await sb.from('compras_pedidos').update({ status: recebido ? 'recebido' : 'pedido', recebido_em: recebido ? hoje() : null, atualizado_em: new Date().toISOString() }).eq('id', id))
+      ok(await sb.rpc('marcar_compra_recebida', { p_id: id, p_recebido: recebido }))
     },
     async precosFornecedor(fornecedorId) {
       return (ok(await sb.rpc('precos_fornecedor', { p_fornecedor: fornecedorId })) ?? []).map((r: any): PrecoFornecedor => ({

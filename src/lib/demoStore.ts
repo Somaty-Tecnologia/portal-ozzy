@@ -2063,7 +2063,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
 
     async fornecedores() {
-      exigeGestao()
+      exigeGestaoOuProducao()
       return structuredClone(fornecedoresDemo).sort((a, b) => a.nome.localeCompare(b.nome))
     },
     async salvarFornecedor(f) {
@@ -2817,7 +2817,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async pedidosCompra() {
-      exigeGestao()
+      exigeGestaoOuProducao()
       return espera(structuredClone(pedidosCompraDemo).sort((a, b) => b.previsaoEntrega.localeCompare(a.previsaoEntrega)))
     },
     async salvarPedidoCompra(p) {
@@ -2831,7 +2831,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(structuredClone(atual ?? pedidosCompraDemo[pedidosCompraDemo.length - 1]))
     },
     async receberPedidoCompra(id, recebido) {
-      exigeGestao()
+      exigeGestaoOuProducao()
       const p = pedidosCompraDemo.find((x) => x.id === id)
       if (p) Object.assign(p, { status: recebido ? 'recebido' : 'pedido', recebidoEm: recebido ? hoje() : null })
       return espera(undefined)

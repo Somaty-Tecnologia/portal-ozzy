@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Selo, Vazio, estiloEntrada } from '../components/ui'
 import { useApp } from '../lib/contexto'
+import { podeGerenciar } from '../lib/permissoes'
 import { naHoraDeComprar, quantidadeSugerida, ritmo } from '../lib/compras'
 import { addDias, dataCurta, diaSemana, diasEntre, hoje, inicioDaSemana } from '../lib/datas'
 import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
@@ -478,7 +479,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
 // ——— Entregas da semana ———
 
 export function SemanaCompras() {
-  const { store, avisar } = useApp()
+  const { store, avisar, eu } = useApp()
   const { d, erro, carregar } = useDados()
   const [seg, setSeg] = useState(inicioDaSemana(hoje()))
   const [comPreco, setComPreco] = useState(false)
@@ -523,7 +524,11 @@ export function SemanaCompras() {
       {p.observacao && <p className="mt-1 text-xs text-stone-500">Obs.: {p.observacao}</p>}
       <div className="mt-2 print:hidden">
         {p.status === 'recebido' ? (
-          <span className="text-xs font-semibold text-emerald-700">Chegou{p.recebidoEm ? ` em ${dataCurta(p.recebidoEm)}` : ''}</span>
+          <span className="text-xs font-semibold text-emerald-700">Chegou{p.recebidoEm ? ` em ${dataCurta(p.recebidoEm)}` : ''}
+            <button className="ml-2 font-normal text-stone-500 underline" onClick={async () => {
+              try { await store.receberPedidoCompra(p.id, false); avisar('Voltou para a receber'); await carregar() } catch (e) { avisar((e as Error).message) }
+            }}>Ainda não chegou</button>
+          </span>
         ) : (
           <button className="text-xs font-semibold text-stone-600 underline" onClick={async () => {
             try { await store.receberPedidoCompra(p.id, true); avisar('Marcado como recebido'); await carregar() } catch (e) { avisar((e as Error).message) }
@@ -539,7 +544,7 @@ export function SemanaCompras() {
         <Botao variante="secundario" onClick={() => setSeg(addDias(seg, -7))} aria-label="Semana anterior">‹</Botao>
         <span className="min-w-40 text-center font-semibold">{dataCurta(seg)} a {dataCurta(fim)}</span>
         <Botao variante="secundario" onClick={() => setSeg(addDias(seg, 7))} aria-label="Semana seguinte">›</Botao>
-        <label className="ml-2 flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={comPreco} onChange={(e) => setComPreco(e.target.checked)} /> Mostrar valores</label>
+        {podeGerenciar(eu.nivel) && <label className="ml-2 flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={comPreco} onChange={(e) => setComPreco(e.target.checked)} /> Mostrar valores</label>}
         <div className="ml-auto flex gap-2">
           <Botao variante="secundario" onClick={async () => { try { await navigator.clipboard.writeText(texto()); avisar('Copiado para mandar à equipe') } catch { avisar('Não consegui copiar') } }}>Copiar para o WhatsApp</Botao>
           <Botao variante="secundario" onClick={() => window.print()}>Imprimir</Botao>

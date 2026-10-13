@@ -42,7 +42,7 @@ export const MODULOS: Modulo[] = [
   // Cadastros da Eclética (09/10): materiais (insumos), produtos de venda com preço e fornecedores, num lugar só.
   { id: 'cadastros', nome: 'Cadastros', pronto: true, soGestao: true },
   {
-    id: 'compras', soGestao: true, nome: 'Compras', pronto: true,
+    id: 'compras', nome: 'Compras', pronto: true, ve: (eu) => podeGerenciar(eu.nivel) || eu.setor === 'producao',
     resumo: 'Do pedido de compra até a conferência da nota.',
     itens: ['Solicitação de compra por unidade', 'Cotação e aprovação por valor', 'Recebimento com conferência e fotos'],
   },
