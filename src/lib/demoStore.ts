@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -960,6 +960,7 @@ const produtosVendaDemo: ProdutoVenda[] = [
 ]
 // Ideal de segunda a domingo (exemplo).
 const pedidosTirarDemo: PedidoTirarFechamento[] = []
+const caixaDemo: CaixaTurno[] = []
 const listaFechDemo: ItemListaFechamento[] = (['burger-psd', 'burger-va'] as const).flatMap((u, k) => ([
   ['cozinha', 'in15', 'Uni', [8, 8, 8, 10, 12, 12, 10]],
   ['cozinha', 'in16', 'Kg', [20, 20, 25, 30, 45, 45, 35]],
@@ -2917,6 +2918,40 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
           prePreparo: prePreparoDemo.has(i.insumoId), ideal: i.ideal[dia] ?? null, contagem: c?.contagem ?? null, sugestao: c?.sugestao ?? null, pedido: c?.pedido ?? null,
         }
       }))
+    },
+    async caixaTurnos(unidadeId, de, ate) {
+      const u = exigeEu()
+      if (!podeGerenciar(u.nivel) && u.unidadeId !== unidadeId) return espera([])
+      return espera(caixaDemo.filter((c) => c.unidadeId === unidadeId && c.data >= de && c.data <= ate).sort((a, b) => b.data.localeCompare(a.data)).map((c) => structuredClone(c)))
+    },
+    async abrirCaixa(c) {
+      const u = exigeEu()
+      if (!podeGerenciar(u.nivel) && u.unidadeId !== c.unidadeId) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (caixaDemo.some((x) => x.unidadeId === c.unidadeId && x.data === c.data)) throw new Error('O caixa deste dia já foi aberto.')
+      caixaDemo.push({ ...c, id: novoId('cx'), valorFinal: null, valorEnviado: null, observacao: null, abertoPor: u.id, abertoEm: agora(), fechadoPor: null, fechadoEm: null, sangrias: [] })
+      return espera(undefined)
+    },
+    async salvarCaixa(id, c) {
+      const u = exigeEu()
+      const t = caixaDemo.find((x) => x.id === id)
+      if (!t) throw new Error('Caixa não encontrado.')
+      if (t.fechadoEm && !podeGerenciar(u.nivel)) throw new Error('Caixa já fechado: só a gestão altera.')
+      const { fechar, reabrir, ...campos } = c
+      Object.assign(t, campos)
+      if (fechar) Object.assign(t, { fechadoEm: agora(), fechadoPor: u.id })
+      if (reabrir) Object.assign(t, { fechadoEm: null, fechadoPor: null })
+      return espera(undefined)
+    },
+    async lancarSangria(turnoId, valor, descricao) {
+      const u = exigeEu()
+      const t = caixaDemo.find((x) => x.id === turnoId)
+      if (!t || (t.fechadoEm && !podeGerenciar(u.nivel))) throw new Error('Caixa fechado.')
+      t.sangrias.push({ id: novoId('sg'), valor, descricao: descricao.trim(), criadoPor: u.id, criadoEm: agora() })
+      return espera(undefined)
+    },
+    async apagarSangria(id) {
+      for (const t of caixaDemo) t.sangrias = t.sangrias.filter((s) => s.id !== id)
+      return espera(undefined)
     },
     async pedidosTirarFechamento() {
       const u = exigeEu()

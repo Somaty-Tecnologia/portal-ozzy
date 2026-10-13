@@ -1476,6 +1476,29 @@ export interface ItemFechamento {
   sugestao: number | null
   pedido: number | null
 }
+// Caixa das lojas (Heitor, 13/10): um turno por dia e loja.
+export interface SangriaCaixa {
+  id: string
+  valor: number
+  descricao: string
+  criadoPor: string | null
+  criadoEm: string
+}
+export interface CaixaTurno {
+  id: string
+  unidadeId: string
+  data: string
+  valorInicial: number
+  valorFinal: number | null
+  valorEnviado: number | null
+  observacao: string | null
+  responsavelId: string | null
+  abertoPor: string | null
+  abertoEm: string
+  fechadoPor: string | null
+  fechadoEm: string | null
+  sangrias: SangriaCaixa[]
+}
 // Pedido de quem preenche o fechamento para tirar um item da lista (Heitor, 13/10); a gestão aprova ou nega.
 export interface PedidoTirarFechamento {
   id: string

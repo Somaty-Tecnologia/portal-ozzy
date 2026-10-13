@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1553,6 +1553,34 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         itemId: r.item_id, insumoId: r.insumo_id, nome: r.nome, categoria: r.categoria ?? null, unidadeContagem: r.unidade_contagem, ordem: r.ordem, prePreparo: r.pre_preparo,
         ideal: numeroOuNulo(r.ideal), contagem: numeroOuNulo(r.contagem), sugestao: numeroOuNulo(r.sugestao), pedido: numeroOuNulo(r.pedido),
       }))
+    },
+    async caixaTurnos(unidadeId, de, ate) {
+      return (ok(await sb.from('caixa_turnos').select('*, caixa_sangrias(*)').eq('unidade_id', unidadeId).gte('data', de).lte('data', ate).order('data', { ascending: false })) ?? []).map((r: any): CaixaTurno => ({
+        id: r.id, unidadeId: r.unidade_id, data: r.data, valorInicial: Number(r.valor_inicial), valorFinal: numeroOuNulo(r.valor_final), valorEnviado: numeroOuNulo(r.valor_enviado),
+        observacao: r.observacao, responsavelId: r.responsavel_id, abertoPor: r.aberto_por, abertoEm: r.aberto_em, fechadoPor: r.fechado_por, fechadoEm: r.fechado_em,
+        sangrias: (r.caixa_sangrias ?? []).sort((a: any, b: any) => a.criado_em.localeCompare(b.criado_em)).map((s: any) => ({ id: s.id, valor: Number(s.valor), descricao: s.descricao, criadoPor: s.criado_por, criadoEm: s.criado_em })),
+      }))
+    },
+    async abrirCaixa(c) {
+      ok(await sb.from('caixa_turnos').insert({ unidade_id: c.unidadeId, data: c.data, valor_inicial: c.valorInicial, responsavel_id: c.responsavelId }))
+    },
+    async salvarCaixa(id, c) {
+      const eu = exigeEu().id
+      ok(await sb.from('caixa_turnos').update({
+        ...(c.valorInicial !== undefined && { valor_inicial: c.valorInicial }),
+        ...(c.valorFinal !== undefined && { valor_final: c.valorFinal }),
+        ...(c.valorEnviado !== undefined && { valor_enviado: c.valorEnviado }),
+        ...(c.observacao !== undefined && { observacao: texto(c.observacao) }),
+        ...(c.responsavelId !== undefined && { responsavel_id: c.responsavelId }),
+        ...(c.fechar && { fechado_em: new Date().toISOString(), fechado_por: eu }),
+        ...(c.reabrir && { fechado_em: null, fechado_por: null }),
+      }).eq('id', id))
+    },
+    async lancarSangria(turnoId, valor, descricao) {
+      ok(await sb.from('caixa_sangrias').insert({ turno_id: turnoId, valor, descricao: descricao.trim() }))
+    },
+    async apagarSangria(id) {
+      ok(await sb.from('caixa_sangrias').delete().eq('id', id))
     },
     async pedidosTirarFechamento() {
       return (ok(await sb.from('fechamento_pedidos_tirar').select('*, insumos(nome)').eq('status', 'pendente').order('criado_em')) ?? []).map((r: any): PedidoTirarFechamento => ({

@@ -8,6 +8,7 @@ import { podeGerenciar } from '../lib/permissoes'
 import { LOJAS_FECHAMENTO, type Fechamento as FechamentoT, type ItemContagem, type ItemFechamento, type SetorFechamento } from '../lib/types'
 import { criarReconhecedor, lerContagem } from '../lib/voz'
 import { esc, imprimirTermica } from '../lib/termica'
+import Caixa from '../components/Caixa'
 
 // Fechamento e pedido (Heitor, 09/10). No fim do turno a cozinha e o atendimento da PSD e da Vila contam o
 // estoque (pode ser falando, lendo o papel), o portal sugere o pedido pelo estoque ideal do dia seguinte e a
@@ -35,6 +36,8 @@ export default function Fechamento() {
   const [loja, setLoja] = useState(minhaLoja)
   const [setor, setSetor] = useState<SetorFechamento>(eu.setor === 'atendimento' ? 'atendimento' : 'cozinha')
   const [data, setData] = useState(dataPadrao)
+  // Heitor (13/10): o caixa da loja fica junto do fechamento.
+  const [aba, setAba] = useState<'pedido' | 'caixa'>('pedido')
 
   return (
     <div className="space-y-4">
@@ -51,16 +54,21 @@ export default function Fechamento() {
           </div>
         )}
         <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-200">
+          {([['pedido', 'Contagem e pedido'], ['caixa', 'Caixa']] as const).map(([a, nome]) => (
+            <button key={a} onClick={() => setAba(a)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${aba === a ? 'bg-carvao text-white' : 'text-stone-600'}`}>{nome}</button>
+          ))}
+        </div>
+        {aba === 'pedido' && <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-200">
           {SETORES.map((s) => (
             <button key={s.valor} onClick={() => setSetor(s.valor)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${setor === s.valor ? 'bg-carvao text-white' : 'text-stone-600'}`}>{s.nome}</button>
           ))}
-        </div>
+        </div>}
         <label className="flex items-center gap-2 text-sm text-stone-600">
           Dia do fechamento
           <input type="date" value={data} max={addDias(hoje(), 1)} onChange={(e) => e.target.value && setData(e.target.value)} className={`${estiloEntrada} w-40!`} />
         </label>
       </div>
-      <TelaFechamento key={`${loja}|${setor}|${data}`} loja={loja} setor={setor} data={data} />
+      {aba === 'caixa' ? <Caixa loja={loja} data={data} /> : <TelaFechamento key={`${loja}|${setor}|${data}`} loja={loja} setor={setor} data={data} />}
     </div>
   )
 }
