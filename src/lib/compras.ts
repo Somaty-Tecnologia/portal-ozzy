@@ -8,7 +8,7 @@ export function quantidadeSugerida(c: CompraFornecedor, ins?: Insumo): number | 
   const semanal = c.intervaloDias === null || c.intervaloDias < 10
   const base = semanal ? c.porSemana : c.porCompra ?? c.ultimaQtd
   if (!base || base <= 0) return null
-  const emb = ins?.embalagemQtd && ins.embalagemQtd > 1 ? ins.embalagemQtd : null
+  const emb = ins?.embalagemQtd && ins.embalagemQtd > 0 && ins.embalagemQtd !== 1 ? ins.embalagemQtd : null
   if (emb) return Math.ceil(base / emb - 0.05) * emb
   return ins?.unidade === 'un' || !ins ? Math.ceil(base - 0.05) : Math.ceil(base * 10 - 0.5) / 10
 }

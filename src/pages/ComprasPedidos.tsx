@@ -37,7 +37,7 @@ function useDados() {
 // "2 fardos (24 un) Coca-Cola" quando foi pedido em embalagem; senão "24 un Coca-Cola".
 const plural = (n: number, s: string) => (n > 1 && /[aeiou]$/i.test(s) ? s + 's' : s)
 export const qtdItem = (i: { quantidade: number; unidade: string; embalagem?: string | null; fator?: number | null }) =>
-  i.fator && i.fator > 1 && i.embalagem
+  i.fator && i.fator > 0 && i.fator !== 1 && i.embalagem
     ? `${mostrarQtd(Math.round((i.quantidade / i.fator) * 1000) / 1000)} ${plural(i.quantidade / i.fator, i.embalagem)} (${mostrarQtd(i.quantidade)} ${i.unidade})`
     : `${mostrarQtd(i.quantidade)} ${i.unidade}`
 const linhaItem = (d: Dados, i: ItemCompra) => `${qtdItem(i)} ${d.insumos.find((x) => x.id === i.insumoId)?.nome ?? 'item'}`
@@ -151,7 +151,7 @@ export function PedidosCompra() {
 interface LinhaForm { chave: string; insumoId: string; qtd: string; unidade: string; preco: string; fator: number; embalagem: string | null }
 const arred = (n: number) => Math.round(n * 10000) / 10000
 // Preço da embalagem em centavos; o da unidade com até 4 casas.
-const precoNa = (n: number, fator: number) => (fator > 1 ? Math.round(n * 100) / 100 : arred(n))
+const precoNa = (n: number, fator: number) => (fator !== 1 ? Math.round(n * 100) / 100 : arred(n))
 let seq = 0
 
 function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | null; aoFechar: (mudou: boolean) => void }) {
@@ -165,8 +165,8 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
   })
   const [previsaoMexida, setPrevisaoMexida] = useState(!!pedido)
   const [linhas, setLinhas] = useState<LinhaForm[]>(() => (pedido?.itens ?? []).map((i) => {
-    const f = i.fator && i.fator > 1 ? i.fator : 1
-    return { chave: 'l' + seq++, insumoId: i.insumoId, qtd: numTexto(arred(i.quantidade / f)), unidade: i.unidade, preco: numTexto(i.preco === null ? null : precoNa(i.preco * f, f)), fator: f, embalagem: f > 1 ? i.embalagem ?? null : null }
+    const f = i.fator && i.fator > 0 && i.fator !== 1 ? i.fator : 1
+    return { chave: 'l' + seq++, insumoId: i.insumoId, qtd: numTexto(arred(i.quantidade / f)), unidade: i.unidade, preco: numTexto(i.preco === null ? null : precoNa(i.preco * f, f)), fator: f, embalagem: f !== 1 ? i.embalagem ?? null : null }
   }))
   const [precos, setPrecos] = useState<PrecoFornecedor[]>([])
   const [historico, setHistorico] = useState<CompraFornecedor[]>([])
@@ -217,9 +217,9 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
   const adicionar = (ins: Insumo, qtd: number | null = null) => {
     if (linhas.some((l) => l.insumoId === ins.id)) return avisar('Este item já está no pedido.')
     // Material com embalagem (fardo com 12…): já entra pedido em fardo.
-    const f = ins.embalagem && ins.embalagemQtd && ins.embalagemQtd > 1 ? ins.embalagemQtd : 1
+    const f = ins.embalagem && ins.embalagemQtd && ins.embalagemQtd > 0 && ins.embalagemQtd !== 1 ? ins.embalagemQtd : 1
     const u = ultimo(ins.id)?.preco
-    setLinhas((ls) => [...ls, { chave: 'l' + seq++, insumoId: ins.id, qtd: numTexto(qtd === null ? null : arred(qtd / f)), unidade: ins.unidade, preco: numTexto(u === undefined ? null : precoNa(u * f, f)), fator: f, embalagem: f > 1 ? ins.embalagem : null }])
+    setLinhas((ls) => [...ls, { chave: 'l' + seq++, insumoId: ins.id, qtd: numTexto(qtd === null ? null : arred(qtd / f)), unidade: ins.unidade, preco: numTexto(u === undefined ? null : precoNa(u * f, f)), fator: f, embalagem: f !== 1 ? ins.embalagem : null }])
     setBusca('')
   }
   const mudar = (chave: string, m: Partial<LinhaForm>) => setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, ...m } : l)))
@@ -229,13 +229,13 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
     let f = 1
     let emb: string | null = null
     if (op === 'emb' && ins) {
-      f = l.fator > 1 ? l.fator : ins.embalagemQtd ?? 1
-      emb = l.fator > 1 ? l.embalagem : ins.embalagem
+      f = l.fator !== 1 ? l.fator : ins.embalagemQtd ?? 1
+      emb = l.fator !== 1 ? l.embalagem : ins.embalagem
     } else if (op === 'nova' && ins) {
       const nome = prompt('Como vem do fornecedor? (fardo, caixa, pacote…)', ins.embalagem ?? 'fardo')?.trim().toLowerCase()
       if (!nome) return
       const n = lerValor(prompt(`Quantos ${ins.unidade} vêm em 1 ${nome}?`, ins.embalagemQtd ? numTexto(ins.embalagemQtd) : '') ?? '')
-      if (!n || n <= 1) return avisar(`Coloque quantos ${ins.unidade} vêm na embalagem (mais de 1).`)
+      if (!n || n <= 0 || n === 1) return avisar(`Coloque quantos ${ins.unidade} vêm na embalagem (ex.: 12, ou 0,330 para 330 g).`)
       try {
         const salvo = await store.salvarInsumo({ ...ins, embalagem: nome, embalagemQtd: n })
         setInsumos((is) => is.map((x) => (x.id === ins.id ? salvo : x)))
@@ -274,7 +274,7 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
     if (!v.fornecedorId) return setErro('Escolha o fornecedor.')
     const itens = linhas.map((l) => {
       const preco = lerValor(l.preco)
-      return { insumoId: l.insumoId, quantidade: arred((lerValor(l.qtd) ?? 0) * l.fator), unidade: l.unidade.trim() || 'un', preco: preco === null ? null : arred(preco / l.fator), embalagem: l.fator > 1 ? l.embalagem : null, fator: l.fator > 1 ? l.fator : null }
+      return { insumoId: l.insumoId, quantidade: arred((lerValor(l.qtd) ?? 0) * l.fator), unidade: l.unidade.trim() || 'un', preco: preco === null ? null : arred(preco / l.fator), embalagem: l.fator !== 1 ? l.embalagem : null, fator: l.fator !== 1 ? l.fator : null }
     })
     if (status !== 'cancelado' && !itens.some((i) => i.quantidade > 0)) return setErro('Coloque a quantidade de pelo menos um item.')
     if (v.previsaoEntrega < v.dataPedido) return setErro('A entrega não pode ser antes do pedido.')
@@ -364,25 +364,25 @@ function FormPedido({ d, pedido, aoFechar }: { d: Dados; pedido: PedidoCompra | 
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <input inputMode="decimal" value={l.qtd} disabled={!editavel} onChange={(e) => mudar(l.chave, { qtd: e.target.value })} placeholder="Qtd." aria-label={`Quantidade de ${ins?.nome}`} className={`${estiloEntrada} w-20! text-center`} />
-                <select value={l.fator > 1 ? 'emb' : 'base'} disabled={!editavel} onChange={(e) => trocarUnidade(l, ins, e.target.value)} aria-label={`Unidade de ${ins?.nome}`} className={`${estiloEntrada} w-auto! py-1.5! pr-7!`}>
+                <select value={l.fator !== 1 ? 'emb' : 'base'} disabled={!editavel} onChange={(e) => trocarUnidade(l, ins, e.target.value)} aria-label={`Unidade de ${ins?.nome}`} className={`${estiloEntrada} w-auto! py-1.5! pr-7!`}>
                   <option value="base">{l.unidade}</option>
-                  {(l.fator > 1 || (ins?.embalagem && (ins.embalagemQtd ?? 0) > 1)) && (
-                    <option value="emb">{l.fator > 1 ? l.embalagem : ins!.embalagem} c/ {mostrarQtd(l.fator > 1 ? l.fator : ins!.embalagemQtd!)} {l.unidade}</option>
+                  {(l.fator !== 1 || (ins?.embalagem && ![0, 1].includes(ins.embalagemQtd ?? 0))) && (
+                    <option value="emb">{l.fator !== 1 ? l.embalagem : ins!.embalagem} c/ {mostrarQtd(l.fator !== 1 ? l.fator : ins!.embalagemQtd!)} {l.unidade}</option>
                   )}
-                  {ins && <option value="nova">{ins.embalagem && (ins.embalagemQtd ?? 0) > 1 ? 'Mudar embalagem…' : 'Fardo, caixa…'}</option>}
+                  {ins && <option value="nova">{ins.embalagem && ![0, 1].includes(ins.embalagemQtd ?? 0) ? 'Mudar embalagem…' : 'Fardo, caixa…'}</option>}
                 </select>
                 <span className="text-sm text-stone-500">×</span>
                 <input inputMode="decimal" value={l.preco} disabled={!editavel} onChange={(e) => mudar(l.chave, { preco: e.target.value })} placeholder="Preço" aria-label={`Preço de ${ins?.nome}`} className={`${estiloEntrada} w-24! text-right`} />
                 <span className="ml-auto text-sm font-semibold">{reais((lerValor(l.qtd) ?? 0) * (p ?? 0))}</span>
               </div>
-              {l.fator > 1 && (lerValor(l.qtd) ?? 0) > 0 && (
+              {l.fator !== 1 && (lerValor(l.qtd) ?? 0) > 0 && (
                 <p className="mt-1 text-xs text-stone-500">
                   = {mostrarQtd(arred((lerValor(l.qtd) ?? 0) * l.fator))} {l.unidade} no estoque{p !== null ? ` · ${reais(p / l.fator)}/${l.unidade}` : ''}
                 </p>
               )}
               {u && (
                 <p className={`mt-1 text-xs ${p !== null && Math.abs(p / l.fator - u.preco) > 0.0001 ? 'text-amber-800' : 'text-stone-500'}`}>
-                  Último preço com este fornecedor: {reais(u.preco * l.fator)}{l.fator > 1 ? ` o ${l.embalagem}` : ''} em {dataCurta(u.em)} ({u.origem === 'nota' ? 'nota fiscal' : u.origem === 'historico' ? 'Eclética' : 'pedido'}){p !== null && Math.abs(p / l.fator - u.preco) > 0.0001 ? ` · ${p / l.fator > u.preco ? 'subiu' : 'baixou'} ${Math.abs(Math.round(((p / l.fator - u.preco) / u.preco) * 1000) / 10).toLocaleString('pt-BR')}%` : ''}
+                  Último preço com este fornecedor: {reais(u.preco * l.fator)}{l.fator !== 1 ? ` o ${l.embalagem}` : ''} em {dataCurta(u.em)} ({u.origem === 'nota' ? 'nota fiscal' : u.origem === 'historico' ? 'Eclética' : 'pedido'}){p !== null && Math.abs(p / l.fator - u.preco) > 0.0001 ? ` · ${p / l.fator > u.preco ? 'subiu' : 'baixou'} ${Math.abs(Math.round(((p / l.fator - u.preco) / u.preco) * 1000) / 10).toLocaleString('pt-BR')}%` : ''}
                 </p>
               )}
             </div>
