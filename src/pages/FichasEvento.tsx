@@ -61,6 +61,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
   const [inativas, setInativas] = useState(false)
   const [nova, setNova] = useState(false)
   const [imprimir, setImprimir] = useState<Receita[] | null>(null)
+  const [lote, setLote] = useState(false)
   // Produto é de uma área (lojas ou eventos); pré-preparo serve para todos.
   const daArea = (r: Receita) => r.tipo === 'preparo' || (r.area ?? 'eventos') === d.area
   const linhas = [...new Set(d.receitas.filter((r) => daArea(r) && r.tipo === tipo).map((r) => r.linha).filter(Boolean) as string[])].sort()
@@ -93,6 +94,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
               Imprimir {lista.filter(({ r }) => r.versaoAtual > 0).length === 1 ? 'a ficha' : `as ${lista.filter(({ r }) => r.versaoAtual > 0).length} fichas`}
             </Botao>
           )}
+          <Botao variante="secundario" onClick={() => setLote(true)}>Trocar ingrediente em lote</Botao>
           <Botao onClick={() => setNova(true)}>+ Nova ficha</Botao>
         </div>}
       </div>
@@ -151,6 +153,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
       <p className="text-xs text-stone-500">O custo usa o preço atual de cada insumo e o aproveitamento de cada item. O CMV fica em vermelho acima de 35%.</p>
       </>}
 
+      {lote && <TrocarEmLote d={d} aoFechar={() => setLote(false)} aoSalvar={async (n) => { setLote(false); await aoMudar(); avisar(`Trocado em ${n} ${n === 1 ? 'ficha' : 'fichas'}`) }} />}
       {imprimir && <ImprimirFichas fichas={imprimir} cat={d.cat} aoFechar={() => setImprimir(null)} />}
       {nova && (
         <EditarDadosFicha
@@ -679,6 +682,133 @@ function EditarComposicao({ r, d, aoFechar, aoSalvar }: { r: Receita; d: Dados; 
         </Campo>
         {erro && <p className="text-sm text-red-600">{erro}</p>}
         <Botao className="w-full" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : `Salvar como versão ${(r.versaoAtual ?? 0) + 1}`}</Botao>
+      </div>
+    </Modal>
+  )
+}
+
+// Trocar em lote (Heitor, 13/10): um item (ex.: molho de tomate italiano) por outro em várias fichas de uma vez.
+// Cada ficha marcada ganha uma versão nova, com a mesma quantidade (ou multiplicada, se a unidade mudar).
+function TrocarEmLote({ d, aoFechar, aoSalvar }: { d: Dados; aoFechar: () => void; aoSalvar: (n: number) => void }) {
+  const { store, avisar } = useApp()
+  const opcoes = useMemo(() => [
+    ...d.insumos.filter((x) => x.ativo).map((x) => ({ ref: 'i:' + x.id, nome: x.nome, un: nomeUnidade(x.unidade) })),
+    ...d.receitas.filter((x) => x.tipo === 'preparo' && x.ativo).map((p) => ({ ref: 'r:' + p.id, nome: p.nome + ' (pré-preparo)', un: nomeUnidade(p.unidade) })),
+  ].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), [d])
+  // O item que sai pode estar inativo: procura também entre todos os que aparecem nas fichas.
+  const todas = useMemo(() => [
+    ...d.insumos.map((x) => ({ ref: 'i:' + x.id, nome: x.nome, un: nomeUnidade(x.unidade) })),
+    ...d.receitas.map((p) => ({ ref: 'r:' + p.id, nome: p.nome + (p.tipo === 'preparo' ? ' (pré-preparo)' : ' (produto)'), un: nomeUnidade(p.unidade) })),
+  ], [d])
+  const [saiTexto, setSaiTexto] = useState('')
+  const [entraTexto, setEntraTexto] = useState('')
+  const sai = todas.find((o) => o.nome.toLowerCase() === saiTexto.trim().toLowerCase())
+  const entra = opcoes.find((o) => o.nome.toLowerCase() === entraTexto.trim().toLowerCase())
+  const [fator, setFator] = useState('1')
+  const [nota, setNota] = useState('')
+  const [desmarcadas, setDesmarcadas] = useState<Set<string>>(new Set())
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  const usa = (i: ItemReceita, ref: string) => (ref.startsWith('i:') ? i.insumoId === ref.slice(2) : i.subReceitaId === ref.slice(2))
+  const fichas = useMemo(() => {
+    if (!sai) return []
+    return [...d.cat.atual.entries()]
+      .map(([id, v]) => ({ r: d.cat.receitas.get(id)!, v, q: v.itens.filter((i) => usa(i, sai.ref)).reduce((s, i) => s + i.quantidade, 0) }))
+      .filter((x) => x.r && x.v.itens.some((i) => usa(i, sai.ref)))
+      .sort((a, b) => a.r.nome.localeCompare(b.r.nome, 'pt-BR'))
+  }, [sai, d])
+  const marcadas = fichas.filter((x) => !desmarcadas.has(x.r.id))
+  const k = numero(fator)
+
+  const novaComposicao = (v: VersaoReceita): ItemReceita[] => {
+    const ref = entra!.ref
+    const out: ItemReceita[] = []
+    for (const i of v.itens) {
+      if (!usa(i, sai!.ref)) { out.push(i); continue }
+      const q = Math.round(i.quantidade * (k ?? 1) * 10000) / 10000
+      const ja = out.find((x) => usa(x, ref))
+      if (ja) ja.quantidade = Math.round((ja.quantidade + q) * 10000) / 10000
+      else out.push({ ...i, insumoId: ref.startsWith('i:') ? ref.slice(2) : null, subReceitaId: ref.startsWith('r:') ? ref.slice(2) : null, quantidade: q })
+    }
+    return out
+  }
+
+  const trocar = async () => {
+    if (!sai || !entra) return setErro('Escolha da lista o item que sai e o que entra.')
+    if (sai.ref === entra.ref) return setErro('O item que entra é o mesmo que sai.')
+    if (!k || !(k > 0)) return setErro('Confira a quantidade (multiplicar por).')
+    if (!marcadas.length) return setErro('Marque pelo menos uma ficha.')
+    setSalvando(true)
+    setErro('')
+    let feitas = 0
+    const falhas: string[] = []
+    for (const { r, v } of marcadas) {
+      const itens = novaComposicao(v)
+      const c = custoItens(d.cat, itens, v.rendimento, [r.id])
+      if (c.ciclo) { falhas.push(`${r.nome} (o item novo usa esta ficha)`); continue }
+      try {
+        await store.salvarVersaoReceita(r.id, v.rendimento, Math.round(c.total * 10000) / 10000, nota.trim() || `Troca em lote: ${sai.nome} por ${entra.nome}`, itens)
+        feitas++
+      } catch (e) {
+        falhas.push(`${r.nome} (${(e as Error).message})`)
+      }
+    }
+    setSalvando(false)
+    if (!feitas) return setErro(`Não deu em: ${falhas.join('; ')}.`)
+    aoSalvar(feitas)
+    if (falhas.length) setTimeout(() => avisar(`Não deu em: ${falhas.join('; ')}`), 1500)
+  }
+
+  return (
+    <Modal titulo="Trocar ingrediente em lote" aberto aoFechar={aoFechar}>
+      <div className="space-y-3">
+        <datalist id="lote-todos">{todas.map((o) => <option key={o.ref} value={o.nome} />)}</datalist>
+        <datalist id="lote-entra">{opcoes.map((o) => <option key={o.ref} value={o.nome} />)}</datalist>
+        <Campo rotulo="Item que sai" dica={sai ? `Está em ${fichas.length} ${fichas.length === 1 ? 'ficha' : 'fichas'}.` : 'Digite e escolha da lista.'}>
+          <input list="lote-todos" className={estiloEntrada} value={saiTexto} onChange={(e) => { setSaiTexto(e.target.value); setDesmarcadas(new Set()) }} placeholder="Ex.: Molho de tomate italiano" autoFocus />
+        </Campo>
+        <Campo rotulo="Item que entra">
+          <input list="lote-entra" className={estiloEntrada} value={entraTexto} onChange={(e) => setEntraTexto(e.target.value)} placeholder="Digite e escolha da lista" />
+        </Campo>
+        <div className="grid grid-cols-[8rem_1fr] items-end gap-3">
+          <Campo rotulo="Multiplicar qtd por">
+            <input className={estiloEntrada} inputMode="decimal" value={fator} onChange={(e) => setFator(e.target.value)} />
+          </Campo>
+          <p className="pb-2 text-xs text-stone-500">
+            1 = mesma quantidade.
+            {sai && entra && sai.un !== entra.un && <span className="font-semibold text-amber-700"> Atenção: sai em {sai.un} e entra em {entra.un}. Ajuste o número se precisar.</span>}
+          </p>
+        </div>
+        {sai && (fichas.length === 0 ? (
+          <p className="text-sm text-stone-500">Nenhuma ficha usa este item.</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-stone-200">
+            <label className="flex items-center gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600">
+              <input type="checkbox" className="accent-carvao" checked={marcadas.length === fichas.length}
+                onChange={(e) => setDesmarcadas(e.target.checked ? new Set() : new Set(fichas.map((x) => x.r.id)))} />
+              {marcadas.length} de {fichas.length} marcadas
+            </label>
+            {fichas.map(({ r, q }) => (
+              <label key={r.id} className="flex items-center gap-2 border-b border-stone-100 px-3 py-1.5 text-sm last:border-0">
+                <input type="checkbox" className="accent-carvao" checked={!desmarcadas.has(r.id)}
+                  onChange={() => setDesmarcadas((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n })} />
+                <span className="flex-1">{r.nome} {!r.ativo && <Selo>Inativa</Selo>}
+                  <span className="text-xs text-stone-500"> · {r.tipo === 'preparo' ? 'pré-preparo' : (r.area ?? 'eventos') === 'lojas' ? 'lojas' : 'eventos'}</span>
+                </span>
+                <span className="text-xs whitespace-nowrap text-stone-500">{qtd(q)} {sai.un}{entra && k && k > 0 ? ` → ${qtd(Math.round(q * k * 10000) / 10000)} ${entra.un}` : ''}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        <Campo rotulo="O que mudou (vai em cada versão nova)">
+          <input className={estiloEntrada} value={nota} onChange={(e) => setNota(e.target.value)} placeholder={sai && entra ? `Troca em lote: ${sai.nome} por ${entra.nome}` : ''} />
+        </Campo>
+        {erro && <p className="text-sm text-red-600">{erro}</p>}
+        <Botao className="w-full" onClick={trocar} disabled={salvando || !sai || !entra || !marcadas.length}>
+          {salvando ? 'Trocando…' : `Trocar em ${marcadas.length} ${marcadas.length === 1 ? 'ficha' : 'fichas'}`}
+        </Botao>
+        <p className="text-xs text-stone-500">Cada ficha ganha uma versão nova; as anteriores continuam no histórico.</p>
       </div>
     </Modal>
   )
