@@ -280,17 +280,17 @@ function Montar({ inicial }: { inicial?: string }) {
           </div>
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <Campo rotulo="Prato do dia">
-              <input className={estiloEntrada} value={prato} onChange={(e) => setPrato(e.target.value)} placeholder="Ex.: Escondidinho de carne moída" />
+              <input className={estiloEntrada} value={prato} onChange={(e) => setPrato(e.target.value)} />
             </Campo>
             <Campo rotulo="Quantas pessoas">
               <CampoNumero className={estiloEntrada} valor={pessoas} aoMudar={setPessoas} inputMode="numeric" aria-label="Quantas pessoas" />
             </Campo>
           </div>
           <Campo rotulo="Acompanhamentos">
-            <input className={estiloEntrada} value={acomp} onChange={(e) => setAcomp(e.target.value)} placeholder="Ex.: arroz, feijão e salada" />
+            <input className={estiloEntrada} value={acomp} onChange={(e) => setAcomp(e.target.value)} />
           </Campo>
           <Campo rotulo="Recado para a equipe (opcional)">
-            <input className={estiloEntrada} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: sobremesa na geladeira" />
+            <input className={estiloEntrada} value={obs} onChange={(e) => setObs(e.target.value)} />
           </Campo>
 
           <div>
