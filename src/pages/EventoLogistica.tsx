@@ -4,7 +4,7 @@ import { useApp } from '../lib/contexto'
 import { cmv, custoFicha, montarCatalogo, nomeUnidade, qtd, reais, type Catalogo } from '../lib/custos'
 import { dataCurta, diaSemana, hoje, tempoDesde } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
-import { arredondarPara, consumoEvento, estoqueBase, quantoLevar, referenciasPadrao, semFicha, sugerirVendas, type LinhaLevar } from '../lib/logistica'
+import { arredondarPara, consumoEvento, estoqueBase, necessidade, quantoLevar, referenciasPadrao, semFicha, sugerirVendas, type LinhaLevar } from '../lib/logistica'
 import { posicaoEventos } from '../lib/painelEventos'
 import InsumosEvento from '../components/InsumosEvento'
 import { ir } from '../lib/rota'
@@ -523,12 +523,23 @@ export function VendasEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; 
 
 // ——— Separação (checklist de saída e retorno) ———
 
+// Rascunho da separação (Heitor, 13/10): sair da página no meio não perde o que já foi ajustado.
+// Fica neste aparelho até criar a separação ou descartar.
+interface RascunhoSeparacao { dia: string; linhas: LinhaMontagem[]; obs: string }
+const chaveRascunho = (eventoId: string) => 'separacao-rascunho:' + eventoId
+const lerRascunho = (eventoId: string): RascunhoSeparacao | null => {
+  try { return JSON.parse(localStorage.getItem(chaveRascunho(eventoId)) ?? 'null') } catch { return null }
+}
+const gravarRascunho = (eventoId: string, r: RascunhoSeparacao | null) => {
+  try { if (r) localStorage.setItem(chaveRascunho(eventoId), JSON.stringify(r)); else localStorage.removeItem(chaveRascunho(eventoId)) } catch { /* sem armazenamento */ }
+}
+
 const ehConsumivel = (i: Pick<ItemEnvio, 'insumoId' | 'receitaId'>) => !!(i.insumoId || i.receitaId)
 
 export function Separacao({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; aoMudar: () => Promise<void> }) {
   const { store, avisar } = useApp()
   const g = d.gestao
-  const [montando, setMontando] = useState<string | null>(null)
+  const [montando, setMontando] = useState<string | null>(() => (g ? lerRascunho(e.id)?.dia ?? null : null))
   const [aberto, setAberto] = useState<string | null>(d.envios.find((x) => x.itens.some((i) => !i.conferido))?.id ?? d.envios[d.envios.length - 1]?.id ?? null)
   const diaN = (dia: string) => e.dias.findIndex((x) => x.data === dia) + 1
   const proximoDia = e.dias.map((x) => x.data).find((x) => !d.envios.some((v) => v.data === x)) ?? e.dias[0]?.data ?? hoje()
@@ -545,7 +556,7 @@ export function Separacao({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; aoM
           e={e}
           d={d}
           diaInicial={montando}
-          aoFechar={() => setMontando(null)}
+          aoFechar={() => { gravarRascunho(e.id, null); setMontando(null) }}
           aoCriar={async (id) => {
             setMontando(null)
             await aoMudar()
@@ -682,7 +693,8 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
   const g = d.gestao!
   const [dia, setDia] = useState(diaInicial)
   const primeira = !d.envios.some((v) => v.tipo === 'separacao')
-  const [obs, setObs] = useState('')
+  const rascunho = useMemo(() => { const r = lerRascunho(e.id); return r?.dia === diaInicial ? r : null }, [e.id, diaInicial])
+  const [obs, setObs] = useState(rascunho?.obs ?? '')
   const [salvando, setSalvando] = useState(false)
   const [novoItem, setNovoItem] = useState('')
   const saldo = useMemo(() => estoqueBase(g.contagensBase, g.enviosTodos), [g])
@@ -710,7 +722,9 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
         linhas.push({ k: 'm:' + m.id, usar: true, categoria: m.categoria, operacao: g.operacoes.find((o) => o.id === m.operacaoId)?.nome ?? m.operacao, insumoId: null, receitaId: null, item: m.item, previsto: null, quantidade: null, quantidadeTexto: m.quantidade, unidade: null })
     return linhas
   }
-  const [linhas, setLinhas] = useState<LinhaMontagem[]>(() => sugestao(diaInicial))
+  const [linhas, setLinhas] = useState<LinhaMontagem[]>(() => rascunho?.linhas ?? sugestao(diaInicial))
+  const [recuperado, setRecuperado] = useState(!!rascunho)
+  useEffect(() => { gravarRascunho(e.id, { dia, linhas, obs }) }, [e.id, dia, linhas, obs])
   const semPrevisao = !g.previsao.some((p) => p.data === dia)
   const mudar = (k: string, m: Partial<LinhaMontagem>) => setLinhas((ls) => ls.map((l) => (l.k === k ? { ...l, ...m } : l)))
 
@@ -719,6 +733,7 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
     try {
       const usadas = linhas.filter((l) => l.usar)
       const id = await store.criarEnvio(e.id, dia, primeira ? 'separacao' : 'reposicao', obs, usadas.map(({ k: _k, usar: _u, nota: _n, ...x }) => x))
+      gravarRascunho(e.id, null)
       await aoCriar(id)
     } catch (err) {
       avisar((err as Error).message)
@@ -739,6 +754,7 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
             onChange={(ev) => {
               setDia(ev.target.value)
               setLinhas(sugestao(ev.target.value))
+              setRecuperado(false)
             }}
           >
             {e.dias.map((x, i) => <option key={x.data} value={x.data}>Dia {i + 1}: {diaCurto(x.data)}</option>)}
@@ -749,6 +765,12 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
         Quantidade = previsão de vendas do dia × fichas técnicas{consumo.some((c) => c.ajuste) ? ' × ajuste pelo consumo real dos dias anteriores' : ''} + {e.margemSegurancaPct}% de folga − o que já está no evento. Bebidas, limpeza, embalagens e descartáveis vão todos no primeiro dia; só os alimentos são divididos por dia. Pré-preparos vão prontos da base.
         {primeira && ' Os itens fixos (equipamentos, utensílios…) entram só na primeira separação.'}
       </p>
+      {recuperado && (
+        <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          Continuando a separação que você deixou montando.{' '}
+          <button className="underline" onClick={() => { setLinhas(sugestao(dia)); setObs(''); setRecuperado(false) }}>Descartar e recalcular</button>
+        </p>
+      )}
       {semPrevisao && <p className="mt-2 text-sm font-semibold text-amber-700">Sem previsão de vendas para este dia: só os itens fixos entram. Preencha a previsão em Cardápio e previsão.</p>}
 
       <div className="mt-3 space-y-3">
@@ -860,6 +882,13 @@ export function Sobras({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; aoMuda
   )
   // Itens que foram para o evento aparecem primeiro na contagem.
   const enviados = [...new Set(d.envios.flatMap((v) => v.itens.map(chaveDe).filter(Boolean)))] as ChaveItem[]
+  // Heitor (13/10): a lista já abre com os insumos do evento (previsão × fichas), mesmo antes da separação.
+  const doEvento = useMemo(() => {
+    const prev = g ? g.previsao.filter((p) => dias.includes(p.data)) : []
+    const ks = [...new Set([...enviados, ...(g ? [...necessidade(g.cat, prev).keys()] : [])])]
+    const nome = (k: ChaveItem) => infoItem(d.itens, k)?.nome ?? ''
+    return ks.filter((k) => nome(k)).sort((x, y) => nome(x).localeCompare(nome(y), 'pt-BR'))
+  }, [g, dias.join(), enviados.join(), d.itens]) // eslint-disable-line react-hooks/exhaustive-deps
   const ultimoContado = [...dias].reverse().find((x) => contagem(x))
   const proximo = dias.find((x) => x > (ultimoContado ?? '')) ?? null
 
@@ -868,7 +897,7 @@ export function Sobras({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; aoMuda
       <Contagem
         titulo={`Sobra do fim do dia ${dias.indexOf(contando) + 1} (${diaCurto(contando)})`}
         itens={d.itens}
-        primeiro={enviados}
+        primeiro={doEvento}
         inicial={contagem(contando)}
         aoCancelar={() => setContando(null)}
         aoSalvar={async (itens, fala, obs) => {
@@ -1083,9 +1112,9 @@ export function Contagem({
       <div className="rounded-2xl bg-white ring-1 ring-stone-200">
         <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-3 py-2">
           <h3 className="font-bold">Ou preencha item por item</h3>
-          <span className="text-sm text-stone-500">{todos ? `todos os itens (${itens.length})` : 'o que foi para o evento'}</span>
+          <span className="text-sm text-stone-500">{todos ? `todos os itens (${itens.length})` : 'os itens do evento'}</span>
           <button className="ml-auto text-sm font-semibold text-sky-700 underline" onClick={() => setTodos((t) => !t)}>
-            {todos ? 'Só o que foi para o evento' : 'Mostrar todos os itens'}
+            {todos ? 'Só os itens do evento' : 'Mostrar todos os itens'}
           </button>
           {todos && <input className={`${estiloEntrada} sm:w-64!`} placeholder="Filtrar a lista" value={busca} onChange={(ev) => setBusca(ev.target.value)} aria-label="Filtrar itens" />}
         </div>
