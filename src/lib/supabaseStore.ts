@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1371,16 +1371,18 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       else ok(await sb.from('motoboy_escala').upsert({ motoboy_id: motoboyId, unidade_id: unidadeId, data }, { onConflict: 'motoboy_id,data' }))
     },
     async refeicoes(de, ate) {
-      return (ok(await sb.from('refeicoes').select('id, data, centro_custo_id, prato, acompanhamentos, observacao, pessoas, peso_kg').gte('data', de).lte('data', ate).order('data')) ?? []).map(paraRefeicao)
+      return (ok(await sb.from('refeicoes').select('id, data, centro_custo_id, prato, acompanhamentos, observacao, pessoas, peso_kg, pesos').gte('data', de).lte('data', ate).order('data')) ?? []).map(paraRefeicao)
     },
     async refeicoesCozinha(de, ate) {
       return (ok(await sb.rpc('refeicoes_cozinha', { p_de: de, p_ate: ate })) ?? []).map(paraRefeicao)
     },
     async salvarRefeicao(r) {
-      return ok(await sb.rpc('salvar_refeicao', { p: {
+      const id: string = ok(await sb.rpc('salvar_refeicao', { p: {
         id: r.id ?? null, data: r.data, centro_custo_id: r.centroCustoId, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
         pessoas: r.pessoas === null ? '' : String(r.pessoas), peso_kg: r.pesoKg === null ? '' : String(r.pesoKg), itens: r.itens.map((i) => ({ insumo_id: i.insumoId, quantidade: String(i.quantidade) })),
       } }))
+      if (r.pesos) ok(await sb.rpc('salvar_pesos_refeicao', { p_id: id, p_pesos: r.pesos }))
+      return id
     },
     async excluirRefeicao(id) {
       ok(await sb.rpc('excluir_refeicao', { p_id: id }))
@@ -1431,6 +1433,31 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     },
     async conferirCorrentePonto() {
       return ok(await sb.rpc('conferir_corrente_ponto')) ?? null
+    },
+    async preparosRefeicao() {
+      return (ok(await sb.from('refeicao_preparos').select('*').order('nome')) ?? []).map((r: any): PreparoRefeicao => ({
+        id: r.id, nome: r.nome, unidade: r.unidade, rendimento: Number(r.rendimento), modoPreparo: r.modo_preparo, insumoId: r.insumo_id, ativo: r.ativo,
+        itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade) })),
+      }))
+    },
+    async salvarPreparoRefeicao(p) {
+      ok(await sb.rpc('salvar_preparo_refeicao', { p: {
+        id: p.id ?? null, nome: p.nome, unidade: p.unidade, rendimento: String(p.rendimento), modo_preparo: p.modoPreparo ?? '', ativo: p.ativo,
+        itens: p.itens.map((i) => ({ insumo_id: i.insumoId, quantidade: String(i.quantidade) })),
+      } }))
+    },
+    async lotesPreparoRefeicao(de, ate) {
+      return (ok(await sb.from('producoes').select('*').not('refeicao_preparo_id', 'is', null).gte('data', de).lte('data', ate).order('data', { ascending: false }).order('criado_em', { ascending: false })) ?? []).map((r: any): Producao => ({
+        id: r.id, centroCustoId: r.centro_custo_id, data: r.data, receitaId: r.receita_id, versao: r.versao, insumoId: r.insumo_id, quantidade: Number(r.quantidade),
+        custoTotal: numeroOuNulo(r.custo_total), observacao: r.observacao, criadoEm: r.criado_em, criadoPor: r.criado_por, refeicaoPreparoId: r.refeicao_preparo_id,
+      }))
+    },
+    async lancarPreparoRefeicao(l) {
+      ok(await sb.rpc('lancar_preparo_refeicao', { p_preparo: l.preparoId, p_data: l.data, p_quantidade: l.quantidade,
+        p_saidas: l.saidas.map((x) => ({ insumo_id: x.insumoId, quantidade: x.quantidade })), p_obs: l.observacao.trim() || null }))
+    },
+    async desfazerPreparoRefeicao(id) {
+      ok(await sb.rpc('desfazer_preparo_refeicao', { p_id: id }))
     },
     async votacoesCardapio(desde) {
       return (ok(await sb.from('refeicao_votacoes').select('*, refeicao_votacao_opcoes(*)').gte('fecha_em', desde).order('semana', { ascending: false })) ?? []).map((v: any): VotacaoCardapio => ({
@@ -1740,7 +1767,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
 
 const paraRefeicao = (r: any): Refeicao => ({
   id: r.id, data: r.data, centroCustoId: r.centro_custo_id, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
-  pessoas: r.pessoas ?? null, pesoKg: numeroOuNulo(r.peso_kg),
+  pessoas: r.pessoas ?? null, pesoKg: numeroOuNulo(r.peso_kg), pesos: (r.pesos ?? []).map((x: any) => ({ nome: x.nome, kg: Number(x.kg) })),
   ...('itens' in r ? {
     custoTotal: numeroOuNulo(r.custo_total),
     itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), custoUnit: numeroOuNulo(i.custo_unit) })),

@@ -1413,6 +1413,18 @@ export interface Producao {
   observacao: string | null
   criadoEm: string
   criadoPor: string | null
+  refeicaoPreparoId?: string | null
+}
+// Pré-preparo das refeições (0104): feijão, arroz… feitos à parte; o pronto vira item de estoque da Central.
+export interface PreparoRefeicao {
+  id: string
+  nome: string
+  unidade: string
+  rendimento: number
+  itens: { insumoId: string; quantidade: number }[]
+  modoPreparo: string | null
+  insumoId: string | null
+  ativo: boolean
 }
 export interface NovaProducao {
   centroCustoId: string
@@ -1692,6 +1704,8 @@ export interface Refeicao {
   observacao: string | null
   // Peso total da comida pronta (preenchido no fim) e pessoas: todos veem a porção.
   pesoKg?: number | null
+  // Peso de cada item pronto (arroz, feijão, a carne…), pesados separados.
+  pesos?: { nome: string; kg: number }[]
   pessoas?: number | null
   // Só para quem cozinha e a gestão.
   itens?: ItemRefeicao[]
@@ -1706,6 +1720,7 @@ export interface NovaRefeicao {
   observacao: string
   pessoas: number | null
   pesoKg: number | null
+  pesos?: { nome: string; kg: number }[]
   itens: { insumoId: string; quantidade: number }[]
 }
 export type TipoModeloRefeicao = 'prato' | 'acompanhamento' | 'salada'

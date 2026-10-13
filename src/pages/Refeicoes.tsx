@@ -6,6 +6,7 @@ import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
 import { ir } from '../lib/rota'
+import PreparosRefeicao from './RefeicoesPreparos'
 import { FaleComCozinha, OrcamentoRefeicoes, Recados, VotacaoCozinha, VotacaoDaSemana } from './RefeicoesVotacao'
 import type { Funcionario, Insumo, ModeloRefeicao, QuemCome, Refeicao, TipoModeloRefeicao, VotosRefeicao } from '../lib/types'
 
@@ -19,6 +20,7 @@ export const souCozinha = (eu: Pick<Funcionario, 'nivel'>) => podeGerenciar(eu.n
 export const ABAS_REFEICOES = [
   { id: '', nome: 'Refeição do dia' },
   { id: 'montar', nome: 'Montar o prato', cozinha: true },
+  { id: 'preparos', nome: 'Pré-preparos', cozinha: true },
   { id: 'historico', nome: 'Histórico e custo', cozinha: true },
   { id: 'votacao', nome: 'Votação do cardápio', cozinha: true },
   { id: 'recados', nome: 'Recados da equipe', cozinha: true },
@@ -34,6 +36,10 @@ const sem = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCas
 const diaLongo = (d: string) => `${diaSemana(d)}, ${dataCurta(d)}`
 // Porção por pessoa em gramas, pelo peso total da comida pronta.
 const porcaoG = (pesoKg?: number | null, pessoas?: number | null) => (pesoKg && pessoas ? Math.round((pesoKg * 1000) / pessoas) : null)
+// Itens para pesar depois de pronto (Heitor, 13/10): o prato e cada acompanhamento, separados.
+const itensParaPesar = (prato: string, acomp: string) =>
+  [prato, ...acomp.split(/,|\s+e\s+/i)].map((x) => x.trim()).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1))
+interface Pesagem { nome: string; kg: number | null }
 const pct = (p: number, n: number) => (p + n ? Math.round((p / (p + n)) * 100) : null)
 
 export default function Refeicoes({ sub, param }: { sub?: string; param?: string }) {
@@ -56,6 +62,7 @@ export default function Refeicoes({ sub, param }: { sub?: string; param?: string
         : aba === 'historico' ? <Historico />
         : aba === 'avaliacoes' ? <Avaliacoes />
         : aba === 'pratos' ? <Pratos />
+        : aba === 'preparos' ? <PreparosRefeicao />
         : aba === 'votacao' ? <VotacaoCozinha />
         : aba === 'recados' ? <Recados />
         : (
@@ -120,7 +127,9 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
           {grande && <div className="text-xs font-semibold tracking-wide text-stone-500 uppercase">Hoje{deHoje.length > 1 ? ` · ${nomeLocal(r.centroCustoId)}` : ''}</div>}
           <div className={grande ? 'text-lg font-bold' : 'font-semibold'}>{r.prato}</div>
           {r.acompanhamentos && <div className="text-sm text-stone-600">{r.acompanhamentos}</div>}
-          {grande && porcaoG(r.pesoKg, r.pessoas) && <div className="text-sm font-semibold text-stone-700">Porção: cerca de {porcaoG(r.pesoKg, r.pessoas)} g por pessoa</div>}
+          {grande && (r.pesos?.length && r.pessoas ? (
+            <div className="text-sm font-semibold text-stone-700">Porção por pessoa: {r.pesos.map((x) => `${x.nome} ${porcaoG(x.kg, r.pessoas)} g`).join(' · ')}</div>
+          ) : porcaoG(r.pesoKg, r.pessoas) && <div className="text-sm font-semibold text-stone-700">Porção: cerca de {porcaoG(r.pesoKg, r.pessoas)} g por pessoa</div>)}
           {grande && r.observacao && <div className="text-sm text-stone-500">{r.observacao}</div>}
           {!grande && <div className="text-xs text-stone-500">{diaLongo(r.data)}{lista.some((x) => x.data === r.data && x.id !== r.id) ? ` · ${nomeLocal(r.centroCustoId)}` : ''}</div>}
           {v?.positivos !== null && v?.positivos !== undefined && (
@@ -194,7 +203,7 @@ function Montar({ inicial }: { inicial?: string }) {
   const [acomp, setAcomp] = useState('')
   const [obs, setObs] = useState('')
   const [pessoas, setPessoas] = useState<number | null>(null)
-  const [peso, setPeso] = useState<number | null>(null)
+  const [pesos, setPesos] = useState<Pesagem[]>([])
   const [linhas, setLinhas] = useState<Linha[]>([])
   const [usados, setUsados] = useState<ModeloRefeicao[]>([])
   const [salvando, setSalvando] = useState(false)
@@ -217,7 +226,7 @@ function Montar({ inicial }: { inicial?: string }) {
       setUsados([])
       const todos = q ? q.equipe.length + q.motoboys.length : 0
       setPessoas(r?.pessoas ?? (todos || null))
-      setPeso(r?.pesoKg ?? null)
+      setPesos(r?.pesos?.length ? r.pesos.map((x) => ({ ...x })) : r?.pesoKg ? [{ nome: 'Tudo junto', kg: r.pesoKg }] : [])
       setLinhas((r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })))
     }, (e) => avisar((e as Error).message))
     return () => { vivo = false }
@@ -248,13 +257,17 @@ function Montar({ inicial }: { inicial?: string }) {
     setUsados((u) => [...u.filter((x) => x.id !== m.id), m])
   }
 
+  const pesoTotal = pesos.reduce((t, x) => t + (x.kg ?? 0), 0) || null
+  // Sem pesagem ainda: sugere o prato e cada acompanhamento.
+  const paraPesar = pesos.length ? pesos : itensParaPesar(prato, acomp).map((nome) => ({ nome, kg: null }))
+  const mudarPeso = (k: number, x: Partial<Pesagem>) => setPesos(paraPesar.map((p, j) => (j === k ? { ...p, ...x } : p)))
   const salvar = async () => {
     const faltam = linhas.filter((l) => !l.insumoId && (l.texto || l.quantidade))
     if (faltam.length) return avisar(`Escolha o material do cadastro para: ${faltam.map((l) => l.texto || 'linha sem nome').join(', ')}`)
     setSalvando(true)
     try {
       await store.salvarRefeicao({
-        id: refeicao?.id, data, centroCustoId: local, prato, acompanhamentos: acomp, observacao: obs, pessoas, pesoKg: peso,
+        id: refeicao?.id, data, centroCustoId: local, prato, acompanhamentos: acomp, observacao: obs, pessoas, pesoKg: pesoTotal, pesos: pesos.filter((x) => x.nome.trim() && x.kg).map((x) => ({ nome: x.nome.trim(), kg: x.kg! })),
         itens: linhas.filter((l) => l.insumoId && l.quantidade).map((l) => ({ insumoId: l.insumoId, quantidade: l.quantidade! })),
       })
       const rs = await store.refeicoesCozinha(data, data)
@@ -349,14 +362,24 @@ function Montar({ inicial }: { inicial?: string }) {
             <Botao variante="secundario" className="mt-2 py-1.5!" onClick={() => setLinhas((ls) => [...ls, novaLinha()])}>+ Ingrediente</Botao>
           </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm">
-              <span className="mb-1 block font-medium text-stone-700">Peso total pronto (kg)</span>
-              <CampoNumero className={`${estiloEntrada} w-32!`} valor={peso} aoMudar={setPeso} inputMode="decimal" aria-label="Peso total pronto em kg" />
-            </label>
-            <p className="pb-2 text-sm text-stone-600">
-              {porcaoG(peso, pessoas) ? <>Dá <b>{porcaoG(peso, pessoas)} g por pessoa</b> ({pessoas} pessoas)</> : 'Pese tudo depois de pronto e salve de novo: o portal mostra quanto dá por pessoa.'}
-            </p>
+          <div>
+            <h3 className="mb-1 font-bold">Peso depois de pronto</h3>
+            <p className="mb-2 text-xs text-stone-500">Pese cada item separado depois de pronto e salve de novo: a equipe vê quanto dá de cada um por pessoa.</p>
+            <div className="space-y-1.5">
+              {paraPesar.map((x, k) => (
+                <div key={k} className="flex flex-wrap items-center gap-2">
+                  <input className={`${estiloEntrada} min-w-40 flex-1 py-1.5!`} value={x.nome} onChange={(e) => mudarPeso(k, { nome: e.target.value })} aria-label="Item pesado" />
+                  <CampoNumero className={`${estiloEntrada} w-24! py-1.5! text-right`} valor={x.kg} aoMudar={(n) => mudarPeso(k, { kg: n })} inputMode="decimal" aria-label={`Peso de ${x.nome} em kg`} />
+                  <span className="w-8 text-sm text-stone-500">kg</span>
+                  <span className="w-28 text-right text-sm text-stone-600">{porcaoG(x.kg, pessoas) ? `${porcaoG(x.kg, pessoas)} g/pessoa` : ''}</span>
+                  <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => setPesos(paraPesar.filter((_, j) => j !== k))} aria-label="Tirar item">✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Botao variante="secundario" className="py-1.5!" onClick={() => setPesos([...paraPesar, { nome: '', kg: null }])}>+ Item</Botao>
+              {pesoTotal && <span className="text-sm text-stone-600">Total {mostrarQtd(pesoTotal)} kg{porcaoG(pesoTotal, pessoas) ? <> · <b>{porcaoG(pesoTotal, pessoas)} g por pessoa</b> ({pessoas} pessoas)</> : ''}</span>}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl bg-stone-50 px-3 py-2 text-sm">
@@ -676,7 +699,7 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
 
 // Campo de material: só aceita o que está no cadastro (Heitor, 13/10). O que não existe some ao sair do campo,
 // com o aviso de pedir o cadastro ao administrativo, para não criar material solto.
-function MaterialDoCadastro({ insumos, lista, insumoId, aoEscolher, destaque = false, textoInicial = '' }: {
+export function MaterialDoCadastro({ insumos, lista, insumoId, aoEscolher, destaque = false, textoInicial = '' }: {
   insumos: Insumo[]; lista: string; insumoId: string; aoEscolher: (i: Insumo) => void; destaque?: boolean; textoInicial?: string
 }) {
   const atual = insumos.find((i) => i.id === insumoId)

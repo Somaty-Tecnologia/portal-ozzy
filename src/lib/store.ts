@@ -1,5 +1,5 @@
 import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, TipoRecado } from './types'
-import type { MarcacaoPonto, TipoMarcacao, CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, PedidoTirarFechamento, CaixaTurno, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
 export type NovoMovimentoEstoque = Omit<MovimentoEstoque, 'id' | 'criadoEm' | 'notaItemId' | 'custoUnit'> & { custoUnit?: number | null }
@@ -255,6 +255,11 @@ export interface Store {
   modelosRefeicao(): Promise<ModeloRefeicao[]>
   salvarModeloRefeicao(m: Omit<ModeloRefeicao, 'id'> & { id?: string }): Promise<void>
   quemCome(data: string): Promise<QuemCome>
+  preparosRefeicao(): Promise<PreparoRefeicao[]>
+  salvarPreparoRefeicao(p: Omit<PreparoRefeicao, 'id' | 'insumoId'> & { id?: string }): Promise<void>
+  lotesPreparoRefeicao(de: string, ate: string): Promise<Producao[]>
+  lancarPreparoRefeicao(l: { preparoId: string; data: string; quantidade: number; saidas: { insumoId: string; quantidade: number }[]; observacao: string }): Promise<void>
+  desfazerPreparoRefeicao(id: string): Promise<void>
   // Votação do cardápio, recados anônimos e meta de custo (0102).
   votacoesCardapio(desde: string): Promise<VotacaoCardapio[]>
   salvarVotacao(v: Omit<VotacaoCardapio, 'id' | 'opcoes'> & { id?: string; opcoes: { id?: string; nome: string; descricao: string | null; modeloId: string | null }[] }): Promise<void>

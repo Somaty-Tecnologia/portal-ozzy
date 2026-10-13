@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -237,6 +237,8 @@ const insumosDemo: Insumo[] = [
   ins('in27', 'Batata', 'Hortifruti', 'kg', 5, 'fo2'),
   ins('in28', 'Cebola', 'Hortifruti', 'kg', 5, 'fo2'),
   ins('in29', 'Peito de frango', 'Proteínas e ovos', 'kg', 19, null),
+  ins('in-rp1', 'Feijão (refeição)', 'Pré-preparos', 'kg', 3.5, null, { prePreparo: true }),
+  ins('in-rp2', 'Arroz (refeição)', 'Pré-preparos', 'kg', 2.4, null, { prePreparo: true }),
   ins('in30', 'Leite integral', 'Laticínios', 'l', 5, null),
 ]
 const prePreparoDemo = new Set(['in12', 'in13', 'in14'])
@@ -515,6 +517,11 @@ const recadosDemo: RecadoRefeicao[] = [
   { id: 'rc3', tipo: 'sugestao', texto: 'Podia ter uma feijoada numa sexta.', refeicaoId: null, votacaoId: 'vc1', data: addDias(hoje(), -1), lidoEm: null },
 ]
 let metaRefeicaoDemo: number | null = 12
+// Pré-preparos das refeições de EXEMPLO (0104).
+const preparosRefeicaoDemo: PreparoRefeicao[] = [
+  { id: 'rp1', nome: 'Feijão', unidade: 'kg', rendimento: 2.5, itens: [{ insumoId: 'in25', quantidade: 1 }, { insumoId: 'in28', quantidade: 0.15 }], modoPreparo: 'Deixar de molho na véspera. Cozinhar na pressão por 30 minutos e temperar com cebola refogada.', insumoId: 'in-rp1', ativo: true },
+  { id: 'rp2', nome: 'Arroz', unidade: 'kg', rendimento: 2.6, itens: [{ insumoId: 'in24', quantidade: 1 }, { insumoId: 'in28', quantidade: 0.05 }], modoPreparo: null, insumoId: 'in-rp2', ativo: true },
+]
 const modelosRefeicaoDemo: ModeloRefeicao[] = [
   { id: 'mr1', nome: 'Escondidinho de Carne Moída', tipo: 'prato', ativo: true, modoPreparo: null,
     itens: [{ nome: 'Carne moída', quantidade: 0.15, unidade: 'kg', insumoId: 'in26' }, { nome: 'Batata', quantidade: 0.25, unidade: 'kg', insumoId: 'in27' }, { nome: 'Arroz tipo 1', quantidade: 0.0786, unidade: 'kg', insumoId: 'in24' }, { nome: 'Feijão carioca', quantidade: 0.0571, unidade: 'kg', insumoId: 'in25' }] },
@@ -1807,7 +1814,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async refeicoes(de, ate) {
       exigeEu()
       return espera(refeicoesDemo.filter((x) => x.data >= de && x.data <= ate).sort((a, b) => a.data.localeCompare(b.data))
-        .map(({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg }) => ({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg })))
+        .map(({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg, pesos }) => ({ id, data, centroCustoId, prato, acompanhamentos, observacao, pessoas, pesoKg, pesos })))
     },
     async refeicoesCozinha(de, ate) {
       exigeCozinha()
@@ -1819,7 +1826,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const itens = r.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumoId: i.insumoId, quantidade: i.quantidade, custoUnit: insumosDemo.find((x) => x.id === i.insumoId)?.preco ?? null }))
       const dados = {
         data: r.data, centroCustoId: r.centroCustoId, prato: nomeItem(r.prato), acompanhamentos: r.acompanhamentos.trim() || null, observacao: r.observacao.trim() || null,
-        pessoas: r.pessoas, pesoKg: r.pesoKg, itens, custoTotal: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.custoUnit ?? 0), 0) * 100) / 100,
+        pessoas: r.pessoas, pesos: r.pesos ?? [], pesoKg: r.pesos?.length ? Math.round(r.pesos.reduce((t, x) => t + x.kg, 0) * 1000) / 1000 : r.pesoKg, itens, custoTotal: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.custoUnit ?? 0), 0) * 100) / 100,
       }
       const outra = refeicoesDemo.find((x) => x.data === r.data && x.centroCustoId === r.centroCustoId && x.id !== r.id)
       if (outra) throw new Error('Já existe uma refeição neste dia e local.')
@@ -1879,6 +1886,55 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const atual = m.id ? modelosRefeicaoDemo.find((x) => x.id === m.id) : undefined
       if (atual) Object.assign(atual, dados)
       else modelosRefeicaoDemo.push({ ...dados, id: novoId('mr') })
+      return espera(undefined)
+    },
+    async preparosRefeicao() {
+      exigeCozinha()
+      return espera(preparosRefeicaoDemo.map((p) => ({ ...p, itens: p.itens.map((i) => ({ ...i })) })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
+    },
+    async salvarPreparoRefeicao(p) {
+      exigeCozinha()
+      const nome = nomeItem(p.nome)
+      if (!nome) throw new Error('Coloque o nome do preparo.')
+      if (!(p.rendimento > 0)) throw new Error('Diga quanto a receita rende.')
+      const itens = p.itens.filter((i) => i.insumoId && i.quantidade > 0)
+      if (!itens.length) throw new Error('Coloque os ingredientes.')
+      let atual = p.id ? preparosRefeicaoDemo.find((x) => x.id === p.id) : undefined
+      if (!atual) {
+        const insumoId = novoId('in')
+        insumosDemo.push(ins(insumoId, `${nome} (refeição)`, 'Pré-preparos', p.unidade as Insumo['unidade'], null, null, { prePreparo: true }))
+        atual = { id: novoId('rp'), nome, unidade: p.unidade, rendimento: p.rendimento, itens, modoPreparo: null, insumoId, ativo: true }
+        preparosRefeicaoDemo.push(atual)
+      }
+      Object.assign(atual, { nome, unidade: p.unidade, rendimento: p.rendimento, itens, modoPreparo: p.modoPreparo?.trim() || null, ativo: p.ativo })
+      const i = insumosDemo.find((x) => x.id === atual!.insumoId)
+      if (i) Object.assign(i, { nome: `${nome} (refeição)`, ativo: p.ativo })
+      return espera(undefined)
+    },
+    async lotesPreparoRefeicao(de, ate) {
+      exigeCozinha()
+      return espera(producoesDemo.filter((p) => p.refeicaoPreparoId && p.data >= de && p.data <= ate).sort((a, b) => b.data.localeCompare(a.data) || b.criadoEm.localeCompare(a.criadoEm)).map((p) => ({ ...p })))
+    },
+    async lancarPreparoRefeicao(l) {
+      const u = exigeCozinha()
+      const r = preparosRefeicaoDemo.find((x) => x.id === l.preparoId)
+      if (!r?.insumoId) throw new Error('Preparo não encontrado.')
+      if (!(l.quantidade > 0)) throw new Error('Diga quanto ficou pronto.')
+      const saidas = l.saidas.filter((x) => x.quantidade > 0 && x.insumoId !== r.insumoId)
+      const custo = saidas.reduce((t, x) => t + x.quantidade * (insumosDemo.find((i) => i.id === x.insumoId)?.preco ?? 0), 0)
+      const id = novoId('pr')
+      producoesDemo.push({ id, centroCustoId: 'central', data: l.data, receitaId: null, versao: null, insumoId: r.insumoId, quantidade: l.quantidade, custoTotal: Math.round(custo * 10000) / 10000, observacao: l.observacao.trim() || null, criadoEm: agora(), criadoPor: u.id, refeicaoPreparoId: r.id })
+      for (const x of saidas) movimentosDemo.push({ id: novoId('mv'), centroCustoId: 'central', insumoId: x.insumoId, data: l.data, tipo: 'saida', quantidade: -x.quantidade, custoUnit: null, notaItemId: null, observacao: 'Pré-preparo da refeição: ' + r.nome, criadoEm: agora(), producaoId: id })
+      movimentosDemo.push({ id: novoId('mv'), centroCustoId: 'central', insumoId: r.insumoId, data: l.data, tipo: 'entrada', quantidade: l.quantidade, custoUnit: custo > 0 ? custo / l.quantidade : null, notaItemId: null, observacao: 'Pré-preparo da refeição', criadoEm: agora(), producaoId: id })
+      const i = insumosDemo.find((x) => x.id === r.insumoId)
+      if (i && custo > 0) Object.assign(i, { preco: Math.round((custo / l.quantidade) * 10000) / 10000, precoEm: agora() })
+      return espera(undefined)
+    },
+    async desfazerPreparoRefeicao(id) {
+      exigeCozinha()
+      const k = producoesDemo.findIndex((p) => p.id === id && p.refeicaoPreparoId)
+      if (k >= 0) producoesDemo.splice(k, 1)
+      for (let j = movimentosDemo.length - 1; j >= 0; j--) if (movimentosDemo[j].producaoId === id) movimentosDemo.splice(j, 1)
       return espera(undefined)
     },
     async votacoesCardapio(desde) {
