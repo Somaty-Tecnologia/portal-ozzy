@@ -636,6 +636,9 @@ function Saldo() {
   const [erro, setErro] = useState('')
   const [centro, setCentro] = useState('central')
   const [busca, setBusca] = useState('')
+  // Heitor (13/10): mostrar também o que está zerado; inativos só quando pedir.
+  const [soComSaldo, setSoComSaldo] = useState(false)
+  const [inativos, setInativos] = useState(false)
   const [mov, setMov] = useState<{ insumoId: string } | null>(null)
   const carregar = useCallback(() => {
     let vale = true
@@ -647,15 +650,22 @@ function Saldo() {
   if (erro || erroCad) return <Vazio>{erro || erroCad}</Vazio>
   if (!saldos || !c) return <p className="text-stone-400">Carregando…</p>
 
-  const linhas = saldos
-    .map((v) => {
-      const ins = c.insumos.find((i) => i.id === v.insumoId)
-      const custo = v.custo ?? ins?.preco ?? null
-      return { id: v.insumoId, ins, qtd: v.quantidade, ultima: v.ultima, custo, valor: custo !== null ? Math.max(v.quantidade, 0) * custo : 0 }
+  const porId = new Map(saldos.map((v) => [v.insumoId, v]))
+  const ids = new Set([...saldos.map((v) => v.insumoId), ...c.insumos.filter((i) => i.controlaEstoque !== false && (inativos || i.ativo)).map((i) => i.id)])
+  const todas = [...ids]
+    .map((id): LinhaSaldo => {
+      const v = porId.get(id)
+      const ins = c.insumos.find((i) => i.id === id)
+      const q = v?.quantidade ?? 0
+      const custo = v?.custo ?? ins?.preco ?? null
+      return { id, ins, qtd: q, ultima: v?.ultima ?? null, custo, valor: custo !== null ? Math.max(q, 0) * custo : 0 }
     })
-    .filter((l) => Math.abs(l.qtd) > 0.0001 && (!busca || (l.ins?.nome ?? '').toLowerCase().includes(busca.toLowerCase())))
+    .filter((l) => inativos || l.ins?.ativo !== false || Math.abs(l.qtd) > 0.0001)
+  const comSaldo = todas.filter((l) => Math.abs(l.qtd) > 0.0001)
+  const linhas = (soComSaldo ? comSaldo : todas)
+    .filter((l) => !busca || (l.ins?.nome ?? '').toLowerCase().includes(busca.toLowerCase()))
     .sort((a, b) => (a.ins?.nome ?? '').localeCompare(b.ins?.nome ?? ''))
-  const total = linhas.reduce((t, l) => t + l.valor, 0)
+  const total = comSaldo.reduce((t, l) => t + l.valor, 0)
 
   return (
     <div className="space-y-4">
@@ -671,13 +681,15 @@ function Saldo() {
           {c.centros.map((x) => <option key={x.id} value={x.id}>{nomeCentro(x)}</option>)}
         </select>
         <input className={`${estiloEntrada} w-auto! flex-1`} placeholder="Buscar insumo" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={soComSaldo} onChange={(e) => setSoComSaldo(e.target.checked)} /> Só com saldo</label>
+        <label className="flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={inativos} onChange={(e) => setInativos(e.target.checked)} /> Mostrar inativos</label>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Cartao><p className="text-sm text-stone-500">Itens com saldo</p><p className="text-xl font-bold">{linhas.length}</p></Cartao>
+        <Cartao><p className="text-sm text-stone-500">Itens com saldo</p><p className="text-xl font-bold">{comSaldo.length} <span className="text-sm font-normal text-stone-500">de {todas.length}</span></p></Cartao>
         <Cartao><p className="text-sm text-stone-500">Valor em estoque</p><p className="text-xl font-bold">{reais(total)}</p></Cartao>
       </div>
       {linhas.length === 0 ? (
-        <Vazio>Nada em estoque nesta loja ainda. As entradas aparecem quando as notas são lançadas.</Vazio>
+        <Vazio>{soComSaldo ? 'Nada em estoque nesta loja ainda. As entradas aparecem quando as notas são lançadas.' : 'Nenhum material com esse nome.'}</Vazio>
       ) : (
         <TabelaSaldo linhas={linhas} aoAjustar={(id) => setMov({ insumoId: id })} />
       )}
@@ -689,22 +701,23 @@ function Saldo() {
   )
 }
 
-type LinhaSaldo = { id: string; ins?: Insumo; qtd: number; ultima: string; custo: number | null; valor: number }
+type LinhaSaldo = { id: string; ins?: Insumo; qtd: number; ultima: string | null; custo: number | null; valor: number }
 function TabelaSaldo({ linhas, aoAjustar }: { linhas: LinhaSaldo[]; aoAjustar: (id: string) => void }) {
   const { ordenada, cabecalho } = useOrdem(linhas, {
-    nome: (l) => l.ins?.nome ?? '', qtd: (l) => l.qtd, custo: (l) => l.custo, valor: (l) => l.valor,
+    nome: (l) => l.ins?.nome ?? '', categoria: (l) => l.ins?.categoria, qtd: (l) => l.qtd, custo: (l) => l.custo, valor: (l) => l.valor,
   }, { col: 'nome' })
   return (
     <Cartao className="overflow-x-auto p-0!">
       <table className="w-full text-sm">
         <thead className="bg-stone-50 text-left text-stone-500">
-          <tr>{cabecalho('nome', 'Insumo')}{cabecalho('qtd', 'Saldo', 'text-right', true)}{cabecalho('custo', 'Custo', 'text-right', true)}{cabecalho('valor', 'Valor', 'text-right', true)}<th /></tr>
+          <tr>{cabecalho('nome', 'Insumo')}{cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}{cabecalho('qtd', 'Saldo', 'text-right', true)}{cabecalho('custo', 'Custo', 'text-right', true)}{cabecalho('valor', 'Valor', 'text-right', true)}<th /></tr>
         </thead>
         <tbody className="divide-y divide-stone-100">
           {ordenada.map((l) => (
             <tr key={l.id}>
-              <td className="px-3 py-2">{l.ins?.nome ?? 'Insumo removido'}<span className="block text-xs text-stone-400">último movimento {dataCurta(l.ultima)}</span></td>
-              <td className={`px-3 py-2 text-right whitespace-nowrap ${l.qtd < 0 ? 'font-semibold text-red-700' : ''}`}>{mostrarQtd(l.qtd)} {l.ins?.unidade}</td>
+              <td className="px-3 py-2">{l.ins?.nome ?? 'Insumo removido'} {l.ins && !l.ins.ativo && <Selo>Inativo</Selo>}<span className="block text-xs text-stone-400">{l.ultima ? `último movimento ${dataCurta(l.ultima)}` : 'sem movimento'}</span></td>
+              <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{l.ins?.categoria ?? '—'}</td>
+              <td className={`px-3 py-2 text-right whitespace-nowrap ${l.qtd < 0 ? 'font-semibold text-red-700' : Math.abs(l.qtd) <= 0.0001 ? 'text-stone-400' : ''}`}>{mostrarQtd(l.qtd)} {l.ins?.unidade}</td>
               <td className="px-3 py-2 text-right whitespace-nowrap">{l.custo !== null ? reais(l.custo) : '—'}</td>
               <td className="px-3 py-2 text-right whitespace-nowrap">{reais(l.valor)}</td>
               <td className="px-3 py-2 text-right"><button className="font-semibold underline" onClick={() => aoAjustar(l.id)}>Ajustar</button></td>
