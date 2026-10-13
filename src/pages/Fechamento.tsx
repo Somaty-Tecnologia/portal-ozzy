@@ -7,6 +7,7 @@ import { lerValor, mostrarQtd } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
 import { LOJAS_FECHAMENTO, type Fechamento as FechamentoT, type ItemContagem, type ItemFechamento, type SetorFechamento } from '../lib/types'
 import { criarReconhecedor, lerContagem } from '../lib/voz'
+import { esc, imprimirTermica } from '../lib/termica'
 
 // Fechamento e pedido (Heitor, 09/10). No fim do turno a cozinha e o atendimento da PSD e da Vila contam o
 // estoque (pode ser falando, lendo o papel), o portal sugere o pedido pelo estoque ideal do dia seguinte e a
@@ -82,13 +83,16 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   const [ouvindo, setOuvindo] = useState(false)
   const [naoEntendi, setNaoEntendi] = useState<string[]>([])
   const [destaque, setDestaque] = useState<Set<string>>(new Set())
+  // Itens que alguém pediu para tirar da lista (esperando a gestão).
+  const [paraTirar, setParaTirar] = useState<Map<string, string | null>>(new Map())
   const rec = useRef<ReturnType<typeof criarReconhecedor>>(null)
   const suportaVoz = typeof window !== 'undefined' && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
   const para = addDias(data, 1)
 
   const carregar = useCallback(async () => {
     try {
-      const [lista, fechs] = await Promise.all([store.listaFechamento(loja, setor, data), store.fechamentos(data, data)])
+      const [lista, fechs, tirar] = await Promise.all([store.listaFechamento(loja, setor, data), store.fechamentos(data, data), store.pedidosTirarFechamento().catch(() => [])])
+      setParaTirar(new Map(tirar.filter((x) => x.setor === setor).map((x) => [x.insumoId, x.motivo])))
       const f = fechs.find((x) => x.unidadeId === loja && x.setor === setor) ?? null
       setItens(lista)
       setEnviado(f)
@@ -168,6 +172,27 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   if (!itens) return <p className="text-stone-400">Carregando…</p>
   if (!itens.length) return <Vazio>Esta loja ainda não tem lista de {setor}. A gestão monta em Produção › Listas.</Vazio>
 
+  const pedirTirar = async (i: ItemFechamento) => {
+    const motivo = prompt(`Pedir para tirar "${i.nome}" da lista? A gestão aprova ou nega.\nPor quê? (ex.: não usamos mais)`)
+    if (motivo === null) return
+    try {
+      await store.pedirTirarFechamento({ unidadeId: loja, setor, insumoId: i.insumoId, motivo })
+      setParaTirar((m) => new Map(m).set(i.insumoId, motivo.trim() || null))
+      avisar('Pedido enviado para a gestão')
+    } catch (e) { avisar((e as Error).message) }
+  }
+  const titulo = `${setor === 'cozinha' ? 'Cozinha' : 'Atendimento'} · ${NOME_LOJA[loja]}`
+  // Lista em branco para contar no papel, sempre com os itens de hoje (Heitor, 13/10).
+  const imprimirLista = () => imprimirTermica(`Fechamento ${titulo}`,
+    `<h1>Fechamento ${esc(titulo)}</h1><div class="sub">${esc(diaSemana(data))} ${dataCurta(data)} · pedido para ${esc(diaSemana(para).toLowerCase())}</div><div class="sub">Quem contou: ____________________</div>`
+    + agruparPorCategoria(itens.filter((i) => !paraTirar.has(i.insumoId))).map(([cat, l]) => `<div class="cat">${esc(cat)}</div>`
+      + l.map((i) => `<div class="l"><span class="n">${esc(i.nome)} <span class="u">(${esc(i.unidadeContagem)})</span></span><span class="campo">tem ______</span></div>`).join('')).join(''))
+  const imprimirPedido = () => imprimirTermica(`Pedido ${titulo}`,
+    `<h1>Pedido ${esc(titulo)}</h1><div class="sub">Para ${esc(diaSemana(para).toLowerCase())} ${dataCurta(para)}${responsavel ? ` · ${esc(responsavel)}` : ''}</div>`
+    + agruparPorCategoria(pedidos).map(([cat, l]) => `<div class="cat">${esc(cat)}</div>`
+      + l.map((i) => `<div class="l"><span class="n">${esc(i.nome)}</span><span class="q">${esc(ped[i.itemId] ?? '')} ${esc(i.unidadeContagem)}</span></div>`).join('')).join('')
+    + (obs ? `<div class="fim">Obs.: ${esc(obs)}</div>` : ''))
+
   const contados = itens.filter((i) => lerValor(cont[i.itemId] ?? '') !== null)
   const pedidos = itens.filter((i) => (lerValor(ped[i.itemId] ?? '') ?? 0) > 0)
   const termo = busca.trim().toLowerCase()
@@ -182,7 +207,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   ].filter((l, k) => l !== '' || k === 2).join('\n')
 
   const enviar = async () => {
-    const faltam = itens.length - contados.length
+    const faltam = itens.filter((i) => !paraTirar.has(i.insumoId)).length - contados.filter((i) => !paraTirar.has(i.insumoId)).length
     if (faltam > 0 && !confirm(`${faltam} ${faltam === 1 ? 'item ficou' : 'itens ficaram'} sem contagem. Enviar assim?`)) return
     setSalvando(true)
     try {
@@ -237,6 +262,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
           <input type="checkbox" checked={soFalta} onChange={(e) => setSoFalta(e.target.checked)} /> Só o que falta contar
         </label>
         <span className="text-sm text-stone-500">{contados.length} de {itens.length} contados</span>
+        <Botao variante="secundario" className="py-1.5! sm:ml-auto" onClick={imprimirLista}>🖨 Imprimir lista para contar</Botao>
       </div>
 
       <div className="divide-y divide-stone-100 rounded-2xl bg-white ring-1 ring-stone-200">
@@ -256,6 +282,9 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
                     <div className="truncate text-xs text-stone-500">
                       {i.unidadeContagem}{i.ideal !== null ? ` · ideal ${mostrarQtd(i.ideal)}` : ' · sem ideal'}
                       {s !== null && p !== s ? ` · sugestão ${mostrarQtd(s)}` : ''}
+                      {paraTirar.has(i.insumoId)
+                        ? <span className="font-semibold text-amber-700"> · pedido para tirar, esperando a gestão</span>
+                        : <> · <button className="underline hover:text-red-700" onClick={() => pedirTirar(i)}>pedir para tirar</button></>}
                     </div>
                   </div>
                   <input inputMode="decimal" aria-label={`Quanto tem de ${i.nome}`} value={cont[i.itemId] ?? ''} onChange={(e) => mudarContagem({ [i.itemId]: e.target.value })}
@@ -286,6 +315,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
           <Botao variante="secundario" disabled={!pedidos.length} onClick={async () => {
             try { await navigator.clipboard.writeText(textoWhats()); avisar('Pedido copiado') } catch { avisar('Não consegui copiar') }
           }}>Copiar</Botao>
+          <Botao variante="secundario" disabled={!pedidos.length} onClick={imprimirPedido}>Imprimir</Botao>
           <Botao onClick={enviar} disabled={salvando}>{salvando ? 'Enviando…' : enviado ? 'Enviar de novo' : 'Enviar pedido'}</Botao>
         </div>
       </div>

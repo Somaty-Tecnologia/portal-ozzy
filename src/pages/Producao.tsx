@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Modal, Vazio, estiloEntrada } from '../components/ui'
+import PedidosTirarLista from '../components/PedidosTirarLista'
 import { useOrdem } from '../components/Ordenar'
 import { agruparPorCategoria } from '../lib/categorias'
 import { useApp } from '../lib/contexto'
@@ -320,6 +321,7 @@ function Listas() {
 
   return (
     <div className="space-y-3">
+      <PedidosTirarLista aoResolver={carregar} />
       <div className="flex flex-wrap items-center gap-2">
         <select value={setor} onChange={(e) => setSetor(e.target.value as SetorFechamento)} className={`${estiloEntrada} w-auto!`} aria-label="Lista">
           <option value="cozinha">Lista da cozinha</option><option value="atendimento">Lista do atendimento</option>

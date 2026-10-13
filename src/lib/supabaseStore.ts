@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1553,6 +1553,18 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         itemId: r.item_id, insumoId: r.insumo_id, nome: r.nome, categoria: r.categoria ?? null, unidadeContagem: r.unidade_contagem, ordem: r.ordem, prePreparo: r.pre_preparo,
         ideal: numeroOuNulo(r.ideal), contagem: numeroOuNulo(r.contagem), sugestao: numeroOuNulo(r.sugestao), pedido: numeroOuNulo(r.pedido),
       }))
+    },
+    async pedidosTirarFechamento() {
+      return (ok(await sb.from('fechamento_pedidos_tirar').select('*, insumos(nome)').eq('status', 'pendente').order('criado_em')) ?? []).map((r: any): PedidoTirarFechamento => ({
+        id: r.id, unidadeId: r.unidade_id, setor: r.setor, insumoId: r.insumo_id, nome: r.insumos?.nome ?? '', motivo: r.motivo,
+        pedidoPor: r.pedido_por, criadoEm: r.criado_em, status: r.status,
+      }))
+    },
+    async pedirTirarFechamento(p) {
+      ok(await sb.from('fechamento_pedidos_tirar').insert({ unidade_id: p.unidadeId, setor: p.setor, insumo_id: p.insumoId, motivo: texto(p.motivo) }))
+    },
+    async resolverPedidoTirar(id, tirar) {
+      ok(await sb.rpc('resolver_pedido_tirar', { p_id: id, p_tirar: tirar }))
     },
     async fechamentos(de, ate) {
       return (ok(await sb.from('fechamentos').select('*').gte('data', de).lte('data', ate).order('data', { ascending: false })) ?? []).map((r: any): Fechamento => ({

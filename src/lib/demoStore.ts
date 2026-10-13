@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -959,6 +959,7 @@ const produtosVendaDemo: ProdutoVenda[] = [
   pv('pv9', '41', 'QUAL O PONTO DA CARNE?', 'Outros', 'PERGUNTAS', 0, null, 'vinculo'),
 ]
 // Ideal de segunda a domingo (exemplo).
+const pedidosTirarDemo: PedidoTirarFechamento[] = []
 const listaFechDemo: ItemListaFechamento[] = (['burger-psd', 'burger-va'] as const).flatMap((u, k) => ([
   ['cozinha', 'in15', 'Uni', [8, 8, 8, 10, 12, 12, 10]],
   ['cozinha', 'in16', 'Kg', [20, 20, 25, 30, 45, 45, 35]],
@@ -2916,6 +2917,24 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
           prePreparo: prePreparoDemo.has(i.insumoId), ideal: i.ideal[dia] ?? null, contagem: c?.contagem ?? null, sugestao: c?.sugestao ?? null, pedido: c?.pedido ?? null,
         }
       }))
+    },
+    async pedidosTirarFechamento() {
+      const u = exigeEu()
+      return espera(pedidosTirarDemo.filter((x) => x.status === 'pendente' && (podeGerenciar(u.nivel) || x.unidadeId === u.unidadeId || x.pedidoPor === u.id)).map((x) => ({ ...x })))
+    },
+    async pedirTirarFechamento(p) {
+      const u = exigeEu()
+      if (!podeGerenciar(u.nivel) && u.unidadeId !== p.unidadeId) throw new Error('Seu nível de acesso não permite esta ação.')
+      pedidosTirarDemo.push({ ...p, id: novoId('pt'), motivo: p.motivo.trim() || null, nome: insumosDemo.find((i) => i.id === p.insumoId)?.nome ?? '', pedidoPor: u.id, criadoEm: agora(), status: 'pendente' })
+      return espera(undefined)
+    },
+    async resolverPedidoTirar(id, tirar) {
+      exigeGestao()
+      const p = pedidosTirarDemo.find((x) => x.id === id && x.status === 'pendente')
+      if (!p) throw new Error('Pedido não encontrado ou já resolvido.')
+      if (tirar) for (const i of listaFechDemo) if (i.setor === p.setor && i.insumoId === p.insumoId) i.ativo = false
+      for (const x of pedidosTirarDemo) if (x.setor === p.setor && x.insumoId === p.insumoId && x.status === 'pendente') x.status = tirar ? 'tirado' : 'mantido'
+      return espera(undefined)
     },
     async fechamentos(de, ate) {
       const u = exigeEu()

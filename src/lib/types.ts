@@ -1476,6 +1476,18 @@ export interface ItemFechamento {
   sugestao: number | null
   pedido: number | null
 }
+// Pedido de quem preenche o fechamento para tirar um item da lista (Heitor, 13/10); a gestão aprova ou nega.
+export interface PedidoTirarFechamento {
+  id: string
+  unidadeId: string
+  setor: SetorFechamento
+  insumoId: string
+  nome: string
+  motivo: string | null
+  pedidoPor: string | null
+  criadoEm: string
+  status: 'pendente' | 'tirado' | 'mantido'
+}
 export interface Fechamento {
   id: string
   unidadeId: string
