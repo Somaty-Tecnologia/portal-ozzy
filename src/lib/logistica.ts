@@ -165,8 +165,18 @@ export interface LinhaLevar {
 }
 
 // Quanto separar para um dia do evento.
+// Heitor (13/10): bebida, limpeza, embalagem e itens de organização vão todos no primeiro dia;
+// só os insumos alimentícios são divididos pelos dias do evento.
+const NAO_ALIMENTO = /bebida|limpeza|descart|utens[ií]lio|embalage|adesivo|etiqueta|escrit[oó]rio|organiza|equipamento/i
+export const vaiTudoNoPrimeiroDia = (cat: Catalogo, chave: string) =>
+  chave.startsWith('i:') && NAO_ALIMENTO.test(cat.insumos.get(chave.slice(2))?.categoria ?? '')
+
 export function quantoLevar(cat: Catalogo, evento: Evento, data: string, previsao: QtdDiaProduto[], consumo: LinhaConsumo[], envios: EnvioEvento[], inventarios: Inventario[], arredondar: (chave: ChaveItem, q: number) => number) {
-  const precisa = necessidade(cat, previsao.filter((p) => p.data === data))
+  const precisaDoDia = necessidade(cat, previsao.filter((p) => p.data === data))
+  // Não alimentícios: a necessidade deste dia até o fim do evento (no 1º dia, o evento todo).
+  const precisaAteOFim = necessidade(cat, previsao.filter((p) => p.data >= data))
+  const precisa = new Map([...precisaDoDia].filter(([k]) => !vaiTudoNoPrimeiroDia(cat, k)))
+  for (const [k, q] of precisaAteOFim) if (vaiTudoNoPrimeiroDia(cat, k)) precisa.set(k, q)
   const dias = evento.dias.map((d) => d.data)
   const anteriores = dias.filter((d) => d < data)
   const sobra = sobraPorDia(inventarios)

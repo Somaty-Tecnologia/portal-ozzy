@@ -1142,6 +1142,8 @@ export interface ItemContagem {
   unidade: UnidadeMedida
   embalagem: string | null
   embalagemQtd: number | null
+  // Inativo só aparece para dar nome a item que uma ficha ainda usa; não entra nas listas de escolher.
+  ativo?: boolean
 }
 export interface EventoEscalado {
   id: string

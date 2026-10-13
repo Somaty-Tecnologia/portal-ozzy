@@ -1041,7 +1041,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     },
     async itensContagem() {
       return (ok(await sb.rpc('itens_contagem')) ?? []).map((r: any) => ({
-        chave: (r.tipo === 'insumo' ? 'i:' : 'r:') + r.id, nome: r.nome, categoria: r.categoria, unidade: r.unidade, embalagem: r.embalagem, embalagemQtd: numeroOuNulo(r.embalagem_qtd),
+        chave: (r.tipo === 'insumo' ? 'i:' : 'r:') + r.id, nome: r.nome, categoria: r.categoria, unidade: r.unidade, embalagem: r.embalagem, embalagemQtd: numeroOuNulo(r.embalagem_qtd), ativo: r.ativo !== false,
       }))
     },
     async meusEventosEscalados() {

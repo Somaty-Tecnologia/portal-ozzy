@@ -746,7 +746,7 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
         </label>
       </div>
       <p className="mt-1 text-sm text-stone-600">
-        Quantidade = previsão de vendas do dia × fichas técnicas{consumo.some((c) => c.ajuste) ? ' × ajuste pelo consumo real dos dias anteriores' : ''} + {e.margemSegurancaPct}% de folga − o que já está no evento. Pré-preparos vão prontos da base.
+        Quantidade = previsão de vendas do dia × fichas técnicas{consumo.some((c) => c.ajuste) ? ' × ajuste pelo consumo real dos dias anteriores' : ''} + {e.margemSegurancaPct}% de folga − o que já está no evento. Bebidas, limpeza, embalagens e descartáveis vão todos no primeiro dia; só os alimentos são divididos por dia. Pré-preparos vão prontos da base.
         {primeira && ' Os itens fixos (equipamentos, utensílios…) entram só na primeira separação.'}
       </p>
       {semPrevisao && <p className="mt-2 text-sm font-semibold text-amber-700">Sem previsão de vendas para este dia: só os itens fixos entram. Preencha a previsão em Cardápio e previsão.</p>}
@@ -802,7 +802,7 @@ function MontarSeparacao({ e, d, diaInicial, aoFechar, aoCriar }: { e: Evento; d
       <div className="mt-3 flex flex-wrap gap-2">
         <select className={`${estiloEntrada} sm:w-72!`} value={novoItem} onChange={(ev) => setNovoItem(ev.target.value)} aria-label="Item para acrescentar">
           <option value="">Acrescentar insumo ou pré-preparo…</option>
-          {d.itens.filter((i) => !linhas.some((l) => chaveDe(l) === i.chave)).map((i) => <option key={i.chave} value={i.chave}>{i.nome}</option>)}
+          {d.itens.filter((i) => i.ativo !== false && !linhas.some((l) => chaveDe(l) === i.chave)).map((i) => <option key={i.chave} value={i.chave}>{i.nome}</option>)}
         </select>
         <Botao
           variante="secundario"
@@ -1031,9 +1031,9 @@ export function Contagem({
   const daLista = lista.map((k) => infoItem(itens, k)).filter(Boolean) as ItemContagem[]
   const filtro = busca.trim().toLowerCase()
   const visiveis = todos
-    ? [...daLista, ...itens.filter((i) => !lista.includes(i.chave)).sort((a, b) => a.nome.localeCompare(b.nome))].filter((i) => !filtro || i.nome.toLowerCase().includes(filtro))
+    ? [...daLista, ...itens.filter((i) => i.ativo !== false && !lista.includes(i.chave)).sort((a, b) => a.nome.localeCompare(b.nome))].filter((i) => !filtro || i.nome.toLowerCase().includes(filtro))
     : daLista
-  const achados = !todos && busca.trim().length >= 2 ? itens.filter((i) => !lista.includes(i.chave) && i.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 8) : []
+  const achados = !todos && busca.trim().length >= 2 ? itens.filter((i) => i.ativo !== false && !lista.includes(i.chave) && i.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 8) : []
   const preenchidos = Object.entries(valores).filter(([, v]) => numero(v) !== null)
 
   const salvar = async () => {
