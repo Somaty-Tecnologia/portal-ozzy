@@ -181,10 +181,11 @@ function acharInsumo(insumos: Insumo[], nome: string, id?: string | null) {
 }
 
 function Montar({ inicial }: { inicial?: string }) {
-  const { store, eu, avisar } = useApp()
+  const { store, avisar } = useApp()
   const [dIni, lIni] = (inicial ?? '').split('_')
   const [data, setData] = useState(/^\d{4}-\d{2}-\d{2}$/.test(dIni ?? '') ? dIni : hoje())
-  const [local, setLocal] = useState(LOCAIS.some(([x]) => x === lIni) ? lIni : LOCAIS.some(([x]) => x === eu.unidadeId) ? eu.unidadeId : 'burger-psd')
+  // A comida da equipe sai só do estoque da Central (Heitor, 13/10); refeições antigas de outro local ainda abrem.
+  const local = LOCAIS.some(([x]) => x === lIni) ? lIni : 'central'
   const [insumos, setInsumos] = useState<Insumo[]>([])
   const [modelos, setModelos] = useState<ModeloRefeicao[]>([])
   const [quem, setQuem] = useState<QuemCome | null>(null)
@@ -214,8 +215,8 @@ function Montar({ inicial }: { inicial?: string }) {
       setAcomp(r?.acompanhamentos ?? '')
       setObs(r?.observacao ?? '')
       setUsados([])
-      const daqui = q ? q.equipe.filter((p) => juntos(local).includes(p.local)).length + q.motoboys.filter((m) => juntos(local).includes(m.local)).length : 0
-      setPessoas(r?.pessoas ?? (daqui || null))
+      const todos = q ? q.equipe.length + q.motoboys.length : 0
+      setPessoas(r?.pessoas ?? (todos || null))
       setPeso(r?.pesoKg ?? null)
       setLinhas((r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })))
     }, (e) => avisar((e as Error).message))
@@ -288,11 +289,7 @@ function Montar({ inicial }: { inicial?: string }) {
           <span className="mb-1 block font-medium text-stone-700">Dia</span>
           <input type="date" className={`${estiloEntrada} w-auto!`} value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
         </label>
-        <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-300">
-          {LOCAIS.map(([id, nome]) => (
-            <button key={id} onClick={() => setLocal(id)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${local === id ? 'bg-carvao text-white' : 'text-stone-600'}`}>{nome}</button>
-          ))}
-        </div>
+        <span className="pb-2 text-sm text-stone-600">Sai do estoque da <b>{nomeLocal(local)}</b></span>
         {refeicao && <Selo cor="verde">Já lançada</Selo>}
       </div>
 
@@ -328,7 +325,7 @@ function Montar({ inicial }: { inicial?: string }) {
 
           <div>
             <h3 className="mb-1 font-bold">Ingredientes usados</h3>
-            <p className="mb-2 text-xs text-stone-500">Saem do estoque de {nomeLocal(local)} quando salvar. Quantidade na unidade do material.</p>
+            <p className="mb-2 text-xs text-stone-500">Saem do estoque da {nomeLocal(local)} quando salvar. Quantidade na unidade do material.</p>
             <datalist id="materiais-refeicao">
               {ativos.map((i) => <option key={i.id} value={i.nome} />)}
             </datalist>
@@ -418,7 +415,7 @@ function QuemComePainel({ quem, local, data, aoUsar }: { quem: QuemCome | null; 
         </details>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
-        <Botao variante="secundario" className="py-1.5!" onClick={() => aoUsar(daqui)}>Usar {daqui} ({juntos(local).map(nomeLocal).join(' + ')})</Botao>
+        {local !== 'central' && <Botao variante="secundario" className="py-1.5!" onClick={() => aoUsar(daqui)}>Usar {daqui} ({juntos(local).map(nomeLocal).join(' + ')})</Botao>}
         <Botao variante="secundario" className="py-1.5!" onClick={() => aoUsar(total)}>Usar {total} (todos)</Botao>
       </div>
     </details>
