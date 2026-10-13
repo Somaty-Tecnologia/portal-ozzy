@@ -316,6 +316,9 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
             try { await navigator.clipboard.writeText(textoWhats()); avisar('Pedido copiado') } catch { avisar('Não consegui copiar') }
           }}>Copiar</Botao>
           <Botao variante="secundario" disabled={!pedidos.length} onClick={imprimirPedido}>Imprimir</Botao>
+          {/* Heitor (13/10): por enquanto o pedido também vai no grupo do WhatsApp; abre o WhatsApp com o texto pronto. */}
+          <a className="inline-flex items-center justify-center rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            aria-disabled={!pedidos.length} href={`https://wa.me/?text=${encodeURIComponent(textoWhats())}`} target="_blank" rel="noreferrer">WhatsApp</a>
           <Botao onClick={enviar} disabled={salvando}>{salvando ? 'Enviando…' : enviado ? 'Enviar de novo' : 'Enviar pedido'}</Botao>
         </div>
       </div>
