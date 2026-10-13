@@ -7,6 +7,7 @@ import { lerNumero } from '../lib/financeiro'
 import { arredondarPara, consumoEvento, estoqueBase, necessidade, quantoLevar, referenciasPadrao, semFicha, sugerirVendas, type LinhaLevar } from '../lib/logistica'
 import { posicaoEventos } from '../lib/painelEventos'
 import InsumosEvento from '../components/InsumosEvento'
+import ImportarPrintVendas from '../components/ImportarPrintVendas'
 import { ir } from '../lib/rota'
 import { criarReconhecedor, lerContagem } from '../lib/voz'
 import {
@@ -396,8 +397,12 @@ export function VendasEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; 
   const dias = [...new Set([...e.dias.map((x) => x.data), ...vendas.map((v) => v.data)])].sort()
   const [editando, setEditando] = useState(false)
   const [grade, setGrade] = useState<Record<string, string>>({})
+  const [importando, setImportando] = useState(false)
+  // Do print (Heitor, 13/10): produtos fora do cardápio que venderam e o total lido de cada um.
+  const [extras, setExtras] = useState<string[]>([])
+  const [totaisPrint, setTotaisPrint] = useState<Record<string, { quantidade: number; total: number }>>({})
   const preco = (receitaId: string) => g.cardapio.find((c) => c.receitaId === receitaId)?.preco ?? g.receitas.find((r) => r.id === receitaId)?.precoVenda ?? null
-  const produtos = [...new Set([...g.cardapio.map((c) => c.receitaId), ...vendas.map((v) => v.receitaId).filter(Boolean)])] as string[]
+  const produtos = [...new Set([...g.cardapio.map((c) => c.receitaId), ...vendas.map((v) => v.receitaId).filter(Boolean), ...extras])] as string[]
   const nome = (id: string) => g.receitas.find((r) => r.id === id)?.nome ?? vendas.find((v) => v.receitaId === id)?.produto ?? '—'
   const vq = (r: string, dia: string) => vendas.filter((v) => v.receitaId === r && v.data === dia).reduce((s, v) => s + v.quantidade, 0)
   const vt = (r: string, dia: string) => vendas.filter((v) => v.receitaId === r && v.data === dia).reduce((s, v) => s + (v.total ?? 0), 0)
@@ -405,6 +410,15 @@ export function VendasEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; 
   const temPrevisao = g.previsao.length > 0
   const total = vendas.reduce((s, v) => s + (v.total ?? 0), 0)
   const itens = vendas.reduce((s, v) => s + v.quantidade, 0)
+  // Produtos que o print pode casar: o cardápio do evento e as fichas de produto dos eventos, com os nomes já usados nas vendas.
+  const candidatos = useMemo(() => {
+    const ids = new Set([...g.cardapio.map((c) => c.receitaId), ...g.receitas.filter((r) => r.tipo === 'produto' && r.ativo && (r.area ?? 'eventos') === 'eventos').map((r) => r.id)])
+    return [...ids].flatMap((id) => {
+      const r = g.receitas.find((x) => x.id === id)
+      if (!r) return []
+      return [{ id, nome: r.nome, nomes: [r.nome, ...new Set(g.vendas.filter((v) => v.receitaId === id && v.produto).map((v) => v.produto!))] }]
+    }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [g.cardapio, g.receitas, g.vendas])
   const ordenados = [...produtos].sort((a, b) => dias.reduce((s, x) => s + vq(b, x), 0) - dias.reduce((s, x) => s + vq(a, x), 0))
 
   const abrirEdicao = () => {
@@ -416,11 +430,14 @@ export function VendasEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; 
       await store.salvarVendasEvento(e.id, produtos.flatMap((r) => dias.map((x) => {
         const quantidade = numero(grade[`${r}|${x}`] ?? '') ?? 0
         // Mantém o total importado quando a quantidade não mudou; senão quantidade × preço do cardápio.
-        const total = quantidade === vq(r, x) ? vt(r, x) : quantidade * (preco(r) ?? 0)
+        const lido = totaisPrint[`${r}|${x}`]
+        const total = lido && lido.quantidade === quantidade ? lido.total : quantidade === vq(r, x) ? vt(r, x) : quantidade * (preco(r) ?? 0)
         return { data: x, receitaId: r, quantidade, total }
       })))
       await aoMudar()
       setEditando(false)
+      setExtras([])
+      setTotaisPrint({})
       avisar('Vendas salvas')
     } catch (err) {
       avisar((err as Error).message)
@@ -453,10 +470,41 @@ export function VendasEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; 
               <Botao onClick={salvar}>Salvar vendas</Botao>
             </>
           ) : (
-            <Botao variante="secundario" disabled={!produtos.length} onClick={abrirEdicao}>Lançar vendas</Botao>
+            <>
+              <Botao variante="secundario" onClick={() => setImportando(true)}>Importar print</Botao>
+              <Botao variante="secundario" disabled={!produtos.length} onClick={abrirEdicao}>Lançar vendas</Botao>
+            </>
           )}
         </div>
       </div>
+      {importando && (
+        <ImportarPrintVendas
+          dias={e.dias.map((x) => x.data)}
+          candidatos={candidatos}
+          aoFechar={() => setImportando(false)}
+          aoUsar={(dia, lidas) => {
+            const novos = [...new Set(lidas.map((l) => l.receitaId))].filter((r) => !produtos.includes(r))
+            const todos = [...produtos, ...novos]
+            const somaQ = new Map<string, number>()
+            const somaT = new Map<string, number | null>()
+            for (const l of lidas) {
+              somaQ.set(l.receitaId, (somaQ.get(l.receitaId) ?? 0) + l.quantidade)
+              const t = somaT.has(l.receitaId) ? somaT.get(l.receitaId)! : 0
+              somaT.set(l.receitaId, t === null || l.total === null ? null : t + l.total)
+            }
+            setExtras((x) => [...x, ...novos])
+            setTotaisPrint(Object.fromEntries([...somaQ].flatMap(([r, q]) => (somaT.get(r) != null ? [[`${r}|${dia}`, { quantidade: q, total: somaT.get(r)! }]] : []))))
+            // O dia importado é substituído pelo print; os outros dias ficam como estão.
+            setGrade(Object.fromEntries(todos.flatMap((r) => dias.map((x) => {
+              const v = x === dia ? somaQ.get(r) ?? 0 : vq(r, x)
+              return [`${r}|${x}`, v ? String(v) : '']
+            }))))
+            setImportando(false)
+            setEditando(true)
+            avisar('Confira as quantidades e clique em Salvar vendas')
+          }}
+        />
+      )}
       {!produtos.length ? (
         <Vazio>Sem vendas nem cardápio. Monte o cardápio na aba Cardápio e previsão para lançar as vendas.</Vazio>
       ) : (
