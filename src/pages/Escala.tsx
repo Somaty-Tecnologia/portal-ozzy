@@ -78,7 +78,8 @@ export default function Escala() {
   }
 
   // Cada toque passa para o próximo: sem folga → folga → folga de feriado → sem folga.
-  // No dia fechado do turno: folga do turno → feriado → vai trabalhar → folga do turno.
+  // No dia fechado do turno: folga do turno → feriado → vazio (vai trabalhar) → folga do turno.
+  // Só aparecem folga e feriado (Heitor, 13/10): vazio é dia de trabalho.
   const alternar = async (fid: string, d: string) => {
     if (!gestao) return
     const g = registro(fid, d)
@@ -92,8 +93,8 @@ export default function Escala() {
     await store.definirFolga(fid, d, proximo)
     await carregar()
     avisar(
-      proximo === 'normal' ? 'Folga marcada' : proximo === 'feriado' ? 'Folga de feriado marcada' : proximo === 'trabalha' ? 'Marcado: trabalha neste dia'
-        : g?.tipo === 'trabalha' ? 'Volta a ser folga do turno' : 'Folga removida',
+      proximo === 'normal' ? 'Folga marcada' : proximo === 'feriado' ? 'Folga de feriado marcada' : proximo === 'trabalha' ? 'Folga removida: trabalha neste dia'
+        : g?.tipo === 'trabalha' ? 'Folga marcada' : 'Folga removida',
     )
   }
   const folgasNoMes = (fid: string) => dias.filter((d) => folgaDe(fid, d)).length
@@ -138,7 +139,7 @@ export default function Escala() {
         {gestao && <span>Toque num dia para trocar:</span>}
         <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-500" /> folga</span>
         <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-sky-600" /> folga de feriado</span>
-        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-100" /> folga do turno (dia sem horário, entra sozinha)</span>
+        <span>vazio = trabalha</span>
       </p>
 
       {pessoas.length === 0 ? (
@@ -171,18 +172,17 @@ export default function Escala() {
                   {dias.map((d) => {
                     const folga = folgaDe(p.id, d)
                     const auto = !!registro(p.id, d)?.automatica
-                    const trabalha = registro(p.id, d)?.tipo === 'trabalha'
                     return (
                       <td key={d} className="px-0.5 py-1 text-center">
                         <button
                           disabled={!gestao}
                           onClick={() => alternar(p.id, d)}
-                          title={`${dataLonga(d)}: ${folga === 'feriado' ? 'folga de feriado' : folga ? (auto ? 'folga do turno' : 'folga') : 'trabalha'}`}
+                          title={`${dataLonga(d)}: ${folga === 'feriado' ? 'folga de feriado' : folga ? (auto ? 'folga (dia sem horário no turno)' : 'folga') : 'trabalha'}`}
                           className={`h-8 w-8 rounded-md text-[10px] font-bold transition ${
-                            folga === 'feriado' ? 'bg-sky-600 text-white' : auto ? 'bg-ozzy-100 text-carvao' : folga ? 'bg-ozzy-500 text-carvao' : trabalha ? 'bg-stone-100 text-stone-600' : 'bg-stone-50 text-stone-300'
+                            folga === 'feriado' ? 'bg-sky-600 text-white' : folga ? 'bg-ozzy-500 text-carvao' : 'bg-stone-50 text-stone-300'
                           } ${gestao ? 'hover:ring-2 hover:ring-carvao' : 'cursor-default'}`}
                         >
-                          {folga === 'feriado' ? 'FER' : folga ? 'F' : trabalha ? 'T' : '·'}
+                          {folga === 'feriado' ? 'FER' : folga ? 'F' : ''}
                         </button>
                       </td>
                     )
