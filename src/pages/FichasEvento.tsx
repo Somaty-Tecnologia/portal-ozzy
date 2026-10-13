@@ -53,6 +53,8 @@ export default function FichasEvento({ id, area = 'eventos' }: { id?: string; ar
   return <ListaFichas d={d} aoMudar={carregar} />
 }
 
+const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
 function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> }) {
   const { avisar } = useApp()
   const [tipo, setTipo] = useState<TipoReceita | 'cmv'>('produto')
@@ -66,12 +68,23 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
   const daArea = (r: Receita) => r.tipo === 'preparo' || (r.area ?? 'eventos') === d.area
   const linhas = [...new Set(d.receitas.filter((r) => daArea(r) && r.tipo === tipo).map((r) => r.linha).filter(Boolean) as string[])].sort()
   const termo = busca.trim().toLowerCase()
+  // Heitor (13/10): a busca também acha pelo ingrediente que está dentro da ficha (ex.: molho de tomate).
+  const termos = semAcento(termo).split(/\s+/).filter(Boolean)
+  const casa = (nome: string) => termos.every((t) => semAcento(nome).includes(t))
+  const ingredientes = (r: Receita) => (d.cat.atual.get(r.id)?.itens ?? [])
+    .map((i) => (i.insumoId ? d.cat.insumos.get(i.insumoId)?.nome : i.subReceitaId ? d.cat.receitas.get(i.subReceitaId)?.nome : undefined))
+    .filter(Boolean) as string[]
   const lista = useMemo(() => d.receitas
-    .filter((r) => r.tipo === tipo && daArea(r) && (inativas || r.ativo) && (!linha || r.linha === linha) && (!termo || r.nome.toLowerCase().includes(termo) || r.ecleticaCodigo === termo))
-    .map((r) => {
+    .filter((r) => r.tipo === tipo && daArea(r) && (inativas || r.ativo) && (!linha || r.linha === linha))
+    .flatMap((r) => {
+      let contem: string[] = []
+      if (termos.length && !casa(r.nome) && r.ecleticaCodigo !== termo) {
+        contem = ingredientes(r).filter(casa)
+        if (!contem.length) return []
+      }
       const c = custoFicha(d.cat, r.id)
-      return { r, c, pct: c ? cmv(c.porUnidade, r.precoVenda) : null }
-    }), [d, tipo, inativas, linha, termo])
+      return [{ r, c, pct: c ? cmv(c.porUnidade, r.precoVenda) : null, contem }]
+    }), [d, tipo, inativas, linha, termo]) // eslint-disable-line react-hooks/exhaustive-deps
   const { ordenada, cabecalho } = useOrdem(lista, {
     nome: (x) => x.r.nome, linha: (x) => x.r.linha, custo: (x) => x.c?.porUnidade, preco: (x) => x.r.precoVenda, cmv: (x) => x.pct,
   }, { col: 'nome' })
@@ -100,7 +113,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
       </div>
       {tipo === 'cmv' ? <AnaliseCmv cat={d.cat} receitas={d.receitas} /> : <>
       <div className="flex flex-wrap items-center gap-2">
-        <input className={`${estiloEntrada} basis-full py-2! sm:basis-0 sm:flex-1`} placeholder={d.area === 'lojas' ? 'Buscar por nome ou código' : 'Buscar ficha'} value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar ficha" />
+        <input className={`${estiloEntrada} basis-full py-2! sm:basis-0 sm:flex-1`} placeholder={d.area === 'lojas' ? 'Buscar por nome, código ou ingrediente' : 'Buscar ficha ou ingrediente'} value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar ficha" />
         <select className={`${estiloEntrada} w-auto! py-2!`} value={linha} onChange={(e) => setLinha(e.target.value)} aria-label="Linha">
           <option value="">{d.area === 'lojas' && tipo === 'produto' ? 'Todos os grupos' : 'Todas as linhas'}</option>
           {linhas.map((l) => <option key={l}>{l}</option>)}
@@ -125,7 +138,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
               </tr>
             </thead>
             <tbody>
-              {ordenada.map(({ r, c, pct }) => {
+              {ordenada.map(({ r, c, pct, contem }) => {
                 return (
                   <tr key={r.id} onClick={() => ir(baseFichas() + '/' + r.id)} className="cursor-pointer border-t border-stone-100 hover:bg-stone-50">
                     <td className="px-3 py-2">
@@ -136,6 +149,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
                           .filter(Boolean).join(' · ')}
                         {c && c.semPreco.length > 0 && <span className="font-semibold text-amber-700"> · {c.semPreco.length} sem preço</span>}
                       </div>
+                      {contem.length > 0 && <div className="text-xs font-semibold text-sky-800">Contém: {contem.join(', ')}</div>}
                     </td>
                     <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{r.linha ?? '—'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">{c ? `${reais(c.porUnidade)}/${nomeUnidade(r.unidade)}` : '—'}</td>
