@@ -24,6 +24,9 @@ export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento
   const [linhas, setLinhas] = useState<Linha[] | null>(null)
   const [grade, setGrade] = useState<Record<string, string>>({})
   const [busca, setBusca] = useState('')
+  // Heitor (13/10): não se faz 8,7 kg; por padrão arredonda o que precisa para cima.
+  const [arredondar, setArredondar] = useState(() => { try { return localStorage.getItem('producao-evento-arredondar') !== 'nao' } catch { return true } })
+  const mudarArredondar = (v: boolean) => { setArredondar(v); try { localStorage.setItem('producao-evento-arredondar', v ? 'sim' : 'nao') } catch { /* sem armazenamento */ } }
   useEffect(() => {
     store.producaoEvento(eventoId).then((r) => {
       setLinhas(r)
@@ -40,7 +43,7 @@ export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento
     const x = chave.startsWith('i:') ? cat.insumos.get(id) : cat.receitas.get(id)
     return x ? { nome: x.nome, unidade: nomeUnidade(x.unidade) } : null
   }
-  const precisa = new Map(automaticos.map((a) => [a.chave, a.quantidade]))
+  const precisa = new Map(automaticos.map((a) => [a.chave, arredondar ? Math.ceil(a.quantidade - 1e-9) : a.quantidade]))
   const manuais = new Set((linhas ?? []).filter((l) => l.dia === null).map((l) => l.chave))
   const chaves = [...new Set([...automaticos.map((a) => a.chave), ...manuais, ...(linhas ?? []).filter((l) => l.dia).map((l) => l.chave)])]
     .filter((k) => info(k))
@@ -102,7 +105,8 @@ export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="font-bold">Para a produção</h4>
         <span className="text-sm text-stone-500">semana de {dataCurta(dias[0])} a {dataCurta(dias[6])}, antes do evento</span>
-        <Botao variante="secundario" className="py-1.5! sm:ml-auto" disabled={!chaves.length} onClick={copiarSemana}>Copiar a semana p/ WhatsApp</Botao>
+        <label className="flex items-center gap-2 text-sm text-stone-600 sm:ml-auto"><input type="checkbox" checked={arredondar} onChange={(e) => mudarArredondar(e.target.checked)} /> Arredondar para cima</label>
+        <Botao variante="secundario" className="py-1.5!" disabled={!chaves.length} onClick={copiarSemana}>Copiar a semana p/ WhatsApp</Botao>
       </div>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-sm">
