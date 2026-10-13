@@ -300,28 +300,19 @@ function Montar({ inicial }: { inicial?: string }) {
             <datalist id="materiais-refeicao">
               {ativos.map((i) => <option key={i.id} value={i.nome} />)}
             </datalist>
+            <p className="mb-2 text-xs text-stone-500">Só materiais do cadastro. Se faltar algum, peça ao administrativo para cadastrar.</p>
             <div className="space-y-1.5">
               {linhas.map((l) => {
                 const ins = porId.get(l.insumoId)
                 return (
                   <div key={l.chave} className="flex flex-wrap items-center gap-2">
-                    <input
-                      className={`${estiloEntrada} min-w-0 flex-[3] py-1.5! ${!l.insumoId && (l.texto || l.quantidade) ? 'ring-2! ring-amber-400!' : ''}`}
-                      list="materiais-refeicao"
-                      aria-label="Material"
-                      placeholder="Material do estoque"
-                      value={ins ? ins.nome : l.texto}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        const achou = ativos.find((i) => i.nome === v)
-                        mudar(l.chave, achou ? { insumoId: achou.id, texto: '' } : { insumoId: '', texto: v })
-                      }}
-                    />
+                    <MaterialDoCadastro insumos={ativos} lista="materiais-refeicao" insumoId={l.insumoId} destaque={!l.insumoId && !!(l.texto || l.quantidade)}
+                      aoEscolher={(i) => mudar(l.chave, { insumoId: i.id, texto: '' })} />
                     <CampoNumero className={`${estiloEntrada} w-24! py-1.5! text-right`} valor={l.quantidade} aoMudar={(n) => mudar(l.chave, { quantidade: n })} inputMode="decimal" aria-label={`Quantidade de ${ins?.nome ?? l.texto}`} />
                     <span className="w-8 text-sm text-stone-500">{ins?.unidade ?? ''}</span>
                     <span className="w-20 text-right text-sm text-stone-600">{ins ? (ins.preco == null ? 'sem preço' : reais(custo(l))) : ''}</span>
                     <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))} aria-label="Tirar ingrediente">✕</button>
-                    {l.dica && !l.insumoId && <span className="basis-full text-xs text-amber-700">Não achei “{l.dica}” no cadastro: escolha o material parecido ou tire a linha.</span>}
+                    {l.dica && !l.insumoId && <span className="basis-full text-xs text-amber-700">“{l.dica}” não está mais no cadastro: escolha outro material ou tire a linha.</span>}
                   </div>
                 )
               })}
@@ -574,6 +565,8 @@ function Pratos() {
 
 function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao | null; aoFechar: () => void; aoSalvar: () => Promise<void> }) {
   const { store, avisar } = useApp()
+  const [insumos, setInsumos] = useState<Insumo[]>([])
+  useEffect(() => { store.insumos().then((is) => setInsumos(is.filter((i) => i.ativo)), () => {}) }, [store])
   const [nome, setNome] = useState(modelo?.nome ?? '')
   const [tipo, setTipo] = useState<TipoModeloRefeicao>(modelo?.tipo ?? 'prato')
   const [modo, setModo] = useState(modelo?.modoPreparo ?? '')
@@ -584,7 +577,8 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
   const salvar = async () => {
     setSalvando(true)
     try {
-      await store.salvarModeloRefeicao({ id: modelo?.id, nome, tipo, modoPreparo: modo, ativo, itens })
+      if (itens.some((i) => !i.insumoId && (i.nome || i.quantidade))) throw new Error('Escolha cada ingrediente na lista do cadastro.')
+      await store.salvarModeloRefeicao({ id: modelo?.id, nome, tipo, modoPreparo: modo, ativo, itens: itens.filter((i) => i.insumoId) })
       avisar('Prato salvo')
       await aoSalvar()
     } catch (e) {
@@ -609,17 +603,17 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
           <div className="space-y-1.5">
             {itens.map((i, k) => (
               <div key={k} className="flex items-center gap-2">
-                <input className={`${estiloEntrada} min-w-0 flex-1 py-1.5!`} value={i.nome} placeholder="Ingrediente" onChange={(e) => mudar(k, { nome: e.target.value, insumoId: null })} aria-label="Ingrediente" />
+                <MaterialDoCadastro insumos={insumos} lista="materiais-prato" insumoId={i.insumoId ?? ''} textoInicial={i.insumoId ? '' : i.nome}
+                  aoEscolher={(x) => mudar(k, { nome: x.nome, unidade: x.unidade, insumoId: x.id })} />
                 <CampoNumero className={`${estiloEntrada} w-20! py-1.5! text-right`} valor={i.quantidade || null} aoMudar={(n) => mudar(k, { quantidade: n ?? 0 })} inputMode="decimal" aria-label={`Quantidade de ${i.nome}`} />
-                <select className={`${estiloEntrada} w-16! px-1! py-1.5!`} value={i.unidade} onChange={(e) => mudar(k, { unidade: e.target.value })} aria-label="Unidade">
-                  {['kg', 'l', 'un'].map((u) => <option key={u}>{u}</option>)}
-                </select>
+                <span className="w-8 text-sm text-stone-500">{i.unidade}</span>
                 <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => setItens((is) => is.filter((_, j) => j !== k))} aria-label="Tirar ingrediente">✕</button>
               </div>
             ))}
           </div>
           <Botao variante="secundario" className="mt-2 py-1.5!" onClick={() => setItens((is) => [...is, { nome: '', quantidade: 0, unidade: 'kg' }])}>+ Ingrediente</Botao>
-          <p className="mt-1 text-xs text-stone-500">Ex.: 0,15 kg de carne moída por pessoa. O nome é usado para achar o material no cadastro.</p>
+          <datalist id="materiais-prato">{insumos.map((x) => <option key={x.id} value={x.nome} />)}</datalist>
+          <p className="mt-1 text-xs text-stone-500">Quantidade por pessoa, na unidade do material. Só materiais do cadastro; se faltar algum, peça ao administrativo.</p>
         </div>
         <Campo rotulo="Modo de preparo">
           <textarea className={`${estiloEntrada} min-h-28`} value={modo} onChange={(e) => setModo(e.target.value)} />
@@ -627,5 +621,39 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
         <Botao className="w-full" disabled={salvando || !nome.trim()} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>
       </div>
     </Modal>
+  )
+}
+
+// Campo de material: só aceita o que está no cadastro (Heitor, 13/10). O que não existe some ao sair do campo,
+// com o aviso de pedir o cadastro ao administrativo, para não criar material solto.
+function MaterialDoCadastro({ insumos, lista, insumoId, aoEscolher, destaque = false, textoInicial = '' }: {
+  insumos: Insumo[]; lista: string; insumoId: string; aoEscolher: (i: Insumo) => void; destaque?: boolean; textoInicial?: string
+}) {
+  const atual = insumos.find((i) => i.id === insumoId)
+  const [texto, setTexto] = useState<string | null>(null)
+  const [aviso, setAviso] = useState(false)
+  const achar = (v: string) => insumos.find((i) => sem(i.nome) === sem(v))
+  return (
+    <div className="min-w-0 flex-[3]">
+      <input
+        className={`${estiloEntrada} py-1.5! ${destaque || aviso ? 'ring-2! ring-amber-400!' : ''}`}
+        list={lista}
+        aria-label="Material"
+        placeholder="Escolha o material do cadastro"
+        value={texto ?? atual?.nome ?? textoInicial}
+        onChange={(e) => {
+          const v = e.target.value
+          const i = achar(v)
+          setAviso(false)
+          if (i) { setTexto(null); aoEscolher(i) } else setTexto(v)
+        }}
+        onBlur={() => {
+          if (texto === null) return
+          if (texto.trim()) setAviso(true)
+          setTexto(null)
+        }}
+      />
+      {aviso && <span className="text-xs text-amber-700">Não está no cadastro. Peça ao administrativo para cadastrar.</span>}
+    </div>
   )
 }
