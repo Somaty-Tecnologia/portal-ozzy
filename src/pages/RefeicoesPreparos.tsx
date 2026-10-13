@@ -4,6 +4,8 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { MaterialDoCadastro } from './Refeicoes'
+import { podeGerenciar } from '../lib/permissoes'
+import { ir } from '../lib/rota'
 import type { Insumo, PreparoRefeicao, Producao } from '../lib/types'
 
 // Pré-preparo das refeições (Heitor, 13/10): feijão, arroz e afins são feitos à parte com os ingredientes deles.
@@ -11,6 +13,12 @@ import type { Insumo, PreparoRefeicao, Producao } from '../lib/types'
 // em "Montar o prato" o preparo pronto entra como ingrediente ("Feijão (refeição)").
 
 type Item = { insumoId: string; quantidade: number | null }
+
+// Rascunho do cadastro (Heitor, 13/10): sair para cadastrar um material novo não perde o que já foi digitado.
+interface Rascunho { id: string | null; nome: string; unidade: string; rendimento: number | null; itens: Item[]; modo: string; ativo: boolean }
+const CHAVE_RASCUNHO = 'preparo-refeicao-rascunho'
+const lerRascunho = (): Rascunho | null => { try { return JSON.parse(localStorage.getItem(CHAVE_RASCUNHO) ?? 'null') } catch { return null } }
+const gravarRascunho = (r: Rascunho | null) => { try { if (r) localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify(r)); else localStorage.removeItem(CHAVE_RASCUNHO) } catch { /* sem armazenamento */ } }
 
 export default function PreparosRefeicao() {
   const { store, avisar } = useApp()
@@ -30,6 +38,12 @@ export default function PreparosRefeicao() {
     }
   }, [store, avisar])
   useEffect(() => { carregar() }, [carregar])
+  // Voltou com rascunho guardado: reabre o cadastro onde parou.
+  useEffect(() => {
+    const r = lerRascunho()
+    if (!r || !preparos || editando) return
+    setEditando(r.id ? preparos.find((p) => p.id === r.id) ?? 'novo' : 'novo')
+  }, [preparos]) // eslint-disable-line react-hooks/exhaustive-deps
   const porId = useMemo(() => new Map(insumos.map((i) => [i.id, i])), [insumos])
   const custoReceita = (p: { itens: { insumoId: string; quantidade: number | null }[] }) => p.itens.reduce((t, i) => t + (i.quantidade ?? 0) * (porId.get(i.insumoId)?.preco ?? 0), 0)
   if (!preparos) return <p className="text-stone-400">Carregando…</p>
@@ -166,21 +180,29 @@ function FizAgora({ preparo, porId, aoFechar, aoSalvar }: { preparo: PreparoRefe
 }
 
 function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: PreparoRefeicao | null; insumos: Insumo[]; aoFechar: () => void; aoSalvar: () => void }) {
-  const { store, avisar } = useApp()
+  const { store, eu, avisar } = useApp()
   const ativos = insumos.filter((i) => i.ativo && i.id !== preparo?.insumoId)
-  const [nome, setNome] = useState(preparo?.nome ?? '')
-  const [unidade, setUnidade] = useState(preparo?.unidade ?? 'kg')
-  const [rendimento, setRendimento] = useState<number | null>(preparo?.rendimento ?? null)
-  const [itens, setItens] = useState<Item[]>(preparo?.itens.length ? preparo.itens.map((i) => ({ ...i })) : [{ insumoId: '', quantidade: null }])
-  const [modo, setModo] = useState(preparo?.modoPreparo ?? '')
-  const [ativo, setAtivo] = useState(preparo?.ativo ?? true)
+  const [salvo] = useState(() => { const r = lerRascunho(); return r && r.id === (preparo?.id ?? null) ? r : null })
+  const [nome, setNome] = useState(salvo?.nome ?? preparo?.nome ?? '')
+  const [unidade, setUnidade] = useState(salvo?.unidade ?? preparo?.unidade ?? 'kg')
+  const [rendimento, setRendimento] = useState<number | null>(salvo ? salvo.rendimento : preparo?.rendimento ?? null)
+  const [itens, setItens] = useState<Item[]>(salvo?.itens ?? (preparo?.itens.length ? preparo.itens.map((i) => ({ ...i })) : [{ insumoId: '', quantidade: null }]))
+  const [modo, setModo] = useState(salvo?.modo ?? preparo?.modoPreparo ?? '')
+  const [ativo, setAtivo] = useState(salvo?.ativo ?? preparo?.ativo ?? true)
   const [salvando, setSalvando] = useState(false)
-  const mudar = (k: number, x: Partial<Item>) => setItens((is) => is.map((i, j) => (j === k ? { ...i, ...x } : i)))
+  // Cada mudança fica guardada até salvar ou descartar.
+  const [mexeu, setMexeu] = useState(!!salvo)
+  useEffect(() => {
+    if (mexeu) gravarRascunho({ id: preparo?.id ?? null, nome, unidade, rendimento, itens, modo, ativo })
+  }, [mexeu, preparo, nome, unidade, rendimento, itens, modo, ativo])
+  const descartar = () => { gravarRascunho(null); aoFechar() }
+  const mudar = (k: number, x: Partial<Item>) => { setMexeu(true); setItens((is) => is.map((i, j) => (j === k ? { ...i, ...x } : i))) }
   const salvar = async () => {
     setSalvando(true)
     try {
       await store.salvarPreparoRefeicao({ id: preparo?.id, nome, unidade, rendimento: rendimento ?? 0, modoPreparo: modo, ativo,
         itens: itens.filter((i) => i.insumoId && i.quantidade).map((i) => ({ insumoId: i.insumoId, quantidade: i.quantidade! })) })
+      gravarRascunho(null)
       avisar('Pré-preparo salvo')
       aoSalvar()
     } catch (e) {
@@ -191,7 +213,13 @@ function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: Prep
   return (
     <Modal titulo={preparo ? preparo.nome : 'Novo pré-preparo'} aberto aoFechar={aoFechar}>
       <div className="space-y-3">
-        <Campo rotulo="Nome (ex.: Feijão, Arroz, Vinagrete)"><input className={estiloEntrada} value={nome} onChange={(e) => setNome(e.target.value)} /></Campo>
+        {salvo && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-ozzy-50 px-3 py-2 text-sm ring-1 ring-ozzy-400/60">
+            <span className="flex-1">Continuando o rascunho que você deixou.</span>
+            <button className="font-semibold text-stone-600 underline" onClick={descartar}>Descartar rascunho</button>
+          </div>
+        )}
+        <Campo rotulo="Nome (ex.: Feijão, Arroz, Vinagrete)"><input className={estiloEntrada} value={nome} onChange={(e) => { setMexeu(true); setNome(e.target.value) }} /></Campo>
         <div>
           <div className="mb-1 text-sm font-medium text-stone-700">Ingredientes de uma receita</div>
           <datalist id="materiais-preparo">{ativos.map((x) => <option key={x.id} value={x.nome} />)}</datalist>
@@ -201,23 +229,27 @@ function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: Prep
                 <MaterialDoCadastro insumos={ativos} lista="materiais-preparo" insumoId={i.insumoId} aoEscolher={(x) => mudar(k, { insumoId: x.id })} />
                 <CampoNumero className={`${estiloEntrada} w-20! py-1.5! text-right`} valor={i.quantidade} aoMudar={(n) => mudar(k, { quantidade: n })} inputMode="decimal" aria-label="Quantidade" />
                 <span className="w-8 text-sm text-stone-500">{insumos.find((x) => x.id === i.insumoId)?.unidade ?? ''}</span>
-                <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => setItens((is) => is.filter((_, j) => j !== k))} aria-label="Tirar ingrediente">✕</button>
+                <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => { setMexeu(true); setItens((is) => is.filter((_, j) => j !== k)) }} aria-label="Tirar ingrediente">✕</button>
               </div>
             ))}
           </div>
-          <Botao variante="secundario" className="mt-2 py-1.5!" onClick={() => setItens((is) => [...is, { insumoId: '', quantidade: null }])}>+ Ingrediente</Botao>
-          <p className="mt-1 text-xs text-stone-500">Só materiais do cadastro. Se faltar algum, peça ao administrativo.</p>
+          <Botao variante="secundario" className="mt-2 py-1.5!" onClick={() => { setMexeu(true); setItens((is) => [...is, { insumoId: '', quantidade: null }]) }}>+ Ingrediente</Botao>
+          <p className="mt-1 text-xs text-stone-500">
+            Só materiais do cadastro. Faltou algum? {podeGerenciar(eu.nivel)
+              ? <button className="font-semibold underline" onClick={() => { setMexeu(true); gravarRascunho({ id: preparo?.id ?? null, nome, unidade, rendimento, itens, modo, ativo }); ir('cadastros') }}>Cadastrar material novo</button>
+              : 'Peça ao administrativo.'} O que você já preencheu fica guardado como rascunho.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Uma receita rende"><CampoNumero className={estiloEntrada} valor={rendimento} aoMudar={setRendimento} inputMode="decimal" aria-label="Rendimento" /></Campo>
+          <Campo rotulo="Uma receita rende"><CampoNumero className={estiloEntrada} valor={rendimento} aoMudar={(n) => { setMexeu(true); setRendimento(n) }} inputMode="decimal" aria-label="Rendimento" /></Campo>
           <Campo rotulo="Unidade">
-            <select className={estiloEntrada} value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+            <select className={estiloEntrada} value={unidade} onChange={(e) => { setMexeu(true); setUnidade(e.target.value) }}>
               <option value="kg">kg</option><option value="l">litro</option><option value="un">unidade</option>
             </select>
           </Campo>
         </div>
-        <Campo rotulo="Modo de preparo (opcional)"><textarea className={`${estiloEntrada} min-h-24`} value={modo} onChange={(e) => setModo(e.target.value)} /></Campo>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} /> Ativo</label>
+        <Campo rotulo="Modo de preparo (opcional)"><textarea className={`${estiloEntrada} min-h-24`} value={modo} onChange={(e) => { setMexeu(true); setModo(e.target.value) }} /></Campo>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ativo} onChange={(e) => { setMexeu(true); setAtivo(e.target.checked) }} /> Ativo</label>
         <Botao className="w-full" disabled={salvando || !nome.trim()} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>
       </div>
     </Modal>
