@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Botao, Modal, estiloEntrada } from './ui'
+import ProducaoEvento from './ProducaoEvento'
 import { useOrdem } from './Ordenar'
 import { useApp } from '../lib/contexto'
 import { custoFicha, precoDoInsumo, qtd, reais, type Catalogo } from '../lib/custos'
@@ -50,7 +51,8 @@ interface Linha {
 const CHAVE_ESTOQUE = 'insumos-evento-estoque-v2'
 const numTexto = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
 
-export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEvento, aoMudar }: {
+export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEvento, aoMudar, inicioEvento }: {
+  inicioEvento?: string
   aoMudar?: () => Promise<void>
   cat: Catalogo
   eventoId: string
@@ -143,7 +145,6 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
   const ehPreparo = (x: Linha) => x.preparo || !!cat.insumos.get(x.id)?.prePreparo || /pr[eé].?preparo/i.test(x.categoria)
   const aProvidenciar = ordenada.filter((x) => x.pedir > 0)
   const paraProduzir = aProvidenciar.filter(ehPreparo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-  const textoProducao = () => `*Pré-preparos para a produção · ${nomeEvento}*\n\n` + paraProduzir.map((x) => `- ${x.nome}: ${qtd(x.pedir)} ${x.unidade}`).join('\n')
   const comFinal = lista.filter((x) => x.final !== null).length
   const semCodigo = lista.filter((x) => x.semCodigo).length
   const copiarDoProvidenciar = () => {
@@ -207,10 +208,6 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
             onClick={() => navigator.clipboard.writeText(texto()).then(() => avisar('Lista copiada para o WhatsApp'), () => avisar('Não deu para copiar neste aparelho'))}>
             Copiar compras p/ WhatsApp
           </Botao>
-          <Botao variante="secundario" className="py-1.5!" disabled={!paraProduzir.length}
-            onClick={() => navigator.clipboard.writeText(textoProducao()).then(() => avisar('Lista da produção copiada'), () => avisar('Não deu para copiar neste aparelho'))}>
-            Copiar p/ produção
-          </Botao>
           <Botao variante="secundario" className="py-1.5!" disabled={!lista.length} onClick={planilha}>Baixar planilha</Botao>
           <Botao variante="secundario" className="py-1.5!" onClick={() => window.print()}>Imprimir</Botao>
         </div>
@@ -235,16 +232,9 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
           Toque em "juntar com o material" embaixo do nome para ligar ao material da Eclética (as fichas passam a usar ele).
         </p>
       )}
-      {paraProduzir.length > 0 && (
-        <div className="rounded-2xl bg-white p-3 ring-1 ring-stone-200">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-bold">Para a produção</h4>
-            <span className="text-sm text-stone-500">pré-preparos a fazer, já descontado o estoque</span>
-          </div>
-          <ul className="mt-1 grid gap-x-6 text-sm sm:grid-cols-2">
-            {paraProduzir.map((x) => <li key={x.id} className="flex justify-between gap-2 border-b border-stone-100 py-1"><span>{x.nome}</span><b className="whitespace-nowrap">{qtd(x.pedir)} {x.unidade}</b></li>)}
-          </ul>
-        </div>
+      {inicioEvento && (
+        <ProducaoEvento cat={cat} eventoId={eventoId} nomeEvento={nomeEvento} inicioEvento={inicioEvento}
+          automaticos={paraProduzir.map((x) => ({ chave: x.id.startsWith('r:') ? x.id : 'i:' + x.id, quantidade: x.pedir }))} />
       )}
       {lista.length === 0 ? (
         <p className="text-sm text-stone-500">As fichas dos produtos da previsão não têm insumos.</p>

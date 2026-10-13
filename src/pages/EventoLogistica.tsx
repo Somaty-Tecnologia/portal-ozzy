@@ -369,7 +369,7 @@ export function InsumosDoEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistic
       </Vazio>
     )
   }
-  return <InsumosEvento cat={g.cat} eventoId={e.id} nomeEvento={e.nome} saldoBase={saldoBase} linhas={linhas} aoMudar={aoMudar} />
+  return <InsumosEvento cat={g.cat} eventoId={e.id} nomeEvento={e.nome} saldoBase={saldoBase} linhas={linhas} aoMudar={aoMudar} inicioEvento={e.dias.map((x) => x.data).sort()[0]} />
 }
 
 // ——— Vendas reais ———

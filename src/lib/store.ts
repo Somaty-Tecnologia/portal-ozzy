@@ -338,6 +338,9 @@ export interface Store {
   freelasEvento(): Promise<FreelaEvento[]>
   salvarFreelaEvento(f: Omit<FreelaEvento, 'id'> & { id?: string }): Promise<FreelaEvento>
   // "Pedir (final)" dos insumos a providenciar do evento (0088): insumoId → quantidade; null apaga.
+  // Produção do evento por dia (13/10). chave 'i:<insumo>' ou 'r:<ficha>'; dia nulo = item posto à mão.
+  producaoEvento(eventoId: string): Promise<{ chave: string; dia: string | null; quantidade: number }[]>
+  salvarProducaoEvento(eventoId: string, linhas: { chave: string; dia: string | null; quantidade: number }[]): Promise<void>
   pedidoInsumosEvento(eventoId: string): Promise<Record<string, number>>
   salvarPedidoInsumosEvento(eventoId: string, valores: Record<string, number | null>): Promise<void>
   diariasFreelaEvento(filtro: { eventoId: string } | { status: 'pendente' }): Promise<DiariaFreelaEvento[]>

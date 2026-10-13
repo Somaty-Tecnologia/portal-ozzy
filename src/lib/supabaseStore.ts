@@ -1064,6 +1064,16 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         : ok(await sb.from('freelas_evento').insert(linha).select('*').single())
       return paraFreelaEvento(r)
     },
+    async producaoEvento(eventoId) {
+      const r = ok(await sb.from('evento_producao').select('insumo_id, receita_id, dia, quantidade').eq('evento_id', eventoId)) ?? []
+      return r.map((x: any) => ({ chave: x.insumo_id ? 'i:' + x.insumo_id : 'r:' + x.receita_id, dia: x.dia, quantidade: Number(x.quantidade) }))
+    },
+    async salvarProducaoEvento(eventoId, linhas) {
+      ok(await sb.from('evento_producao').delete().eq('evento_id', eventoId))
+      if (linhas.length) ok(await sb.from('evento_producao').insert(linhas.map((l) => ({
+        evento_id: eventoId, insumo_id: l.chave.startsWith('i:') ? l.chave.slice(2) : null, receita_id: l.chave.startsWith('r:') ? l.chave.slice(2) : null, dia: l.dia, quantidade: l.quantidade,
+      }))))
+    },
     async pedidoInsumosEvento(eventoId) {
       const r = ok(await sb.from('evento_pedido_insumos').select('insumo_id, quantidade').eq('evento_id', eventoId)) ?? []
       return Object.fromEntries(r.map((x: any) => [x.insumo_id, Number(x.quantidade)]))
