@@ -469,16 +469,10 @@ const votosDemo = new Map<string, { positivos: number; negativos: number; meus: 
   ['rf2', { positivos: 4, negativos: 5, meus: new Map() }],
 ])
 const modelosRefeicaoDemo: ModeloRefeicao[] = [
-  { id: 'mr1', nome: 'Arroz branco', tipo: 'acompanhamento', ativo: true, modoPreparo: 'Refogue o alho no óleo, junte o arroz e o sal, mexa 1 minuto e cubra com o dobro de água fervente. Fogo baixo, tampado, até secar.',
-    itens: [{ nome: 'Arroz', quantidade: 0.08, unidade: 'kg' }, { nome: 'Óleo', quantidade: 0.005, unidade: 'l' }, { nome: 'Alho', quantidade: 0.002, unidade: 'kg' }] },
-  { id: 'mr2', nome: 'Feijão carioca', tipo: 'acompanhamento', ativo: true, modoPreparo: 'Cozinhe na pressão por 25 min. Refogue bacon, cebola e alho e junte ao feijão.',
-    itens: [{ nome: 'Feijão carioca', quantidade: 0.06, unidade: 'kg' }, { nome: 'Bacon', quantidade: 0.01, unidade: 'kg' }, { nome: 'Cebola', quantidade: 0.01, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.002, unidade: 'kg' }] },
-  { id: 'mr3', nome: 'Escondidinho de carne moída', tipo: 'prato', ativo: true, modoPreparo: 'Purê firme com batata, leite e manteiga. Carne moída refogada com cebola, alho e molho de tomate. Carne embaixo, purê por cima e mussarela; forno a 200 °C até gratinar.',
-    itens: [{ nome: 'Carne moída', quantidade: 0.15, unidade: 'kg' }, { nome: 'Batata', quantidade: 0.25, unidade: 'kg' }, { nome: 'Leite', quantidade: 0.05, unidade: 'l' }, { nome: 'Cebola', quantidade: 0.02, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.003, unidade: 'kg' }, { nome: 'Mussarela', quantidade: 0.03, unidade: 'kg' }] },
-  { id: 'mr4', nome: 'Frango grelhado', tipo: 'prato', ativo: true, modoPreparo: 'Tempere com alho, limão e sal (30 min). Grelhe na chapa bem quente, 4 a 5 min de cada lado.',
-    itens: [{ nome: 'Peito de frango', quantidade: 0.18, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.003, unidade: 'kg' }, { nome: 'Óleo', quantidade: 0.005, unidade: 'l' }] },
-  { id: 'mr5', nome: 'Salada verde', tipo: 'salada', ativo: true, modoPreparo: 'Lave bem as folhas e os tomates. Tempere na hora de servir.',
-    itens: [{ nome: 'Alface', quantidade: 0.04, unidade: 'kg' }, { nome: 'Tomate', quantidade: 0.05, unidade: 'kg' }, { nome: 'Cebola', quantidade: 0.01, unidade: 'kg' }] },
+  { id: 'mr1', nome: 'Escondidinho de Carne Moída', tipo: 'prato', ativo: true, modoPreparo: null,
+    itens: [{ nome: 'Carne moída', quantidade: 0.15, unidade: 'kg', insumoId: 'in26' }, { nome: 'Batata', quantidade: 0.25, unidade: 'kg', insumoId: 'in27' }, { nome: 'Arroz tipo 1', quantidade: 0.0786, unidade: 'kg', insumoId: 'in24' }, { nome: 'Feijão carioca', quantidade: 0.0571, unidade: 'kg', insumoId: 'in25' }] },
+  { id: 'mr2', nome: 'Frango Grelhado', tipo: 'prato', ativo: true, modoPreparo: null,
+    itens: [{ nome: 'Peito de frango', quantidade: 0.1833, unidade: 'kg', insumoId: 'in29' }, { nome: 'Arroz tipo 1', quantidade: 0.0833, unidade: 'kg', insumoId: 'in24' }, { nome: 'Feijão carioca', quantidade: 0.0583, unidade: 'kg', insumoId: 'in25' }] },
 ]
 // Uma notinha de exemplo (desenho) para a conferência na demonstração.
 const notinhaDemo = (n: number) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="300" height="420" fill="#fffef6"/><g font-family="monospace" font-size="18" fill="#222"><text x="20" y="40">THE OZZY BURGER</text><text x="20" y="80">Pedido #${4810 + n}</text><text x="20" y="120">Entrega - Rua Exemplo, ${n * 37}</text><text x="20" y="160">1x Ozzy Classic</text><text x="20" y="190">1x Batata média</text><text x="20" y="240">Total R$ ${(48 + n * 3).toFixed(2)}</text></g></svg>`)
@@ -1711,6 +1705,13 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       // Baixa no estoque do local (refaz quando edita).
       for (let k = movimentosDemo.length - 1; k >= 0; k--) if (movimentosDemo[k].observacao === `ref:${id}`) movimentosDemo.splice(k, 1)
       for (const i of itens) movimentosDemo.push({ id: novoId('mv'), centroCustoId: r.centroCustoId, insumoId: i.insumoId, data: r.data, tipo: 'saida', quantidade: -i.quantidade, custoUnit: i.custoUnit, notaItemId: null, observacao: `ref:${id}`, criadoEm: agora() })
+      // Fica salvo para repetir, por pessoa.
+      if (r.pessoas && itens.length) {
+        const porPessoa = itens.map((i) => { const ins = insumosDemo.find((x) => x.id === i.insumoId)!; return { nome: ins.nome, quantidade: Math.round((i.quantidade / r.pessoas!) * 10000) / 10000, unidade: ins.unidade, insumoId: ins.id } })
+        const salvo = modelosRefeicaoDemo.find((m) => m.nome.toLowerCase() === dados.prato.toLowerCase())
+        if (salvo) Object.assign(salvo, { itens: porPessoa, ativo: true })
+        else modelosRefeicaoDemo.push({ id: novoId('mr'), nome: dados.prato, tipo: 'prato', modoPreparo: null, ativo: true, itens: porPessoa })
+      }
       return espera(id!)
     },
     async excluirRefeicao(id) {

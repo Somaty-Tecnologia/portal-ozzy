@@ -20,7 +20,7 @@ export const ABAS_REFEICOES = [
   { id: 'montar', nome: 'Montar o prato', cozinha: true },
   { id: 'historico', nome: 'Histórico e custo', cozinha: true },
   { id: 'avaliacoes', nome: 'O que a equipe gosta', cozinha: true },
-  { id: 'pratos', nome: 'Pratos padrão', cozinha: true },
+  { id: 'pratos', nome: 'Pratos salvos', cozinha: true },
 ]
 
 const LOCAIS: [string, string][] = [['burger-psd', 'PSD'], ['burger-va', 'Vila'], ['pizza', 'Pizza'], ['central', 'Central']]
@@ -136,7 +136,7 @@ interface Linha { chave: string; insumoId: string; texto: string; quantidade: nu
 let seq = 0
 const novaLinha = (x: Partial<Linha> = {}): Linha => ({ chave: 'l' + ++seq, insumoId: '', texto: '', quantidade: null, ...x })
 
-// Material do cadastro para um ingrediente do prato padrão: o que foi ligado, senão o nome mais parecido.
+// Material do cadastro para um ingrediente do prato salvo: o que foi ligado, senão o nome mais parecido.
 function acharInsumo(insumos: Insumo[], nome: string, id?: string | null) {
   if (id) {
     const i = insumos.find((x) => x.id === id)
@@ -225,6 +225,7 @@ function Montar({ inicial }: { inicial?: string }) {
         itens: linhas.filter((l) => l.insumoId && l.quantidade).map((l) => ({ insumoId: l.insumoId, quantidade: l.quantidade! })),
       })
       const rs = await store.refeicoesCozinha(data, data)
+      store.modelosRefeicao().then(setModelos, () => {})
       setRefeicao(rs.find((x) => x.centroCustoId === local) ?? null)
       avisar('Refeição salva: já aparece para a equipe e saiu do estoque')
     } catch (e) {
@@ -268,15 +269,15 @@ function Montar({ inicial }: { inicial?: string }) {
       {refeicao === undefined ? <p className="text-stone-400">Carregando…</p> : (
         <div className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-stone-200">
           <div className="flex flex-wrap items-end gap-2">
-            <select className={`${estiloEntrada} sm:w-80!`} value="" onChange={(e) => { const m = modelos.find((x) => x.id === e.target.value); if (m) usarModelo(m) }} aria-label="Usar prato padrão">
-              <option value="">+ Usar um prato padrão…</option>
+            <select className={`${estiloEntrada} sm:w-80!`} value="" onChange={(e) => { const m = modelos.find((x) => x.id === e.target.value); if (m) usarModelo(m) }} aria-label="Repetir um prato">
+              <option value="">{modelos.some((m) => m.ativo) ? '+ Repetir um prato já feito…' : 'Os pratos que você montar ficam salvos aqui'}</option>
               {(['prato', 'acompanhamento', 'salada'] as TipoModeloRefeicao[]).map((t) => (
                 <optgroup key={t} label={NOME_TIPO[t]}>
                   {modelos.filter((m) => m.ativo && m.tipo === t).map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </optgroup>
               ))}
             </select>
-            <span className="text-xs text-stone-500">Calcula as quantidades para {pessoas ?? 1} {pessoas === 1 ? 'pessoa' : 'pessoas'}; dá para usar mais de um (prato + arroz + feijão).</span>
+            <span className="text-xs text-stone-500">Calcula as quantidades para {pessoas ?? 1} {pessoas === 1 ? 'pessoa' : 'pessoas'}. Ao salvar, este prato fica guardado para repetir.</span>
           </div>
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <Campo rotulo="Prato do dia">
@@ -532,7 +533,7 @@ function Avaliacoes() {
   )
 }
 
-// ——— Pratos padrão (fichas por pessoa) ———
+// ——— Pratos salvos: cada prato montado fica guardado por pessoa para repetir ———
 
 const NOME_TIPO: Record<TipoModeloRefeicao, string> = { prato: 'Pratos', acompanhamento: 'Acompanhamentos', salada: 'Saladas' }
 
@@ -546,8 +547,8 @@ function Pratos() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="flex-1 text-sm text-stone-600">Receitas de base com as quantidades por pessoa. Em “Montar o prato”, o portal multiplica pelo número de pessoas e acha os materiais no cadastro.</p>
-        <Botao onClick={() => setEditando('novo')}>+ Prato padrão</Botao>
+        <p className="flex-1 text-sm text-stone-600">Cada prato montado fica salvo aqui, com os ingredientes por pessoa. Em “Montar o prato”, escolha em “Repetir um prato já feito” e o portal calcula para o número de pessoas do dia.</p>
+        <Botao onClick={() => setEditando('novo')}>+ Prato</Botao>
       </div>
       {(['prato', 'acompanhamento', 'salada'] as TipoModeloRefeicao[]).map((t) => {
         const doTipo = modelos.filter((m) => m.tipo === t)
@@ -584,7 +585,7 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
     setSalvando(true)
     try {
       await store.salvarModeloRefeicao({ id: modelo?.id, nome, tipo, modoPreparo: modo, ativo, itens })
-      avisar('Prato padrão salvo')
+      avisar('Prato salvo')
       await aoSalvar()
     } catch (e) {
       avisar((e as Error).message)
@@ -592,7 +593,7 @@ function EditarModelo({ modelo, aoFechar, aoSalvar }: { modelo: ModeloRefeicao |
     }
   }
   return (
-    <Modal titulo={modelo ? modelo.nome : 'Novo prato padrão'} aberto aoFechar={aoFechar}>
+    <Modal titulo={modelo ? modelo.nome : 'Novo prato'} aberto aoFechar={aoFechar}>
       <div className="space-y-3">
         <Campo rotulo="Nome"><input className={estiloEntrada} value={nome} onChange={(e) => setNome(e.target.value)} /></Campo>
         <div className="flex flex-wrap gap-3">
