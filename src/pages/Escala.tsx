@@ -25,7 +25,8 @@ function OpcoesLocal() {
 export default function Escala() {
   const { eu, store, equipe, avisar } = useApp()
   const gestao = podeGerenciar(eu.nivel)
-  const [visao, setVisao] = useState<'semana' | '30'>(gestao ? '30' : 'semana')
+  // Abre nos próximos 30 dias para todos (Heitor, 13/10), não só para a gestão.
+  const [visao, setVisao] = useState<'semana' | '30'>('30')
   const [inicio, setInicio] = useState(inicioDaSemana(hoje()))
   const [folgas, setFolgas] = useState<Folga[]>([])
   const [unidade, setUnidade] = useState(gestao ? '' : eu.unidadeId)
@@ -78,7 +79,7 @@ export default function Escala() {
     <div>
       <Titulo
         acao={
-          gestao && (
+          (
             <div className="flex rounded-xl bg-stone-200 p-1 text-sm font-semibold">
               {(['semana', '30'] as const).map((v) => (
                 <button key={v} onClick={() => setVisao(v)} className={`rounded-lg px-3 py-1.5 ${visao === v ? 'bg-white shadow-sm' : 'text-stone-600'}`}>
@@ -176,7 +177,7 @@ export default function Escala() {
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
 
-// Calendário dos próximos 30 dias para mandar no grupo (Gerente, Administrativo e Proprietário).
+// Calendário dos próximos 30 dias (todos veem; a gestão manda no grupo).
 function Proximos30({ unidade, setUnidade }: { unidade: string; setUnidade: (u: string) => void }) {
   const { store, equipe, nomeUnidade, avisar } = useApp()
   const [folgas, setFolgas] = useState<Folga[] | null>(null)
