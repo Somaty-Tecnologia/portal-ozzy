@@ -60,7 +60,8 @@ export interface Sugestao {
 }
 
 // Média de vendas por dia de cada produto nos eventos de referência, no mesmo tipo de dia (sexta, sábado, domingo)
-// quando houver; senão a média de todos os dias. Ajuste em % (ex.: 120 = 20% a mais).
+// quando houver; senão a média de todos os dias. Cada produto só conta os eventos em que foi vendido.
+// Ajuste em % (ex.: 120 = 20% a mais).
 export function sugerirVendas(dias: string[], produtos: string[], refs: string[], vendas: VendaEvento[], ajustePct: number): Sugestao {
   const v = vendas.filter((x) => refs.includes(x.eventoId))
   const diasRef = new Map<string, Set<string>>() // tipo de dia -> dias (evento|data)
@@ -83,7 +84,13 @@ export function sugerirVendas(dias: string[], produtos: string[], refs: string[]
       ? mesmos && mesmos.size ? `média de ${usar.n} ${usar.n === 1 ? NOME_TIPO_DIA[t] : 'dias do mesmo tipo (' + NOME_TIPO_DIA[t] + ')'}` : `média de ${usar.n} dias`
       : 'sem histórico'
     for (const r of produtos) {
-      const q = usar.n ? (soma(usar.f, r) / usar.n) * (ajustePct / 100) : 0
+      // Heitor (13/10): o produto só entra na média dos eventos em que ele foi vendido
+      // (a Romana não estava em todos os italianos; dividir por todos puxava a média para baixo).
+      const eventosDele = new Set(v.filter((x) => x.receitaId === r && x.quantidade > 0).map((x) => x.eventoId))
+      const doTipo = mesmos && mesmos.size ? [...mesmos].filter((k) => eventosDele.has(k.split('|')[0])).length : 0
+      // Sem dia do mesmo tipo nos eventos dele: usa todos os dias desses eventos.
+      const diasDele = doTipo || [...todosDias].filter((k) => eventosDele.has(k.split('|')[0])).length
+      const q = diasDele ? (soma(doTipo ? usar.f : () => true, r) / diasDele) * (ajustePct / 100) : 0
       if (q > 0) linhas.push({ data, receitaId: r, quantidade: Math.round(q) })
     }
   }

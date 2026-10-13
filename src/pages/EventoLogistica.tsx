@@ -115,9 +115,9 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
   const [ajuste, setAjuste] = useState('100')
   const [base, setBase] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState(false)
-  const [novo, setNovo] = useState('')
   // Heitor (13/10): qualquer produto do cadastro (fichas dos eventos e das lojas) pode entrar no cardápio.
   const [buscaProduto, setBuscaProduto] = useState('')
+  const [marcados, setMarcados] = useState<string[]>([])
   const produtos = g.receitas.filter((r) => r.tipo === 'produto' && r.ativo).sort((a, b) => a.nome.localeCompare(b.nome))
   const termosProduto = buscaProduto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(Boolean)
   const paraAdicionar = produtos.filter((p) => !cardapio.some((c) => c.receitaId === p.id)
@@ -182,7 +182,7 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
         <Cartao>
           <h3 className="font-bold">Sugerir pelo histórico</h3>
           <p className="mt-1 text-sm text-stone-600">
-            Média de vendas por dia de cada produto nos eventos marcados. Sexta, sábado e domingo usam a média do mesmo dia da semana.
+            Média de vendas por dia de cada produto nos eventos marcados, contando só os eventos em que o produto foi vendido. Sexta, sábado e domingo usam a média do mesmo dia da semana.
             {e.gastronomia && ` Já marquei os mais recentes de gastronomia ${e.gastronomia}`}{e.gastronomia ? ', menos os que estão fora da média.' : ' Os que estão fora da média começam desmarcados.'}
             {' '}Desmarque o que for muito diferente do evento que vem.
           </p>
@@ -314,29 +314,44 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input className={`${estiloEntrada} sm:w-56!`} placeholder="Buscar produto" value={buscaProduto} aria-label="Buscar produto para o cardápio"
-          onChange={(ev) => { setBuscaProduto(ev.target.value); setNovo('') }} />
-        <select className={`${estiloEntrada} sm:w-80!`} value={novo} onChange={(ev) => setNovo(ev.target.value)} aria-label="Produto para adicionar ao cardápio">
-          <option value="">{paraAdicionar.length ? `Adicionar produto ao cardápio (${paraAdicionar.length})…` : 'Nenhum produto com esse nome'}</option>
-          {[['eventos', 'Fichas dos eventos'], ['lojas', 'Fichas das lojas']].map(([area, nome]) => grupoProduto(area).length > 0 && (
-            <optgroup key={area} label={nome}>
-              {grupoProduto(area).map((p) => <option key={p.id} value={p.id}>{p.nome}{p.linha ? ` (${p.linha})` : ''}</option>)}
-            </optgroup>
-          ))}
-        </select>
-        <Botao
-          variante="secundario"
-          disabled={!novo}
-          onClick={() => {
-            setCardapio((cs) => [...cs, { receitaId: novo, preco: receita(novo)?.precoVenda ?? null, ordem: cs.length + 1 }])
-            setNovo('')
-            setBuscaProduto('')
-            setMudou(true)
-          }}
-        >
-          Adicionar
-        </Botao>
+      {/* Heitor (13/10): buscar e marcar vários produtos de uma vez. */}
+      <div className="space-y-2 rounded-2xl bg-white p-3 ring-1 ring-stone-200">
+        <div className="flex flex-wrap items-center gap-2">
+          <input className={`${estiloEntrada} sm:w-72!`} placeholder="Buscar produto para adicionar (fichas dos eventos e das lojas)" value={buscaProduto} aria-label="Buscar produto para o cardápio"
+            onChange={(ev) => setBuscaProduto(ev.target.value)} />
+          <Botao
+            variante="secundario"
+            disabled={!marcados.length}
+            onClick={() => {
+              setCardapio((cs) => [...cs, ...marcados.filter((id) => !cs.some((c) => c.receitaId === id)).map((id, k) => ({ receitaId: id, preco: receita(id)?.precoVenda ?? null, ordem: cs.length + k + 1 }))])
+              setMarcados([])
+              setBuscaProduto('')
+              setMudou(true)
+            }}
+          >
+            {marcados.length ? `Adicionar ${marcados.length} ${marcados.length === 1 ? 'produto' : 'produtos'}` : 'Adicionar'}
+          </Botao>
+          {marcados.length > 0 && <button className="text-sm text-stone-500 underline" onClick={() => setMarcados([])}>limpar seleção</button>}
+        </div>
+        {buscaProduto.trim().length >= 2 && (
+          paraAdicionar.length === 0 ? <p className="text-sm text-stone-500">Nenhum produto com esse nome.</p> : (
+            <div className="max-h-72 overflow-y-auto">
+              {[['eventos', 'Fichas dos eventos'], ['lojas', 'Fichas das lojas']].map(([area, nome]) => grupoProduto(area).length > 0 && (
+                <div key={area} className="mb-2">
+                  <div className="text-xs font-semibold text-stone-500">{nome}</div>
+                  <div className="grid gap-x-4 sm:grid-cols-2">
+                    {grupoProduto(area).map((p) => (
+                      <label key={p.id} className="flex items-center gap-2 py-1 text-sm">
+                        <input type="checkbox" checked={marcados.includes(p.id)} onChange={(ev) => setMarcados((m) => (ev.target.checked ? [...m, p.id] : m.filter((x) => x !== p.id)))} />
+                        <span>{p.nome}{p.linha ? <span className="text-stone-400"> ({p.linha})</span> : ''}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
       </div>
       {faltaFicha.length > 0 && (
         <p className="text-sm text-amber-800">
