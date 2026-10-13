@@ -385,7 +385,9 @@ export interface Store {
   fechamentos(de: string, ate: string): Promise<Fechamento[]>
   pedidosTirarFechamento(): Promise<PedidoTirarFechamento[]> // pendentes
   pedirTirarFechamento(p: { unidadeId: string; setor: SetorFechamento; insumoId: string; motivo: string }): Promise<void>
-  resolverPedidoTirar(id: string, tirar: boolean): Promise<void>
+  pedirIncluirFechamento(p: { unidadeId: string; setor: SetorFechamento; nome: string; motivo: string }): Promise<void>
+  // Aceitar: tira o item ou inclui (incluir pede o material escolhido pela gestão).
+  resolverPedidoTirar(id: string, aceitar: boolean, insumoId?: string): Promise<void>
   enviarFechamento(f: EnvioFechamento): Promise<string>
   inventariosEstoque(centroCustoId: string): Promise<InventarioEstoque[]>
   curvaAbc(dias?: number): Promise<CurvaAbc[]>

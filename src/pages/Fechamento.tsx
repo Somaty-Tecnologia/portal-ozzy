@@ -85,6 +85,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   const [destaque, setDestaque] = useState<Set<string>>(new Set())
   // Itens que alguém pediu para tirar da lista (esperando a gestão).
   const [paraTirar, setParaTirar] = useState<Map<string, string | null>>(new Map())
+  const [paraIncluir, setParaIncluir] = useState<string[]>([])
   const rec = useRef<ReturnType<typeof criarReconhecedor>>(null)
   const suportaVoz = typeof window !== 'undefined' && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
   const para = addDias(data, 1)
@@ -92,7 +93,8 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   const carregar = useCallback(async () => {
     try {
       const [lista, fechs, tirar] = await Promise.all([store.listaFechamento(loja, setor, data), store.fechamentos(data, data), store.pedidosTirarFechamento().catch(() => [])])
-      setParaTirar(new Map(tirar.filter((x) => x.setor === setor).map((x) => [x.insumoId, x.motivo])))
+      setParaTirar(new Map(tirar.filter((x) => x.setor === setor && x.tipo === 'tirar' && x.insumoId).map((x) => [x.insumoId!, x.motivo])))
+      setParaIncluir(tirar.filter((x) => x.setor === setor && x.tipo === 'incluir').map((x) => x.nome))
       const f = fechs.find((x) => x.unidadeId === loja && x.setor === setor) ?? null
       setItens(lista)
       setEnviado(f)
@@ -178,6 +180,16 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
     try {
       await store.pedirTirarFechamento({ unidadeId: loja, setor, insumoId: i.insumoId, motivo })
       setParaTirar((m) => new Map(m).set(i.insumoId, motivo.trim() || null))
+      avisar('Pedido enviado para a gestão')
+    } catch (e) { avisar((e as Error).message) }
+  }
+  const pedirIncluir = async () => {
+    const nome = prompt('Qual item falta na lista? A gestão aprova ou nega.')?.trim()
+    if (!nome) return
+    const motivo = prompt(`Por que incluir "${nome}"? (opcional)`) ?? ''
+    try {
+      await store.pedirIncluirFechamento({ unidadeId: loja, setor, nome, motivo })
+      setParaIncluir((l) => [...l, nome])
       avisar('Pedido enviado para a gestão')
     } catch (e) { avisar((e as Error).message) }
   }
@@ -298,6 +310,10 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
           </div>
         ))}
         {visiveis.length === 0 && <p className="px-3 py-4 text-sm text-stone-500">Nada aqui.</p>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Botao variante="secundario" className="py-1.5!" onClick={pedirIncluir}>+ Pedir para incluir item</Botao>
+        {paraIncluir.length > 0 && <span className="text-amber-700">Esperando a gestão: {paraIncluir.join(', ')}</span>}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

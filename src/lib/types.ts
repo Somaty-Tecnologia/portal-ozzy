@@ -1481,12 +1481,13 @@ export interface PedidoTirarFechamento {
   id: string
   unidadeId: string
   setor: SetorFechamento
-  insumoId: string
+  tipo: 'tirar' | 'incluir'
+  insumoId: string | null
   nome: string
   motivo: string | null
   pedidoPor: string | null
   criadoEm: string
-  status: 'pendente' | 'tirado' | 'mantido'
+  status: 'pendente' | 'tirado' | 'mantido' | 'incluido' | 'recusado'
 }
 export interface Fechamento {
   id: string

@@ -1556,15 +1556,18 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     },
     async pedidosTirarFechamento() {
       return (ok(await sb.from('fechamento_pedidos_tirar').select('*, insumos(nome)').eq('status', 'pendente').order('criado_em')) ?? []).map((r: any): PedidoTirarFechamento => ({
-        id: r.id, unidadeId: r.unidade_id, setor: r.setor, insumoId: r.insumo_id, nome: r.insumos?.nome ?? '', motivo: r.motivo,
+        id: r.id, unidadeId: r.unidade_id, setor: r.setor, tipo: r.tipo ?? 'tirar', insumoId: r.insumo_id, nome: r.insumos?.nome ?? r.nome ?? '', motivo: r.motivo,
         pedidoPor: r.pedido_por, criadoEm: r.criado_em, status: r.status,
       }))
     },
     async pedirTirarFechamento(p) {
       ok(await sb.from('fechamento_pedidos_tirar').insert({ unidade_id: p.unidadeId, setor: p.setor, insumo_id: p.insumoId, motivo: texto(p.motivo) }))
     },
-    async resolverPedidoTirar(id, tirar) {
-      ok(await sb.rpc('resolver_pedido_tirar', { p_id: id, p_tirar: tirar }))
+    async pedirIncluirFechamento(p) {
+      ok(await sb.from('fechamento_pedidos_tirar').insert({ tipo: 'incluir', unidade_id: p.unidadeId, setor: p.setor, nome: p.nome.trim(), motivo: texto(p.motivo) }))
+    },
+    async resolverPedidoTirar(id, aceitar, insumoId) {
+      ok(await sb.rpc('resolver_pedido_lista', { p_id: id, p_aceitar: aceitar, p_insumo: insumoId ?? null }))
     },
     async fechamentos(de, ate) {
       return (ok(await sb.from('fechamentos').select('*').gte('data', de).lte('data', ate).order('data', { ascending: false })) ?? []).map((r: any): Fechamento => ({

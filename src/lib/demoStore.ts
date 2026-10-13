@@ -2925,13 +2925,32 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async pedirTirarFechamento(p) {
       const u = exigeEu()
       if (!podeGerenciar(u.nivel) && u.unidadeId !== p.unidadeId) throw new Error('Seu nível de acesso não permite esta ação.')
-      pedidosTirarDemo.push({ ...p, id: novoId('pt'), motivo: p.motivo.trim() || null, nome: insumosDemo.find((i) => i.id === p.insumoId)?.nome ?? '', pedidoPor: u.id, criadoEm: agora(), status: 'pendente' })
+      pedidosTirarDemo.push({ ...p, tipo: 'tirar', id: novoId('pt'), motivo: p.motivo.trim() || null, nome: insumosDemo.find((i) => i.id === p.insumoId)?.nome ?? '', pedidoPor: u.id, criadoEm: agora(), status: 'pendente' })
       return espera(undefined)
     },
-    async resolverPedidoTirar(id, tirar) {
+    async pedirIncluirFechamento(p) {
+      const u = exigeEu()
+      if (!podeGerenciar(u.nivel) && u.unidadeId !== p.unidadeId) throw new Error('Seu nível de acesso não permite esta ação.')
+      pedidosTirarDemo.push({ unidadeId: p.unidadeId, setor: p.setor, tipo: 'incluir', insumoId: null, nome: p.nome.trim(), id: novoId('pt'), motivo: p.motivo.trim() || null, pedidoPor: u.id, criadoEm: agora(), status: 'pendente' })
+      return espera(undefined)
+    },
+    async resolverPedidoTirar(id, tirar, insumoId) {
       exigeGestao()
       const p = pedidosTirarDemo.find((x) => x.id === id && x.status === 'pendente')
       if (!p) throw new Error('Pedido não encontrado ou já resolvido.')
+      if (p.tipo === 'incluir') {
+        if (tirar) {
+          const ins = insumosDemo.find((i) => i.id === insumoId)
+          if (!ins) throw new Error('Escolha o material para incluir.')
+          for (const u of ['burger-psd', 'burger-va'] as const) {
+            const atual = listaFechDemo.find((x) => x.unidadeId === u && x.setor === p.setor && x.insumoId === ins.id)
+            if (atual) atual.ativo = true
+            else listaFechDemo.push({ id: novoId('lf'), unidadeId: u, setor: p.setor, insumoId: ins.id, unidadeContagem: ins.unidade === 'kg' ? 'Kg' : ins.unidade === 'l' ? 'Lts' : 'Uni', ordem: 999, ideal: Array(7).fill(null), ativo: true } as unknown as ItemListaFechamento)
+          }
+        }
+        p.status = tirar ? 'incluido' : 'recusado'
+        return espera(undefined)
+      }
       if (tirar) for (const i of listaFechDemo) if (i.setor === p.setor && i.insumoId === p.insumoId) i.ativo = false
       for (const x of pedidosTirarDemo) if (x.setor === p.setor && x.insumoId === p.insumoId && x.status === 'pendente') x.status = tirar ? 'tirado' : 'mantido'
       return espera(undefined)
