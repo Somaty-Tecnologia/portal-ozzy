@@ -95,7 +95,9 @@ export default function ProducaoEvento({ cat, eventoId, nomeEvento, inicioEvento
   const textoDia = (dia: string) => {
     const itens = chaves.filter((k) => valor(k, dia) > 0)
     if (!itens.length) return ''
-    return `*${diaSemana(dia)} ${dataCurta(dia)}*\n` + itens.map((k) => `- ${info(k)!.nome}: ${qtd(valor(k, dia))} ${info(k)!.unidade}`).join('\n')
+    // Heitor (13/10): sábado e domingo sempre com a observação.
+    const fds = [0, 6].includes(new Date(dia + 'T12:00:00').getDay())
+    return `*${diaSemana(dia)} ${dataCurta(dia)}*\n` + (fds ? '_Obs.: fazer apenas se houver necessidade._\n' : '') + itens.map((k) => `- ${info(k)!.nome}: ${qtd(valor(k, dia))} ${info(k)!.unidade}`).join('\n')
   }
   const copiar = (t: string) => navigator.clipboard.writeText(t).then(() => avisar('Copiado para o WhatsApp'), () => avisar('Não deu para copiar neste aparelho'))
   const copiarDia = (dia: string) => copiar(`*Produção · ${nomeEvento}*\n\n${textoDia(dia)}`)
