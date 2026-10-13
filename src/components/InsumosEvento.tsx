@@ -10,7 +10,16 @@ import { baixarXlsx, type Celula } from '../lib/xlsx'
 
 // Insumos a providenciar para o evento (Heitor, 12/10): previsão de vendas × fichas técnicas, com os pré-preparos
 // abertos até os insumos (o que precisa comprar ou separar). Desconta o que já está na base (última contagem).
-const plural = (p: string) => (/[aeiou]$/i.test(p) ? `${p}s` : `${p}es`)
+// Plural em português: embalagem → embalagens, saco → sacos, barril → barris, caixão → caixões, display → displays.
+const plural = (p: string) => {
+  const w = p.trim()
+  if (/m$/i.test(w)) return w.slice(0, -1) + 'ns'
+  if (/ão$/i.test(w)) return w.slice(0, -2) + 'ões'
+  if (/[aeo]l$/i.test(w)) return w.slice(0, -1) + 'is'
+  if (/il$/i.test(w)) return w.slice(0, -1) + 's'
+  if (/[rzs]$/i.test(w)) return w + 'es'
+  return w + 's'
+}
 
 interface Linha {
   id: string
