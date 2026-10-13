@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -417,6 +417,27 @@ const ajustesPonto: AjustePonto[] = [
   { id: 'aj2', funcionarioId: 'p-dora-ramos', data: addDias(hoje(), -2), tipo: 'equipamento', horario: '13:30', motivo: 'O relógio estava travado na entrada.', status: 'pendente', resposta: null, criadoEm: new Date(Date.now() - 26 * 3600_000).toISOString(), resolvidoPor: null, resolvidoEm: null },
   { id: 'aj3', funcionarioId: 'p-cibeli-costa', data: addDias(hoje(), -9), tipo: 'esqueci_entrada', horario: '13:30', motivo: null, status: 'feito', resposta: null, criadoEm: new Date(Date.now() - 9 * 86400_000).toISOString(), resolvidoPor: 'p-maria-costa', resolvidoEm: new Date(Date.now() - 8 * 86400_000).toISOString() },
 ]
+
+// Marcações de ponto de EXEMPLO (0103): últimos dias de duas pessoas, com uma fora da loja e uma incluída.
+const hashDemo = () => [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('')
+let nsrDemo = 0
+const marcacaoDemo = (funcionarioId: string, dias: number, hora: string, tipo: TipoMarcacao, extra: Partial<MarcacaoPonto> = {}): MarcacaoPonto => ({
+  id: 'mp' + ++nsrDemo, nsr: nsrDemo, funcionarioId, momento: new Date(`${addDias(hoje(), -dias)}T${hora}:00-03:00`).toISOString(), tipo, origem: 'celular',
+  unidadeId: 'burger-psd', distanciaM: 20, naLoja: true, motivo: null, incluidoPor: null, hash: hashDemo(), desconsiderada: null, ...extra,
+})
+const marcacoesDemo: MarcacaoPonto[] = [1, 2, 3].flatMap((d) => [
+  marcacaoDemo('p-cibeli-costa', d, '15:02', 'entrada'), marcacaoDemo('p-cibeli-costa', d, '18:31', 'saida_intervalo'),
+  marcacaoDemo('p-cibeli-costa', d, '19:30', 'volta_intervalo'), ...(d === 1 ? [] : [marcacaoDemo('p-cibeli-costa', d, '23:48', 'saida')]),
+  marcacaoDemo('p-dora-ramos', d, d === 2 ? '10:14' : '09:58', 'entrada', d === 2 ? { distanciaM: 2300, naLoja: false } : {}),
+  marcacaoDemo('p-dora-ramos', d, '13:00', 'saida_intervalo'), marcacaoDemo('p-dora-ramos', d, '14:01', 'volta_intervalo'), marcacaoDemo('p-dora-ramos', d, '18:05', 'saida'),
+]).sort((a, b) => a.momento.localeCompare(b.momento)).map((m, i) => ({ ...m, nsr: i + 1 }))
+nsrDemo = marcacoesDemo.length
+const codigosPontoDemo = [{ unidadeId: 'burger-psd', codigo: 'demo-psd01' }, { unidadeId: 'burger-va', codigo: 'demo-va001' }, { unidadeId: 'pizza', codigo: 'demo-pz001' }]
+const proximoTipoDemo = (funcionarioId: string, quando = Date.now()): TipoMarcacao => {
+  const u = marcacoesDemo.filter((m) => m.funcionarioId === funcionarioId && !m.desconsiderada && Date.parse(m.momento) <= quando).sort((a, b) => b.momento.localeCompare(a.momento))[0]
+  if (!u || u.tipo === 'saida' || quando - Date.parse(u.momento) > 16 * 3600_000) return 'entrada'
+  return u.tipo === 'entrada' ? 'saida_intervalo' : u.tipo === 'saida_intervalo' ? 'volta_intervalo' : 'saida'
+}
 
 const uniformes: EntregaUniforme[] = [
   {
@@ -1232,6 +1253,70 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       exigeGestao()
       const i = devolucoes.findIndex((d) => d.id === id)
       if (i >= 0) devolucoes.splice(i, 1)
+    },
+    async baterPonto(local, codigo, tipo) {
+      const u = exigeEu()
+      const ultima = marcacoesDemo.filter((m) => m.funcionarioId === u.id && m.origem !== 'ajuste').at(-1)
+      if (ultima && Date.now() - Date.parse(ultima.momento) < 60_000) throw new Error('Você acabou de bater o ponto. Espere um minuto para bater de novo.')
+      let loja: string | null = null
+      let dist: number | null = null
+      let na = false
+      if (local) {
+        for (const [id, l] of Object.entries(locais)) {
+          if (!l) continue
+          const d = Math.round(distanciaM(local.lat, local.lng, l.latitude, l.longitude))
+          if (dist === null || d < dist) { dist = d; loja = id }
+        }
+        na = dist !== null && dist - Math.min(local.precisao ?? 0, 100) <= 150
+      }
+      let origem: MarcacaoPonto['origem'] = 'celular'
+      if (codigo?.trim()) {
+        const c = codigosPontoDemo.find((x) => x.codigo === codigo.trim())
+        if (!c) throw new Error('QR Code não reconhecido. Use o QR colado na loja.')
+        origem = 'qr'
+        if (loja !== c.unidadeId) { loja = c.unidadeId; const l = locais[c.unidadeId]; dist = local && l ? Math.round(distanciaM(local.lat, local.lng, l.latitude, l.longitude)) : null }
+        na = dist === null || dist <= 1000
+      }
+      const m: MarcacaoPonto = { id: novoId('mp'), nsr: ++nsrDemo, funcionarioId: u.id, momento: agora(), tipo: tipo ?? proximoTipoDemo(u.id), origem,
+        unidadeId: loja ?? u.unidadeId, distanciaM: dist, naLoja: na, motivo: null, incluidoPor: null, hash: hashDemo(), desconsiderada: null }
+      marcacoesDemo.push(m)
+      return espera({ ...m })
+    },
+    async meuProximoPonto() {
+      return espera(proximoTipoDemo(exigeEu().id))
+    },
+    async marcacoesPonto(funcionarioId, de, ate) {
+      const u = exigeEu()
+      const quem = podeGerenciar(u.nivel) ? funcionarioId : u.id
+      const ini = Date.parse(`${de}T00:00:00-03:00`)
+      const fim = Date.parse(`${addDias(ate, 1)}T00:00:00-03:00`)
+      return espera(marcacoesDemo.filter((m) => (!quem || m.funcionarioId === quem) && Date.parse(m.momento) >= ini && Date.parse(m.momento) < fim)
+        .sort((a, b) => a.momento.localeCompare(b.momento)).map((m) => ({ ...m })))
+    },
+    async incluirMarcacao(m) {
+      const u = exigeGestao()
+      if (!m.motivo.trim()) throw new Error('Diga o motivo da inclusão.')
+      if (Date.parse(m.momento) > Date.now()) throw new Error('Não dá para incluir marcação no futuro.')
+      const f = funcionarios.find((x) => x.id === m.funcionarioId)
+      marcacoesDemo.push({ id: novoId('mp'), nsr: ++nsrDemo, funcionarioId: m.funcionarioId, momento: new Date(m.momento).toISOString(), tipo: m.tipo, origem: 'ajuste',
+        unidadeId: f?.unidadeId ?? null, distanciaM: null, naLoja: true, motivo: m.motivo.trim(), incluidoPor: u.id, hash: hashDemo(), desconsiderada: null })
+      if (m.ajusteId) { const a = ajustesPonto.find((x) => x.id === m.ajusteId); if (a && a.status === 'pendente') Object.assign(a, { status: 'feito', resolvidoPor: u.id, resolvidoEm: agora() }) }
+      return espera(undefined)
+    },
+    async desconsiderarMarcacao(id, motivo) {
+      const u = exigeGestao()
+      if (!motivo.trim()) throw new Error('Diga o motivo.')
+      const m = marcacoesDemo.find((x) => x.id === id)
+      if (m && !m.desconsiderada) m.desconsiderada = { motivo: motivo.trim(), por: u.id, em: agora() }
+      return espera(undefined)
+    },
+    async codigosPonto() {
+      exigeGestao()
+      return espera(codigosPontoDemo.map((c) => ({ ...c })))
+    },
+    async conferirCorrentePonto() {
+      exigeGestao()
+      return espera(null)
     },
     async ajustesPonto(filtro) {
       const u = exigeEu()

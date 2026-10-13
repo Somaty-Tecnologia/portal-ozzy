@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefeicoesDaSemana, souCozinha } from './Refeicoes'
 import { RecadosNovos, VotacaoDaSemana } from './RefeicoesVotacao'
+import { BaterPonto } from '../components/PontoPortal'
 import PedidosTirarLista from '../components/PedidosTirarLista'
 import { atendeChamados } from '../lib/permissoes'
 import { chamadoEmAberto, nomeCurto, type Chamado } from '../lib/types'
@@ -79,6 +80,7 @@ export default function Inicio() {
 
       <MeusAvisos docs={isentoDeRotinas(eu.nivel) ? null : meusDocs} uniformes={meusUniformes} regulamento={!assinouRegulamento && !isentoDeRotinas(eu.nivel)} />
 
+      {!isentoDeRotinas(eu.nivel) && <BaterPonto compacto />}
       <DependeDeMim />
       <RefeicoesDaSemana />
       <VotacaoDaSemana aviso />

@@ -229,9 +229,30 @@ export const TIPOS_AJUSTE_PONTO: { valor: TipoAjustePonto; nome: string }[] = [
   { valor: 'esqueci_entrada', nome: 'Esqueci de bater a entrada' },
   { valor: 'esqueci_saida', nome: 'Esqueci de bater a saída' },
   { valor: 'horario_errado', nome: 'Horário saiu errado' },
-  { valor: 'equipamento', nome: 'O relógio não registrou (falha)' },
+  { valor: 'equipamento', nome: 'O portal não registrou (falha)' },
   { valor: 'outro', nome: 'Outro' },
 ]
+// Ponto pelo portal (0103, Heitor 13/10): marcação imutável com NSR e código encadeado; correção só incluindo
+// ou desconsiderando (com motivo), a original fica guardada.
+export type TipoMarcacao = 'entrada' | 'saida_intervalo' | 'volta_intervalo' | 'saida'
+export const NOME_MARCACAO: Record<TipoMarcacao, string> = {
+  entrada: 'Entrada', saida_intervalo: 'Saída para o intervalo', volta_intervalo: 'Volta do intervalo', saida: 'Saída',
+}
+export interface MarcacaoPonto {
+  id: string
+  nsr: number
+  funcionarioId: string
+  momento: string
+  tipo: TipoMarcacao
+  origem: 'celular' | 'qr' | 'ajuste'
+  unidadeId: string | null
+  distanciaM: number | null
+  naLoja: boolean
+  motivo: string | null
+  incluidoPor: string | null
+  hash: string
+  desconsiderada: { motivo: string; por: string; em: string } | null
+}
 export interface AjustePonto {
   id: string
   funcionarioId: string

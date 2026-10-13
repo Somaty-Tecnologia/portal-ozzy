@@ -3,20 +3,23 @@ import { Botao, Campo, Cartao, Modal, Selo, Vazio, estiloEntrada } from '../comp
 import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { isentoDeRotinas, podeGerenciar } from '../lib/permissoes'
+import { BaterPonto, Espelho, IncluirMarcacao, PontoEquipe } from '../components/PontoPortal'
 import { TIPOS_AJUSTE_PONTO, type AjustePonto, type TipoAjustePonto } from '../lib/types'
 
 const nomeTipo = (t: TipoAjustePonto) => TIPOS_AJUSTE_PONTO.find((x) => x.valor === t)?.nome ?? t
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 
-// Ajuste do ponto (reunião de RH de 08/10): a pessoa pede aqui em vez do WhatsApp do escritório; o escritório
-// corrige no Control iD e marca como feito. O espelho de ponto vem depois, com a API do Control iD.
-export default function Ponto() {
+// Ponto pelo portal (Heitor, 13/10; antes era o Control iD): a pessoa bate aqui ou na Início, vê o próprio espelho
+// e pede ajuste quando esqueceu. A gestão vê a equipe, inclui ou desconsidera marcações (com motivo) e exporta o mês.
+export default function Ponto({ codigo }: { codigo?: string }) {
   const { eu, store, nomeDe, avisar } = useApp()
   const gestao = podeGerenciar(eu.nivel)
   const [visao, setVisao] = useState<'pendente' | 'todos'>('pendente')
   const [ajustes, setAjustes] = useState<AjustePonto[]>([])
   const [meus, setMeus] = useState<AjustePonto[]>([])
   const [pedir, setPedir] = useState(false)
+  const [incluir, setIncluir] = useState<AjustePonto | null>(null)
+  const [aba, setAba] = useState<'meu' | 'equipe' | 'ajustes'>(gestao ? 'equipe' : 'meu')
 
   const carregar = useCallback(async () => {
     if (gestao) setAjustes(await store.ajustesPonto(visao))
@@ -38,19 +41,71 @@ export default function Ponto() {
     avisar(status === 'feito' ? 'Marcado como ajustado' : 'Pedido recusado')
   }
 
+  const pendentes = ajustes.filter((a) => a.status === 'pendente').length
+  const abas = [
+    ...(!isentoDeRotinas(eu.nivel) ? [['meu', 'Meu ponto'] as const] : []),
+    ...(gestao ? [['equipe', 'Equipe'] as const, ['ajustes', `Pedidos de ajuste${pendentes ? ` (${pendentes})` : ''}`] as const] : []),
+  ]
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Ponto</h1>
-          <p className="text-sm text-stone-500">
-            Esqueceu de bater, saiu horário errado ou o relógio falhou? Peça o ajuste aqui. O escritório corrige no Control iD.
-          </p>
+      <h1 className="text-xl font-bold">Ponto</h1>
+      {!isentoDeRotinas(eu.nivel) && <BaterPonto codigo={codigo} />}
+      {abas.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto rounded-xl bg-stone-200 p-1 text-sm font-semibold">
+          {abas.map(([id, nome]) => (
+            <button key={id} onClick={() => setAba(id)} className={`shrink-0 flex-1 rounded-lg px-3 py-2 whitespace-nowrap ${aba === id ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
+          ))}
         </div>
-        {!isentoDeRotinas(eu.nivel) && <Botao onClick={() => setPedir(true)}>Pedir ajuste no ponto</Botao>}
-      </div>
+      )}
 
-      {gestao && (
+      {aba === 'meu' && !isentoDeRotinas(eu.nivel) && (
+        <>
+          <section className="space-y-2">
+            <h2 className="font-bold">Minhas marcações</h2>
+            <Espelho funcionarioId={eu.id} />
+          </section>
+          <section className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-bold">Meus pedidos de ajuste</h2>
+                <p className="text-sm text-stone-500">Esqueceu de bater ou saiu errado? Peça o ajuste: a gestão inclui a marcação.</p>
+              </div>
+              <Botao variante="secundario" onClick={() => setPedir(true)}>Pedir ajuste no ponto</Botao>
+            </div>
+            {meus.length === 0 ? (
+              <Vazio>Você ainda não pediu nenhum ajuste.</Vazio>
+            ) : (
+              meus.map((a) => (
+                <Cartao key={a.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <LinhaAjuste a={a} />
+                    <div className="flex flex-col items-end gap-1">
+                      <SeloStatus a={a} />
+                      {a.status === 'pendente' && (
+                        <button
+                          className="text-xs font-semibold text-stone-500 underline"
+                          onClick={async () => {
+                            await store.excluirAjustePonto(a.id)
+                            await carregar()
+                            avisar('Pedido cancelado')
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </Cartao>
+              ))
+            )}
+          </section>
+        </>
+      )}
+
+      {aba === 'equipe' && gestao && <PontoEquipe />}
+
+      {aba === 'ajustes' && gestao && (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-bold">Pedidos da equipe</h2>
@@ -79,7 +134,7 @@ export default function Ponto() {
                   {a.status === 'pendente' ? (
                     <div className="flex gap-2">
                       <Botao variante="secundario" onClick={() => resolver(a, 'recusado')}>Recusar</Botao>
-                      <Botao onClick={() => resolver(a, 'feito')}>Ajustei no Control iD</Botao>
+                      <Botao onClick={() => setIncluir(a)}>Incluir no ponto</Botao>
                     </div>
                   ) : (
                     <SeloStatus a={a} />
@@ -91,49 +146,17 @@ export default function Ponto() {
         </section>
       )}
 
-      {!isentoDeRotinas(eu.nivel) && (
-        <section className="space-y-2">
-          <h2 className="font-bold">Meus pedidos</h2>
-          {meus.length === 0 ? (
-            <Vazio>Você ainda não pediu nenhum ajuste.</Vazio>
-          ) : (
-            meus.map((a) => (
-              <Cartao key={a.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <LinhaAjuste a={a} />
-                  <div className="flex flex-col items-end gap-1">
-                    <SeloStatus a={a} />
-                    {a.status === 'pendente' && (
-                      <button
-                        className="text-xs font-semibold text-stone-500 underline"
-                        onClick={async () => {
-                          await store.excluirAjustePonto(a.id)
-                          await carregar()
-                          avisar('Pedido cancelado')
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </Cartao>
-            ))
-          )}
-        </section>
+      {incluir && (
+        <IncluirMarcacao funcionarioId={incluir.funcionarioId} ajuste={incluir} aoFechar={() => setIncluir(null)}
+          aoSalvar={async () => { setIncluir(null); await carregar() }} />
       )}
-
-      <p className="rounded-2xl bg-stone-100 p-4 text-sm text-stone-600">
-        Em breve: o espelho de ponto de cada pessoa, vindo do Control iD, com atrasos e faltas cruzados com os atestados.
-      </p>
-
       {pedir && (
         <PedirAjuste
           aoFechar={() => setPedir(false)}
           aoSalvar={async () => {
             setPedir(false)
             await carregar()
-            avisar('Pedido enviado para o escritório')
+            avisar('Pedido enviado para a gestão')
           }}
         />
       )}
@@ -203,7 +226,7 @@ function PedirAjuste({ aoFechar, aoSalvar }: { aoFechar: () => void; aoSalvar: (
         </Campo>
         <p className="text-xs text-stone-500">Atraso não é ajuste de ponto: justifique o atraso com a gerente.</p>
         {erro && <p className="text-sm text-red-600">{erro}</p>}
-        <Botao className="w-full" disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar para o escritório'}</Botao>
+        <Botao className="w-full" disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar para a gestão'}</Botao>
       </form>
     </Modal>
   )

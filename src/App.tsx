@@ -206,7 +206,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
   else if (abaRh === 'exames') conteudo = <Vencimentos />
   else if (abaRh === 'caixinha') conteudo = <Caixinha />
   else if (abaRh === 'salarios') conteudo = <Salarios />
-  else if (abaRh === 'ponto') conteudo = <Ponto />
+  else if (abaRh === 'ponto') conteudo = <Ponto codigo={param} />
   else if (abaRh === 'perfil') conteudo = <Perfil funcionarioId={eu.id} />
   else conteudo = <Comunicados />
 

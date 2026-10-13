@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1407,6 +1407,31 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       if (m.id) ok(await sb.from('refeicao_modelos').update(linha).eq('id', m.id))
       else ok(await sb.from('refeicao_modelos').insert(linha))
     },
+    async baterPonto(local, codigo, tipo) {
+      const r = ok(await sb.rpc('bater_ponto', { p_local: local, p_codigo: codigo ?? null, p_tipo: tipo ?? null }))
+      return paraMarcacao({ ...r, ponto_desconsideradas: null })
+    },
+    async meuProximoPonto() {
+      return ok(await sb.rpc('meu_proximo_ponto')) ?? 'entrada'
+    },
+    async marcacoesPonto(funcionarioId, de, ate) {
+      // Dia em São Paulo: de 00:00 de "de" até 00:00 do dia seguinte a "ate" (UTC−3).
+      let q = sb.from('ponto_marcacoes').select('*, ponto_desconsideradas(*)').gte('momento', `${de}T00:00:00-03:00`).lt('momento', `${addDiasIso(ate, 1)}T00:00:00-03:00`).order('momento')
+      if (funcionarioId) q = q.eq('funcionario_id', funcionarioId)
+      return (ok(await q) ?? []).map(paraMarcacao)
+    },
+    async incluirMarcacao(m) {
+      ok(await sb.rpc('incluir_marcacao', { p_func: m.funcionarioId, p_momento: m.momento, p_tipo: m.tipo, p_motivo: m.motivo, p_ajuste: m.ajusteId ?? null }))
+    },
+    async desconsiderarMarcacao(id, motivo) {
+      ok(await sb.rpc('desconsiderar_marcacao', { p_id: id, p_motivo: motivo }))
+    },
+    async codigosPonto() {
+      return (ok(await sb.from('ponto_codigos').select('*')) ?? []).map((r: any) => ({ unidadeId: r.unidade_id, codigo: r.codigo }))
+    },
+    async conferirCorrentePonto() {
+      return ok(await sb.rpc('conferir_corrente_ponto')) ?? null
+    },
     async votacoesCardapio(desde) {
       return (ok(await sb.from('refeicao_votacoes').select('*, refeicao_votacao_opcoes(*)').gte('fecha_em', desde).order('semana', { ascending: false })) ?? []).map((v: any): VotacaoCardapio => ({
         id: v.id, semana: v.semana, abreEm: v.abre_em, fechaEm: v.fecha_em, maxEscolhas: v.max_escolhas, observacao: v.observacao,
@@ -1855,3 +1880,12 @@ const paraMembroEquipe = (r: any): MembroEquipeEvento => ({
   id: r.id, eventoId: r.evento_id, funcionarioId: r.funcionario_id, freelaId: r.freela_id, nome: r.nome, funcao: r.funcao,
   barraca: r.barraca, posicao: r.posicao, observacao: r.observacao, ordem: r.ordem,
 })
+
+const paraMarcacao = (r: any): MarcacaoPonto => {
+  const d = Array.isArray(r.ponto_desconsideradas) ? r.ponto_desconsideradas[0] : r.ponto_desconsideradas
+  return {
+    id: r.id, nsr: Number(r.nsr), funcionarioId: r.funcionario_id, momento: r.momento, tipo: r.tipo, origem: r.origem, unidadeId: r.unidade_id,
+    distanciaM: r.distancia_m, naLoja: r.na_loja, motivo: r.motivo, incluidoPor: r.incluido_por, hash: r.hash,
+    desconsiderada: d ? { motivo: d.motivo, por: d.por, em: d.em } : null,
+  }
+}

@@ -186,7 +186,7 @@ export function etapasAdmissao(p: Funcionario, c: ContextoAdmissao): EtapaAdmiss
     { chave: 'contrato_assinado', nome: 'Contrato assinado e anexado', auto: tem('contrato'), detalhe: 'Anexe em Documentos, como "Contrato".', acao: 'documento' },
     { chave: 'uniforme', nome: 'Uniforme entregue e termo assinado', auto: c.entregas.some((e) => e.assinatura), acao: 'uniforme' },
     { chave: 'turno', nome: 'Colocado(a) no turno', auto: !!p.turnoId, acao: 'turno' },
-    { chave: 'ponto', nome: 'Cadastrado(a) no ponto (Control iD)' },
+    { chave: 'ponto', nome: 'Orientado(a) a bater o ponto pelo portal' },
     { chave: 'acesso', nome: 'Recebeu o acesso ao portal', detalhe: 'Login = celular; passe a senha para a pessoa.' },
     { chave: 'regulamento', nome: 'Regulamento interno assinado no portal', auto: c.assinouRegulamento, detalhe: 'A pessoa assina pelo próprio login, em Regras e processos.' },
     { chave: 'apresentacao', nome: 'Regras da empresa apresentadas', detalhe: 'Feito pela Josie.' },

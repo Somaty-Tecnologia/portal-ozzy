@@ -1,5 +1,5 @@
 import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, TipoRecado } from './types'
-import type { CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
+import type { MarcacaoPonto, TipoMarcacao, CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, PedidoTirarFechamento, CaixaTurno, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
 export type NovoMovimentoEstoque = Omit<MovimentoEstoque, 'id' | 'criadoEm' | 'notaItemId' | 'custoUnit'> & { custoUnit?: number | null }
@@ -96,6 +96,14 @@ export interface Store {
   pedirAjustePonto(a: { data: string; tipo: TipoAjustePonto; horario: string | null; motivo: string }): Promise<void>
   resolverAjustePonto(id: string, status: 'feito' | 'recusado', resposta: string): Promise<void>
   excluirAjustePonto(id: string): Promise<void>
+  // Ponto pelo portal (0103).
+  baterPonto(local: LocalEnvio | null, codigo?: string | null, tipo?: TipoMarcacao | null): Promise<MarcacaoPonto>
+  meuProximoPonto(): Promise<TipoMarcacao>
+  marcacoesPonto(funcionarioId: string | null, de: string, ate: string): Promise<MarcacaoPonto[]>
+  incluirMarcacao(m: { funcionarioId: string; momento: string; tipo: TipoMarcacao; motivo: string; ajusteId?: string | null }): Promise<void>
+  desconsiderarMarcacao(id: string, motivo: string): Promise<void>
+  codigosPonto(): Promise<{ unidadeId: string; codigo: string }[]>
+  conferirCorrentePonto(): Promise<number | null>
   // Pedido de troca: a pessoa pede pelo próprio cadastro; a gestão vê todos e responde.
   solicitacoesUniforme(funcionarioId?: string): Promise<SolicitacaoUniforme[]>
   pedirTrocaUniforme(s: { funcionarioId: string; itens: string[]; motivo: string; foto?: Blob }): Promise<void>
