@@ -139,7 +139,11 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
   const preparosSemFicha = lista.filter((x) => x.preparo && !x.temFicha && x.providenciar > 0).map((x) => ({ nome: x.nome, q: x.providenciar }))
   const total = lista.reduce((s, x) => s + (x.custo ?? 0), 0)
   const semPreco = lista.filter((x) => x.custo === null && x.pedir > 0).length
+  // Heitor (13/10): o que é pré-preparo vai numa lista à parte para a produção; o resto é compra.
+  const ehPreparo = (x: Linha) => x.preparo || !!cat.insumos.get(x.id)?.prePreparo || /pr[eé].?preparo/i.test(x.categoria)
   const aProvidenciar = ordenada.filter((x) => x.pedir > 0)
+  const paraProduzir = aProvidenciar.filter(ehPreparo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  const textoProducao = () => `*Pré-preparos para a produção · ${nomeEvento}*\n\n` + paraProduzir.map((x) => `- ${x.nome}: ${qtd(x.pedir)} ${x.unidade}`).join('\n')
   const comFinal = lista.filter((x) => x.final !== null).length
   const semCodigo = lista.filter((x) => x.semCodigo).length
   const copiarDoProvidenciar = () => {
@@ -175,7 +179,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
 
   const texto = () => {
     const grupos = new Map<string, Linha[]>()
-    for (const x of aProvidenciar) grupos.set(x.categoria || 'Sem categoria', [...(grupos.get(x.categoria || 'Sem categoria') ?? []), x])
+    for (const x of aProvidenciar.filter((y) => !ehPreparo(y))) grupos.set(x.categoria || 'Sem categoria', [...(grupos.get(x.categoria || 'Sem categoria') ?? []), x])
     const partes = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([g, xs]) =>
       `*${g}*\n` + [...xs].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((x) => `- ${x.nome}: ${textoEmb(x) ?? `${qtd(x.pedir)} ${x.unidade}`}`).join('\n'))
     return `*Insumos a providenciar · ${nomeEvento}*\n\n${partes.join('\n\n')}`
@@ -199,9 +203,13 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
         <h3 className="font-bold">Insumos a providenciar</h3>
         <span className="text-sm text-stone-500">previsão × fichas, com os pré-preparos abertos até os insumos</span>
         <div className="flex gap-2 sm:ml-auto">
-          <Botao variante="secundario" className="py-1.5!" disabled={!aProvidenciar.length}
+          <Botao variante="secundario" className="py-1.5!" disabled={!aProvidenciar.some((x) => !ehPreparo(x))}
             onClick={() => navigator.clipboard.writeText(texto()).then(() => avisar('Lista copiada para o WhatsApp'), () => avisar('Não deu para copiar neste aparelho'))}>
-            Copiar p/ WhatsApp
+            Copiar compras p/ WhatsApp
+          </Botao>
+          <Botao variante="secundario" className="py-1.5!" disabled={!paraProduzir.length}
+            onClick={() => navigator.clipboard.writeText(textoProducao()).then(() => avisar('Lista da produção copiada'), () => avisar('Não deu para copiar neste aparelho'))}>
+            Copiar p/ produção
           </Botao>
           <Botao variante="secundario" className="py-1.5!" disabled={!lista.length} onClick={planilha}>Baixar planilha</Botao>
           <Botao variante="secundario" className="py-1.5!" onClick={() => window.print()}>Imprimir</Botao>
@@ -226,6 +234,17 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
           {semCodigo === 1 ? '1 item veio' : `${semCodigo} itens vieram`} da planilha dos eventos e não {semCodigo === 1 ? 'é o material' : 'são os materiais'} do estoque, por isso o estoque atual fica 0.
           Toque em "juntar com o material" embaixo do nome para ligar ao material da Eclética (as fichas passam a usar ele).
         </p>
+      )}
+      {paraProduzir.length > 0 && (
+        <div className="rounded-2xl bg-white p-3 ring-1 ring-stone-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-bold">Para a produção</h4>
+            <span className="text-sm text-stone-500">pré-preparos a fazer, já descontado o estoque</span>
+          </div>
+          <ul className="mt-1 grid gap-x-6 text-sm sm:grid-cols-2">
+            {paraProduzir.map((x) => <li key={x.id} className="flex justify-between gap-2 border-b border-stone-100 py-1"><span>{x.nome}</span><b className="whitespace-nowrap">{qtd(x.pedir)} {x.unidade}</b></li>)}
+          </ul>
+        </div>
       )}
       {lista.length === 0 ? (
         <p className="text-sm text-stone-500">As fichas dos produtos da previsão não têm insumos.</p>
