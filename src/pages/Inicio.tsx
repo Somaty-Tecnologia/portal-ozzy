@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { RefeicoesDaSemana } from './Refeicoes'
 import { atendeChamados } from '../lib/permissoes'
 import { chamadoEmAberto, nomeCurto, type Chamado } from '../lib/types'
 import { Detalhe, haQuanto } from './Manutencao'
@@ -77,6 +78,7 @@ export default function Inicio() {
       <MeusAvisos docs={isentoDeRotinas(eu.nivel) ? null : meusDocs} uniformes={meusUniformes} regulamento={!assinouRegulamento && !isentoDeRotinas(eu.nivel)} />
 
       <DependeDeMim />
+      <RefeicoesDaSemana />
       {gestao && <ComprasAtrasadas />}
       {(eu.nivel === 'administrativo' || eu.nivel === 'proprietario') && <PrecosForaDoPadrao />}
       {eu.nivel === 'manutencao' && <ResumoChamados />}

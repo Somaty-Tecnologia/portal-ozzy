@@ -3,7 +3,7 @@ import { LOJAS_FECHAMENTO, type Funcionario } from './types'
 
 export type IdIcone =
   | 'inicio' | 'rh' | 'freelancers' | 'motoboys' | 'fechamento' | 'producao' | 'fichas' | 'financeiro' | 'cadastros' | 'compras' | 'estoque'
-  | 'checklists' | 'regras' | 'treinamentos' | 'manutencao' | 'eventos'
+  | 'checklists' | 'regras' | 'treinamentos' | 'manutencao' | 'eventos' | 'refeicoes'
 
 export interface Modulo {
   id: IdIcone
@@ -23,6 +23,8 @@ export interface Modulo {
 export const MODULOS: Modulo[] = [
   { id: 'inicio', nome: 'Início', pronto: true },
   { id: 'rh', nome: 'Departamento Pessoal', pronto: true },
+  // Refeição da equipe (13/10): todos veem e votam; o manutencista e a gestão montam o prato.
+  { id: 'refeicoes', nome: 'Refeição do dia', pronto: true },
   // Menu próprio (pedido de 08/10), para a gestão achar rápido as diárias enviadas.
   { id: 'freelancers', nome: 'Freelancers', pronto: true, soGestao: true },
   // Cadastro e pagamento semanal dos motoboys (09/10), que não são da equipe.

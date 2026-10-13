@@ -19,6 +19,7 @@ const CAMINHOS: Record<IdIcone | 'menu' | 'relogio' | 'pedidos' | 'avaliacoes' |
   manutencao: 'M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.3 2.3-2.4-.6-.6-2.4z',
   eventos: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
   menu: 'M4 7h16M4 12h16M4 17h16',
+  refeicoes: 'M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M2 4v5a1.5 1.5 0 0 0 3 0V4M3.5 9v11M22 20V4c-1.5 0-2.5 2-2.5 5s1 4 2.5 4',
   busca: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4',
   relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2',
   pedidos: 'M6 3h12l1 18H5zM9 7a3 3 0 0 0 6 0',

@@ -1,3 +1,4 @@
+import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome } from './types'
 import type { CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
@@ -234,6 +235,16 @@ export interface Store {
   fotosEnvioMotoboy(caminhos: string[]): Promise<string[]>
   resolverEnvioMotoboy(id: string, aprovar: boolean, entregas: number | null, motivo: string): Promise<void>
   reabrirEnvioMotoboy(id: string): Promise<void>
+  // Refeição do dia (0083): todos veem o prato e votam (anônimo); quem cozinha e a gestão montam, com baixa no estoque.
+  refeicoes(de: string, ate: string): Promise<Refeicao[]>
+  refeicoesCozinha(de: string, ate: string): Promise<Refeicao[]>
+  salvarRefeicao(r: NovaRefeicao): Promise<string>
+  excluirRefeicao(id: string): Promise<void>
+  votarRefeicao(id: string, voto: -1 | 0 | 1): Promise<void>
+  votosRefeicoes(de: string, ate: string): Promise<VotosRefeicao[]>
+  modelosRefeicao(): Promise<ModeloRefeicao[]>
+  salvarModeloRefeicao(m: Omit<ModeloRefeicao, 'id'> & { id?: string }): Promise<void>
+  quemCome(data: string): Promise<QuemCome>
   freelancers(): Promise<Freelancer[]>
   salvarFreelancer(f: Omit<Freelancer, 'id'> & { id?: string }): Promise<Freelancer>
   // Leva junto diárias e envios; recusa se já houver pagamento marcado.

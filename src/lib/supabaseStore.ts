@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1343,6 +1343,46 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       if (!escalado) ok(await sb.from('motoboy_escala').delete().eq('motoboy_id', motoboyId).eq('data', data))
       else ok(await sb.from('motoboy_escala').upsert({ motoboy_id: motoboyId, unidade_id: unidadeId, data }, { onConflict: 'motoboy_id,data' }))
     },
+    async refeicoes(de, ate) {
+      return (ok(await sb.from('refeicoes').select('id, data, centro_custo_id, prato, acompanhamentos, observacao').gte('data', de).lte('data', ate).order('data')) ?? []).map(paraRefeicao)
+    },
+    async refeicoesCozinha(de, ate) {
+      return (ok(await sb.rpc('refeicoes_cozinha', { p_de: de, p_ate: ate })) ?? []).map(paraRefeicao)
+    },
+    async salvarRefeicao(r) {
+      return ok(await sb.rpc('salvar_refeicao', { p: {
+        id: r.id ?? null, data: r.data, centro_custo_id: r.centroCustoId, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
+        pessoas: r.pessoas === null ? '' : String(r.pessoas), itens: r.itens.map((i) => ({ insumo_id: i.insumoId, quantidade: String(i.quantidade) })),
+      } }))
+    },
+    async excluirRefeicao(id) {
+      ok(await sb.rpc('excluir_refeicao', { p_id: id }))
+    },
+    async votarRefeicao(id, voto) {
+      ok(await sb.rpc('votar_refeicao', { p_id: id, p_voto: voto }))
+    },
+    async votosRefeicoes(de, ate) {
+      return (ok(await sb.rpc('votos_refeicoes', { p_de: de, p_ate: ate })) ?? []).map((r: any): VotosRefeicao => ({
+        refeicaoId: r.refeicao_id, positivos: r.positivos, negativos: r.negativos, meuVoto: r.meu_voto,
+      }))
+    },
+    async modelosRefeicao() {
+      return (ok(await sb.from('refeicao_modelos').select('*').order('nome')) ?? []).map((r: any): ModeloRefeicao => ({
+        id: r.id, nome: r.nome, tipo: r.tipo, modoPreparo: r.modo_preparo, ativo: r.ativo,
+        itens: (r.itens ?? []).map((i: any) => ({ nome: i.nome, quantidade: Number(i.quantidade), unidade: i.unidade ?? '', insumoId: i.insumo_id ?? null })),
+      }))
+    },
+    async salvarModeloRefeicao(m) {
+      const linha = {
+        nome: nomeItem(m.nome), tipo: m.tipo, modo_preparo: m.modoPreparo?.trim() || null, ativo: m.ativo,
+        itens: m.itens.filter((i) => i.nome.trim() && i.quantidade > 0).map((i) => ({ nome: i.nome.trim(), quantidade: i.quantidade, unidade: i.unidade, insumo_id: i.insumoId ?? null })),
+      }
+      if (m.id) ok(await sb.from('refeicao_modelos').update(linha).eq('id', m.id))
+      else ok(await sb.from('refeicao_modelos').insert(linha))
+    },
+    async quemCome(data) {
+      return ok(await sb.rpc('quem_come', { p_data: data }))
+    },
     async motoboyQuemSou(celular) {
       return ok(await sb.rpc('motoboy_quem_sou', { p_celular: celular }))
     },
@@ -1552,6 +1592,13 @@ export function criarSupabaseStore(url: string, chave: string): Store {
   }
 }
 
+const paraRefeicao = (r: any): Refeicao => ({
+  id: r.id, data: r.data, centroCustoId: r.centro_custo_id, prato: r.prato, acompanhamentos: r.acompanhamentos, observacao: r.observacao,
+  ...('itens' in r ? {
+    pessoas: r.pessoas, custoTotal: numeroOuNulo(r.custo_total),
+    itens: (r.itens ?? []).map((i: any) => ({ insumoId: i.insumo_id, quantidade: Number(i.quantidade), custoUnit: numeroOuNulo(i.custo_unit) })),
+  } : {}),
+})
 const paraFreelaEvento = (r: any): FreelaEvento => ({
   id: r.id, nome: r.nome, cpf: r.cpf, pix: r.pix, celular: r.celular, funcao: r.funcao, valorDiaria: numeroOuNulo(r.valor_diaria),
   observacao: r.observacao, ativo: r.ativo,

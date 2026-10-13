@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -230,6 +230,14 @@ const insumosDemo: Insumo[] = [
   ins('in22', 'Água sanitária 2L', 'Limpeza', 'un', 6.5, null, { ecleticaCodigo: '100619', setorEnvio: 'cozinha' }),
   // Exemplo de preço fora do padrão (preço da caixa cadastrado como unidade), para a Conferência de preços.
   ins('in23', 'Guardanapo', 'Descartáveis e utensílios', 'un', 90.34, null, { ecleticaCodigo: '299', setorEnvio: 'atendimento' }),
+  // Para a refeição da equipe.
+  ins('in24', 'Arroz tipo 1', 'Mercearia', 'kg', 6, null),
+  ins('in25', 'Feijão carioca', 'Mercearia', 'kg', 8, null),
+  ins('in26', 'Carne moída', 'Proteínas e ovos', 'kg', 32, null),
+  ins('in27', 'Batata', 'Hortifruti', 'kg', 5, 'fo2'),
+  ins('in28', 'Cebola', 'Hortifruti', 'kg', 5, 'fo2'),
+  ins('in29', 'Peito de frango', 'Proteínas e ovos', 'kg', 19, null),
+  ins('in30', 'Leite integral', 'Laticínios', 'l', 5, null),
 ]
 const prePreparoDemo = new Set(['in12', 'in13', 'in14'])
 const precosInsumoDemo: PrecoInsumo[] = insumosDemo.map((i) => ({ id: 'pi' + i.id, insumoId: i.id, preco: i.preco, em: haHoras(24 * 5), por: null, origem: 'exemplo' }))
@@ -443,7 +451,35 @@ const turnosMotoboyDemo: TurnoMotoboy[] = [
   ...[1, 2, 3, 4, 5, 6].map((dia) => ({ unidadeId: 'burger-psd', dia, inicio: '18:00', fim: dia === 4 || dia === 5 ? '23:30' : '22:30' })),
   ...[1, 2, 3, 4, 5, 6].map((dia) => ({ unidadeId: 'burger-va', dia, inicio: '18:00', fim: '23:00' })),
 ]
-const escalaMotoboyDemo: EscalaMotoboy[] = []
+const escalaMotoboyDemo: EscalaMotoboy[] = [
+  { id: 'esc1', motoboyId: 'mb1', unidadeId: 'burger-psd', data: hoje() },
+  { id: 'esc2', motoboyId: 'mb3', unidadeId: 'burger-va', data: hoje() },
+]
+const refeicoesDemo: (Refeicao & { pessoas: number | null; itens: ItemRefeicao[]; custoTotal: number })[] = [
+  { id: 'rf1', data: addDias(hoje(), -1), centroCustoId: 'burger-psd', prato: 'Escondidinho de Carne Moída', acompanhamentos: 'Arroz, feijão e salada', observacao: null, pessoas: 14,
+    itens: [{ insumoId: 'in26', quantidade: 2.1, custoUnit: 32 }, { insumoId: 'in27', quantidade: 3.5, custoUnit: 5 }, { insumoId: 'in24', quantidade: 1.1, custoUnit: 6 }, { insumoId: 'in25', quantidade: 0.8, custoUnit: 8 }],
+    custoTotal: 2.1 * 32 + 3.5 * 5 + 1.1 * 6 + 0.8 * 8 },
+  { id: 'rf2', data: addDias(hoje(), -2), centroCustoId: 'burger-psd', prato: 'Frango Grelhado', acompanhamentos: 'Arroz, feijão e legumes', observacao: null, pessoas: 12,
+    itens: [{ insumoId: 'in29', quantidade: 2.2, custoUnit: 19 }, { insumoId: 'in24', quantidade: 1, custoUnit: 6 }, { insumoId: 'in25', quantidade: 0.7, custoUnit: 8 }],
+    custoTotal: 2.2 * 19 + 6 + 0.7 * 8 },
+]
+// Votos de exemplo (sem pessoa: no demo só os totais importam); o voto de quem está logado fica à parte.
+const votosDemo = new Map<string, { positivos: number; negativos: number; meus: Map<string, number> }>([
+  ['rf1', { positivos: 9, negativos: 2, meus: new Map() }],
+  ['rf2', { positivos: 4, negativos: 5, meus: new Map() }],
+])
+const modelosRefeicaoDemo: ModeloRefeicao[] = [
+  { id: 'mr1', nome: 'Arroz branco', tipo: 'acompanhamento', ativo: true, modoPreparo: 'Refogue o alho no óleo, junte o arroz e o sal, mexa 1 minuto e cubra com o dobro de água fervente. Fogo baixo, tampado, até secar.',
+    itens: [{ nome: 'Arroz', quantidade: 0.08, unidade: 'kg' }, { nome: 'Óleo', quantidade: 0.005, unidade: 'l' }, { nome: 'Alho', quantidade: 0.002, unidade: 'kg' }] },
+  { id: 'mr2', nome: 'Feijão carioca', tipo: 'acompanhamento', ativo: true, modoPreparo: 'Cozinhe na pressão por 25 min. Refogue bacon, cebola e alho e junte ao feijão.',
+    itens: [{ nome: 'Feijão carioca', quantidade: 0.06, unidade: 'kg' }, { nome: 'Bacon', quantidade: 0.01, unidade: 'kg' }, { nome: 'Cebola', quantidade: 0.01, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.002, unidade: 'kg' }] },
+  { id: 'mr3', nome: 'Escondidinho de carne moída', tipo: 'prato', ativo: true, modoPreparo: 'Purê firme com batata, leite e manteiga. Carne moída refogada com cebola, alho e molho de tomate. Carne embaixo, purê por cima e mussarela; forno a 200 °C até gratinar.',
+    itens: [{ nome: 'Carne moída', quantidade: 0.15, unidade: 'kg' }, { nome: 'Batata', quantidade: 0.25, unidade: 'kg' }, { nome: 'Leite', quantidade: 0.05, unidade: 'l' }, { nome: 'Cebola', quantidade: 0.02, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.003, unidade: 'kg' }, { nome: 'Mussarela', quantidade: 0.03, unidade: 'kg' }] },
+  { id: 'mr4', nome: 'Frango grelhado', tipo: 'prato', ativo: true, modoPreparo: 'Tempere com alho, limão e sal (30 min). Grelhe na chapa bem quente, 4 a 5 min de cada lado.',
+    itens: [{ nome: 'Peito de frango', quantidade: 0.18, unidade: 'kg' }, { nome: 'Alho', quantidade: 0.003, unidade: 'kg' }, { nome: 'Óleo', quantidade: 0.005, unidade: 'l' }] },
+  { id: 'mr5', nome: 'Salada verde', tipo: 'salada', ativo: true, modoPreparo: 'Lave bem as folhas e os tomates. Tempere na hora de servir.',
+    itens: [{ nome: 'Alface', quantidade: 0.04, unidade: 'kg' }, { nome: 'Tomate', quantidade: 0.05, unidade: 'kg' }, { nome: 'Cebola', quantidade: 0.01, unidade: 'kg' }] },
+]
 // Uma notinha de exemplo (desenho) para a conferência na demonstração.
 const notinhaDemo = (n: number) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="300" height="420" fill="#fffef6"/><g font-family="monospace" font-size="18" fill="#222"><text x="20" y="40">THE OZZY BURGER</text><text x="20" y="80">Pedido #${4810 + n}</text><text x="20" y="120">Entrega - Rua Exemplo, ${n * 37}</text><text x="20" y="160">1x Ozzy Classic</text><text x="20" y="190">1x Batata média</text><text x="20" y="240">Total R$ ${(48 + n * 3).toFixed(2)}</text></g></svg>`)
 const enviosMotoboyDemo: EnvioMotoboy[] = [
@@ -1001,6 +1037,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     if (!podeGerenciar(u.nivel)) throw new Error('Seu nível de acesso não permite esta ação.')
     return u
   }  // A produção (setor Produção) lança o que preparou: vê fichas, insumos e produções (0069).
+  const exigeCozinha = () => {
+    const u = exigeEu()
+    if (!(podeGerenciar(u.nivel) || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
+    return u
+  }
   const exigeGestaoOuProducao = () => {
     const u = exigeEu()
     if (!(podeGerenciar(u.nivel) || u.setor === 'producao')) throw new Error('Seu nível de acesso não permite esta ação.')
@@ -1644,6 +1685,92 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       if (escalado) escalaMotoboyDemo.push({ id: novoId('esc'), motoboyId, unidadeId, data })
       return espera(undefined)
     },
+    async refeicoes(de, ate) {
+      exigeEu()
+      return espera(refeicoesDemo.filter((x) => x.data >= de && x.data <= ate).sort((a, b) => a.data.localeCompare(b.data))
+        .map(({ id, data, centroCustoId, prato, acompanhamentos, observacao }) => ({ id, data, centroCustoId, prato, acompanhamentos, observacao })))
+    },
+    async refeicoesCozinha(de, ate) {
+      exigeCozinha()
+      return espera(refeicoesDemo.filter((x) => x.data >= de && x.data <= ate).sort((a, b) => a.data.localeCompare(b.data)).map((x) => ({ ...x, itens: x.itens.map((i) => ({ ...i })) })))
+    },
+    async salvarRefeicao(r) {
+      exigeCozinha()
+      if (!r.prato.trim()) throw new Error('Coloque o nome do prato.')
+      const itens = r.itens.filter((i) => i.quantidade > 0).map((i) => ({ insumoId: i.insumoId, quantidade: i.quantidade, custoUnit: insumosDemo.find((x) => x.id === i.insumoId)?.preco ?? null }))
+      const dados = {
+        data: r.data, centroCustoId: r.centroCustoId, prato: nomeItem(r.prato), acompanhamentos: r.acompanhamentos.trim() || null, observacao: r.observacao.trim() || null,
+        pessoas: r.pessoas, itens, custoTotal: Math.round(itens.reduce((t, i) => t + i.quantidade * (i.custoUnit ?? 0), 0) * 100) / 100,
+      }
+      const outra = refeicoesDemo.find((x) => x.data === r.data && x.centroCustoId === r.centroCustoId && x.id !== r.id)
+      if (outra) throw new Error('Já existe uma refeição neste dia e local.')
+      let id = r.id
+      const atual = id ? refeicoesDemo.find((x) => x.id === id) : undefined
+      if (atual) Object.assign(atual, dados)
+      else { id = novoId('rf'); refeicoesDemo.push({ id, ...dados }) }
+      // Baixa no estoque do local (refaz quando edita).
+      for (let k = movimentosDemo.length - 1; k >= 0; k--) if (movimentosDemo[k].observacao === `ref:${id}`) movimentosDemo.splice(k, 1)
+      for (const i of itens) movimentosDemo.push({ id: novoId('mv'), centroCustoId: r.centroCustoId, insumoId: i.insumoId, data: r.data, tipo: 'saida', quantidade: -i.quantidade, custoUnit: i.custoUnit, notaItemId: null, observacao: `ref:${id}`, criadoEm: agora() })
+      return espera(id!)
+    },
+    async excluirRefeicao(id) {
+      exigeCozinha()
+      const k = refeicoesDemo.findIndex((x) => x.id === id)
+      if (k >= 0) refeicoesDemo.splice(k, 1)
+      for (let j = movimentosDemo.length - 1; j >= 0; j--) if (movimentosDemo[j].observacao === `ref:${id}`) movimentosDemo.splice(j, 1)
+      return espera(undefined)
+    },
+    async votarRefeicao(id, voto) {
+      const u = exigeEu()
+      const r = refeicoesDemo.find((x) => x.id === id)
+      if (!r || r.data < addDias(hoje(), -7) || r.data > hoje()) throw new Error('Só dá para avaliar as refeições da última semana.')
+      const v = votosDemo.get(id) ?? { positivos: 0, negativos: 0, meus: new Map() }
+      if (voto === 0) v.meus.delete(u.id)
+      else v.meus.set(u.id, voto)
+      votosDemo.set(id, v)
+      return espera(undefined)
+    },
+    async votosRefeicoes(de, ate) {
+      const u = exigeEu()
+      const cozinha = podeGerenciar(u.nivel) || u.nivel === 'manutencao'
+      return espera(refeicoesDemo.filter((x) => x.data >= de && x.data <= ate).map((x) => {
+        const v = votosDemo.get(x.id)
+        const meus = [...(v?.meus.values() ?? [])]
+        return {
+          refeicaoId: x.id, meuVoto: v?.meus.get(u.id) ?? null,
+          positivos: cozinha ? (v?.positivos ?? 0) + meus.filter((m) => m === 1).length : null,
+          negativos: cozinha ? (v?.negativos ?? 0) + meus.filter((m) => m === -1).length : null,
+        }
+      }))
+    },
+    async modelosRefeicao() {
+      exigeCozinha()
+      return espera(modelosRefeicaoDemo.map((m) => ({ ...m, itens: m.itens.map((i) => ({ ...i })) })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
+    },
+    async salvarModeloRefeicao(m) {
+      exigeCozinha()
+      const dados = { ...m, nome: nomeItem(m.nome), itens: m.itens.filter((i) => i.nome.trim() && i.quantidade > 0) }
+      const atual = m.id ? modelosRefeicaoDemo.find((x) => x.id === m.id) : undefined
+      if (atual) Object.assign(atual, dados)
+      else modelosRefeicaoDemo.push({ ...dados, id: novoId('mr') })
+      return espera(undefined)
+    },
+    async quemCome(data) {
+      exigeCozinha()
+      const dia = (new Date(data + 'T12:00:00').getDay() + 6) % 7
+      const equipe = funcionarios.filter((f) => f.status === 'ativo' && f.nivel !== 'proprietario' && (!f.dataAdmissao || f.dataAdmissao <= data)).flatMap((f) => {
+        const t = turnos.find((x) => x.id === f.turnoId)
+        const g = folgas.find((x) => x.funcionarioId === f.id && x.data === data)
+        const ferias = feriasDemo.some((x) => x.funcionarioId === f.id && data >= x.inicio && data <= addDias(x.inicio, x.dias - 1))
+        const trabalha = g ? g.tipo === 'trabalha' : !!t?.dias[dia]
+        return trabalha && !ferias ? [{ id: f.id, nome: f.nome, local: t?.local ?? f.unidadeId, unidadeId: f.unidadeId, turno: t?.nome ?? null, horario: t?.dias[dia] ?? null }] : []
+      })
+      const motoboys = escalaMotoboyDemo.filter((e) => e.data === data).flatMap((e) => {
+        const m = motoboysDemo.find((x) => x.id === e.motoboyId && x.ativo)
+        return m ? [{ id: m.id, nome: m.nome, local: e.unidadeId }] : []
+      })
+      return espera({ equipe: equipe.sort((a, b) => a.local.localeCompare(b.local) || a.nome.localeCompare(b.nome, 'pt-BR')), motoboys })
+    },
     async motoboyQuemSou(celular) {
       const cel = celular.replace(/\D/g, '').slice(-11)
       if (cel.length < 10) return espera({ tipo: 'invalido' as const })
@@ -1933,7 +2060,8 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return structuredClone(novo)
     },
     async insumos() {
-      exigeGestaoOuProducao()
+      const u = exigeEu()
+      if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
       return structuredClone(insumosDemo).map((i) => ({ ...i, prePreparo: prePreparoDemo.has(i.id) })).sort((a, b) => a.nome.localeCompare(b.nome))
     },
     async salvarInsumo(i) {

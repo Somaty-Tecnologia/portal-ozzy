@@ -35,6 +35,7 @@ import Salarios from './pages/Salarios'
 import ModuloFinanceiro, { ABAS_FINANCEIRO } from './pages/ModuloFinanceiro'
 import Estoque, { ABAS_ESTOQUE } from './pages/Estoque'
 import Eventos, { ABAS_EVENTOS } from './pages/Eventos'
+import Refeicoes, { ABAS_REFEICOES, souCozinha } from './pages/Refeicoes'
 import IrPara, { type Destino } from './components/IrPara'
 import { MeuEvento } from './pages/EventoLogistica'
 import Icone from './components/Icone'
@@ -152,6 +153,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
       : id === 'estoque' ? ABAS_ESTOQUE
       : id === 'financeiro' ? ABAS_FINANCEIRO
       : id === 'eventos' ? ABAS_EVENTOS
+      : id === 'refeicoes' ? (souCozinha(eu) ? ABAS_REFEICOES : [])
       : []
   const caminhoDe = (m: string, aba: string) => (aba ? `${m}/${aba}` : m)
   const abaAtiva = (m: string) => (m === 'rh' ? abaRh : abasDe(m).some((a) => a.id && a.id === sub) ? sub! : '')
@@ -195,6 +197,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
   else if (modulo.id === 'producao') conteudo = <Producao sub={sub} />
   else if (modulo.id === 'fechamento') conteudo = <Fechamento />
   else if (modulo.id === 'eventos') conteudo = <Eventos sub={sub} param={param} />
+  else if (modulo.id === 'refeicoes') conteudo = <Refeicoes sub={sub} param={param} />
   else if (modulo.id !== 'rh') conteudo = <EmBreve modulo={modulo} />
   else if (abaRh === 'turnos') conteudo = <Turnos />
   else if (abaRh === 'folgas') conteudo = <Escala />

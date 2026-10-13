@@ -1604,3 +1604,54 @@ export interface ProdutoVenda {
   receitaId: string | null
   ativo: boolean
 }
+
+// Refeição do dia (0083, Heitor 13/10): o manutencista monta o prato da equipe com os insumos (baixa no estoque);
+// todos veem o prato e dão joinha anônimo. Ingredientes, custo e totais de votos só quem cozinha e a gestão.
+export interface ItemRefeicao {
+  insumoId: string
+  quantidade: number
+  custoUnit: number | null
+}
+export interface Refeicao {
+  id: string
+  data: string
+  centroCustoId: string
+  prato: string
+  acompanhamentos: string | null
+  observacao: string | null
+  // Só para quem cozinha e a gestão.
+  pessoas?: number | null
+  itens?: ItemRefeicao[]
+  custoTotal?: number | null
+}
+export interface NovaRefeicao {
+  id?: string
+  data: string
+  centroCustoId: string
+  prato: string
+  acompanhamentos: string
+  observacao: string
+  pessoas: number | null
+  itens: { insumoId: string; quantidade: number }[]
+}
+export type TipoModeloRefeicao = 'prato' | 'acompanhamento' | 'salada'
+export interface ModeloRefeicao {
+  id: string
+  nome: string
+  tipo: TipoModeloRefeicao
+  modoPreparo: string | null
+  // Por pessoa, pelo nome; insumoId quando já foi ligado a um material.
+  itens: { nome: string; quantidade: number; unidade: string; insumoId?: string | null }[]
+  ativo: boolean
+}
+export interface VotosRefeicao {
+  refeicaoId: string
+  // null para quem não cozinha nem é gestão (só vê o próprio voto).
+  positivos: number | null
+  negativos: number | null
+  meuVoto: number | null
+}
+export interface QuemCome {
+  equipe: { id: string; nome: string; local: string; unidadeId: string; turno: string | null; horario: DiaTurno | null }[]
+  motoboys: { id: string; nome: string; local: string }[]
+}
