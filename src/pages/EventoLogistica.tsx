@@ -135,6 +135,19 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
   const fatTotal = dias.reduce((s, x) => s + fatDia(x), 0)
   const custoTotal = dias.reduce((s, x) => s + custoDia(x), 0)
   const faltaFicha = semFicha(g.cat, cardapio.map((c) => c.receitaId))
+  // Cardápio para o organizador (Heitor, 13/10): o formulário deles é por operação ("Produto - R$ 30");
+  // produto sem operação (as bebidas) repete em todas.
+  const cardapioPorOperacao = useMemo(() => {
+    const opDe = (id: string) => receita(id)?.operacaoId ?? null
+    const ops = [...new Set([...e.operacoes, ...cardapio.map((c) => opDe(c.receitaId)).filter(Boolean)])] as string[]
+    const preco = (v: number) => 'R$ ' + (Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ','))
+    const linha = (c: ProdutoEvento) => `${receita(c.receitaId)?.nome ?? ''}${c.preco ? ` - ${preco(c.preco)}` : ''}`
+    const ordem = [...cardapio].sort((a, b) => a.ordem - b.ordem)
+    const gerais = ordem.filter((c) => !opDe(c.receitaId) || !ops.includes(opDe(c.receitaId)!))
+    const grupos = ops.map((op) => ({ nome: g.operacoes.find((o) => o.id === op)?.nome ?? 'Operação', itens: [...ordem.filter((c) => opDe(c.receitaId) === op), ...gerais] }))
+      .filter((x) => x.itens.some((c) => opDe(c.receitaId)))
+    return (grupos.length ? grupos : [{ nome: 'Cardápio', itens: gerais }]).map((x) => ({ nome: x.nome, n: x.itens.length, texto: x.itens.map(linha).join('\n') }))
+  }, [cardapio, e.operacoes, g.operacoes, g.receitas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const aplicarSugestao = () => {
     let card = cardapio
@@ -360,6 +373,17 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
         </p>
       )}
       {mudou && <p className="text-sm font-semibold text-amber-700">Alterações não salvas.</p>}
+      {cardapio.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-stone-600">Cardápio para o organizador (nome e preço):</span>
+          {cardapioPorOperacao.map((x) => (
+            <Botao key={x.nome} variante="secundario" className="py-1.5!"
+              onClick={() => navigator.clipboard.writeText(x.texto).then(() => avisar(`Cardápio ${x.nome} copiado`), () => avisar('Não deu para copiar neste aparelho'))}>
+              Copiar {x.nome} ({x.n})
+            </Botao>
+          ))}
+        </div>
+      )}
       {cardapio.length > 0 && (
         <button className="text-sm font-semibold text-sky-700 hover:underline" onClick={() => ir(`eventos/${e.id}/insumos`)}>
           Ver os insumos a providenciar{mudou ? ' (salve a previsão antes)' : ''} →
