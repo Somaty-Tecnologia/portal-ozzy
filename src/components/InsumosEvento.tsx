@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Botao, estiloEntrada } from './ui'
+import { Botao, Modal, estiloEntrada } from './ui'
 import { useOrdem } from './Ordenar'
 import { useApp } from '../lib/contexto'
 import { custoFicha, precoDoInsumo, qtd, reais, type Catalogo } from '../lib/custos'
@@ -38,16 +38,20 @@ interface Linha {
   nEmbalagens: number | null
   // Estoque atual no local escolhido (Central por padrão) e o "Pedir (final)" que o Heitor decide (13/10).
   estoque: number | null
+  // Material sem código da Eclética (veio da planilha dos eventos): o saldo das lojas e da Central fica no da Eclética.
+  semCodigo: boolean
   final: number | null
   pedir: number // final, ou o providenciar quando o final está em branco
   custo: number | null
   preco: number | null
 }
 
-const CHAVE_ESTOQUE = 'insumos-evento-estoque'
+// v2 (13/10): o padrão passou a ser a Central de Produção (Heitor).
+const CHAVE_ESTOQUE = 'insumos-evento-estoque-v2'
 const numTexto = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
 
-export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEvento }: {
+export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEvento, aoMudar }: {
+  aoMudar?: () => Promise<void>
   cat: Catalogo
   eventoId: string
   linhas: { receitaId: string; quantidade: number }[]
@@ -68,7 +72,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
       const ativos = cs.filter((c) => c.ativo)
       setCentros(ativos)
       setEstoqueDe((x) => (x === 'base' || ativos.some((c) => c.id === x) ? x
-        : ativos.find((c) => /evento/i.test(c.nome))?.id ?? ativos.find((c) => /central/i.test(c.nome))?.id ?? ativos[0]?.id ?? ''))
+        : ativos.find((c) => /central/i.test(c.nome))?.id ?? ativos[0]?.id ?? ''))
     }, () => setCentros([]))
   }, [store])
   useEffect(() => {
@@ -78,6 +82,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
     if (estoqueDe === 'base') { setSaldos(new Map([...saldoBase].map(([k, b]) => [k, b.saldo]))); return }
     store.saldosEstoque(estoqueDe).then((r) => setSaldos(new Map(r.map((x) => [`i:${x.insumoId}`, x.quantidade]))), () => setSaldos(new Map()))
   }, [store, estoqueDe, saldoBase])
+  const [juntando, setJuntando] = useState<Linha | null>(null)
   // Pedir (final): texto digitado por insumo; salva sozinho ao sair do campo.
   const [finais, setFinais] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -117,7 +122,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
         categoria: rec ? 'Pré-preparos (produzir)' : ins!.categoria ?? '',
         fornecedor: rec ? '' : ins!.fornecedorId ? nomeForn.get(ins!.fornecedorId) ?? '' : '',
         unidade, precisa, providenciar, embalagem: por ? e!.embalagem : null, porEmbalagem: por,
-        nEmbalagens: por ? Math.ceil(pedir / por - 1e-9) : null, estoque: saldos ? estoqueChave(chave) : null, final, pedir,
+        nEmbalagens: por ? Math.ceil(pedir / por - 1e-9) : null, estoque: saldos ? estoqueChave(chave) : null, semCodigo: !!ins && !ins.ecleticaCodigo, final, pedir,
         custo: preco !== null && preco !== undefined ? pedir * preco : null, preco: preco ?? null,
       })
     }
@@ -136,6 +141,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
   const semPreco = lista.filter((x) => x.custo === null && x.pedir > 0).length
   const aProvidenciar = ordenada.filter((x) => x.pedir > 0)
   const comFinal = lista.filter((x) => x.final !== null).length
+  const semCodigo = lista.filter((x) => x.semCodigo).length
   const copiarDoProvidenciar = () => {
     if (comFinal && !confirm(`${comFinal} ${comFinal === 1 ? 'item já tem' : 'itens já têm'} Pedir (final). Substituir tudo pelo Providenciar?`)) return
     const novos: Record<string, number | null> = {}
@@ -148,7 +154,6 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
     salvarFinais(Object.fromEntries(lista.filter((x) => !x.id.startsWith('r:')).map((x) => [x.id, null])))
     setFinais({})
   }
-  const nomeEstoque = estoqueDe === 'base' ? 'base de eventos' : centros.find((c) => c.id === estoqueDe)?.nome ?? 'estoque'
 
   const textoEmb = (x: Linha) => (x.nEmbalagens && x.embalagem && x.pedir > 0
     ? `${x.nEmbalagens} ${x.nEmbalagens === 1 ? x.embalagem : plural(x.embalagem)} de ${qtd(x.porEmbalagem!)} ${x.unidade}` : null)
@@ -178,24 +183,12 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
 
   // Planilha para mexer à vontade (Heitor, 13/10): Providenciar e Custo são fórmulas, então mudar a quantidade,
   // o que tem na base ou o preço já refaz a conta.
+  // Heitor (13/10): na planilha só categoria, insumo, fornecedor, unidade e quanto precisa.
   const planilha = () => {
     const xs = [...lista].sort((a, b) => (a.categoria || '~').localeCompare(b.categoria || '~', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'))
-    const cab = ['Categoria', 'Insumo', 'Fornecedor', 'Unidade', 'Precisa', `Estoque (${nomeEstoque})`, 'Providenciar', 'Pedir (final)', 'Embalagem', 'Qtd na embalagem', 'Nº de embalagens', 'Preço unit.', 'Custo']
-    const rows: Celula[][] = [cab.map((v) => ({ v, s: 'cabecalho' as const }))]
-    xs.forEach((x, i) => {
-      const r = i + 2
-      // Pedir (final) em branco = usa o Providenciar.
-      const pedir = `IF(H${r}="",G${r},H${r})`
-      rows.push([
-        x.categoria || 'Sem categoria', x.nome, x.fornecedor, x.unidade, x.precisa, Math.max(0, x.estoque ?? 0),
-        { f: descontar ? `MAX(0,E${r}-F${r})` : `E${r}`, s: 'numero' }, x.final, x.embalagem ?? '', x.porEmbalagem,
-        { f: `IF(N(J${r})>0,ROUNDUP(${pedir}/J${r},0),"")`, s: 'numero' },
-        { v: x.preco, s: 'reais' }, { f: `${pedir}*L${r}`, s: 'reais' },
-      ])
-    })
-    const n = xs.length + 1
-    rows.push([{ v: 'Total', s: 'total' }, null, null, null, null, null, null, null, null, null, null, null, { f: `SUM(M2:M${n})`, s: 'totalReais' }])
-    baixarXlsx(`Insumos ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Insumos', rows, [18, 34, 24, 9, 11, 14, 13, 13, 12, 10, 12, 13, 14])
+    const rows: Celula[][] = [['Categoria', 'Insumo', 'Fornecedor', 'Unidade', 'Precisa'].map((v) => ({ v, s: 'cabecalho' as const }))]
+    for (const x of xs) rows.push([x.categoria || 'Sem categoria', x.nome, x.fornecedor, x.unidade, x.precisa])
+    baixarXlsx(`Insumos ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Insumos', rows, [22, 36, 26, 9, 12])
   }
 
   if (!linhas.some((l) => l.quantidade > 0)) return null
@@ -228,6 +221,12 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
           {comFinal > 0 && <Botao variante="secundario" className="py-1.5!" onClick={limparFinais}>Limpar final</Botao>}
         </div>
       </div>
+      {semCodigo > 0 && estoqueDe !== 'base' && (
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {semCodigo === 1 ? '1 item veio' : `${semCodigo} itens vieram`} da planilha dos eventos e não {semCodigo === 1 ? 'é o material' : 'são os materiais'} do estoque, por isso o estoque atual fica 0.
+          Toque em "juntar com o material" embaixo do nome para ligar ao material da Eclética (as fichas passam a usar ele).
+        </p>
+      )}
       {lista.length === 0 ? (
         <p className="text-sm text-stone-500">As fichas dos produtos da previsão não têm insumos.</p>
       ) : (
@@ -249,7 +248,14 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
             <tbody>
               {ordenada.map((x) => (
                 <tr key={x.id} className={`border-t border-stone-100 ${x.pedir > 0 ? '' : 'text-stone-400'}`}>
-                  <td className="px-3 py-1.5 font-semibold">{x.nome}</td>
+                  <td className="px-3 py-1.5 font-semibold">
+                    {x.nome}
+                    {x.semCodigo && (
+                      <button className="block text-xs font-normal text-amber-700 underline" title="Este item veio da planilha dos eventos e não é o material do estoque. Junte com o material certo para puxar o saldo." onClick={() => setJuntando(x)}>
+                        fora do estoque · juntar com o material
+                      </button>
+                    )}
+                  </td>
                   <td className="px-3 py-1.5 text-stone-600">{x.categoria || '—'}</td>
                   <td className="px-3 py-1.5 text-stone-600">{x.fornecedor || '—'}</td>
                   <td className="px-3 py-1.5 text-right whitespace-nowrap">{qtd(x.precisa)} {x.unidade}</td>
@@ -307,6 +313,61 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
           Fora da lista por não ter ficha técnica: {faltaFicha.map((id) => cat.receitas.get(id)?.nome ?? '—').join(', ')}.
         </p>
       )}
+      {juntando && (
+        <JuntarMaterial
+          cat={cat} linha={juntando} aoFechar={() => setJuntando(null)}
+          aoJuntar={async (destino) => {
+            await store.juntarInsumos(juntando.id, destino.id)
+            avisar(`${juntando.nome} juntado com ${destino.nome}`)
+            setJuntando(null)
+            await aoMudar?.()
+          }}
+        />
+      )}
     </section>
+  )
+}
+
+// Juntar o insumo da planilha dos eventos com o material da Eclética (Heitor, 13/10: o saldo da Central não aparecia).
+const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+function JuntarMaterial({ cat, linha, aoFechar, aoJuntar }: { cat: Catalogo; linha: Linha; aoFechar: () => void; aoJuntar: (destino: Insumo) => Promise<void> }) {
+  const [busca, setBusca] = useState(linha.nome.split(/[\s-]+/)[0])
+  const [escolhido, setEscolhido] = useState<Insumo | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+  const termos = semAcento(busca).split(/\s+/).filter(Boolean)
+  const opcoes = [...cat.insumos.values()]
+    .filter((i) => i.id !== linha.id && i.ecleticaCodigo && termos.every((t) => semAcento(i.nome).includes(t)))
+    .sort((a, b) => Number(b.unidade === linha.unidade) - Number(a.unidade === linha.unidade) || a.nome.localeCompare(b.nome))
+    .slice(0, 30)
+  return (
+    <Modal titulo={`Juntar ${linha.nome}`} aberto aoFechar={aoFechar}>
+      <p className="text-sm text-stone-600">
+        Escolha o material do estoque que é o mesmo item. As fichas, contagens e pedidos de <b>{linha.nome}</b> passam para ele, e {linha.nome} sai do cadastro.
+      </p>
+      <input className={`${estiloEntrada} mt-3`} autoFocus placeholder="Buscar material" value={busca} onChange={(e) => { setBusca(e.target.value); setEscolhido(null) }} aria-label="Buscar material" />
+      <ul className="mt-2 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-xl ring-1 ring-stone-200">
+        {opcoes.length === 0 && <li className="px-3 py-3 text-sm text-stone-500">Nenhum material com esse nome.</li>}
+        {opcoes.map((i) => (
+          <li key={i.id}>
+            <button className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm ${escolhido?.id === i.id ? 'bg-ozzy-400/30' : 'hover:bg-stone-50'}`} onClick={() => setEscolhido(i)}>
+              <span>{i.nome} <span className="text-xs text-stone-400">cód. {i.ecleticaCodigo}</span></span>
+              <span className={`text-xs ${i.unidade === linha.unidade ? 'text-stone-500' : 'text-red-600'}`}>{i.unidade}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {escolhido && escolhido.unidade !== linha.unidade && (
+        <p className="mt-2 text-sm text-red-700">{escolhido.nome} está em {escolhido.unidade} e {linha.nome} em {linha.unidade}. Acerte a unidade no cadastro antes de juntar.</p>
+      )}
+      {erro && <p className="mt-2 text-sm text-red-700">{erro}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        <Botao variante="secundario" onClick={aoFechar}>Cancelar</Botao>
+        <Botao disabled={!escolhido || escolhido.unidade !== linha.unidade || salvando} onClick={async () => {
+          setSalvando(true); setErro('')
+          try { await aoJuntar(escolhido!) } catch (e) { setErro((e as Error).message); setSalvando(false) }
+        }}>{salvando ? 'Juntando…' : escolhido ? `Juntar com ${escolhido.nome}` : 'Escolha o material'}</Botao>
+      </div>
+    </Modal>
   )
 }

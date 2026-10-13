@@ -2123,6 +2123,18 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
         return ant || entrada ? [{ insumoId: i.id, precoAnterior: ant?.preco ?? null, anteriorEm: ant?.em ?? null, custoEntrada: entrada, entradaEm: entrada ? hoje() : null }] : []
       })
     },
+    async juntarInsumos(origemId, destinoId) {
+      exigeGestao()
+      const o = insumosDemo.find((x) => x.id === origemId), d = insumosDemo.find((x) => x.id === destinoId)
+      if (!o || !d || o === d) throw new Error('Material não encontrado.')
+      if (o.unidade !== d.unidade) throw new Error(`${o.nome} está em ${o.unidade} e ${d.nome} em ${d.unidade}. Acerte a unidade antes de juntar.`)
+      for (const v of versoesReceitaDemo) for (const it of v.itens) if (it.insumoId === origemId) it.insumoId = destinoId
+      for (const r of receitasDemo) if (r.insumoId === origemId) r.insumoId = destinoId
+      for (const m of movimentosDemo) if (m.insumoId === origemId) m.insumoId = destinoId
+      Object.assign(d, { fornecedorId: d.fornecedorId ?? o.fornecedorId, embalagem: d.embalagem ?? o.embalagem, embalagemQtd: d.embalagemQtd ?? o.embalagemQtd, preco: d.preco ?? o.preco, ativo: true })
+      insumosDemo.splice(insumosDemo.indexOf(o), 1)
+      await espera(undefined)
+    },
     async excluirInsumos(ids) {
       exigeGestao()
       return ids.flatMap((id): { insumoId: string; nome: string; excluido: boolean; motivo: string | null }[] => {

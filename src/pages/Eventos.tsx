@@ -276,7 +276,7 @@ function AbaLogistica({ e, eventos, aba }: { e: Evento; eventos: Evento[]; aba: 
   if (erro) return <p className="text-red-600">{erro}</p>
   if (!d) return <p className="text-stone-400">Carregando…</p>
   if (aba === 'previsao') return <CardapioPrevisao e={e} eventos={eventos} d={d} aoMudar={carregar} />
-  if (aba === 'insumos' && d.gestao) return <InsumosDoEvento e={e} d={d} />
+  if (aba === 'insumos' && d.gestao) return <InsumosDoEvento e={e} d={d} aoMudar={carregar} />
   if (aba === 'vendas') return <VendasEvento e={e} d={d} aoMudar={carregar} />
   if (aba === 'separacao') return <Separacao e={e} d={d} aoMudar={carregar} />
   if (aba === 'sobras') return <Sobras e={e} d={d} aoMudar={carregar} />

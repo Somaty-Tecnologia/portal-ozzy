@@ -884,6 +884,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         insumoId: r.insumo_id, precoAnterior: numeroOuNulo(r.preco_anterior), anteriorEm: r.anterior_em, custoEntrada: numeroOuNulo(r.custo_entrada), entradaEm: r.entrada_em,
       }))
     },
+    async juntarInsumos(origemId, destinoId) {
+      ok(await sb.rpc('juntar_insumos', { p_origem: origemId, p_destino: destinoId }))
+    },
     async excluirInsumos(ids) {
       return (ok(await sb.rpc('excluir_insumos', { p_ids: ids })) ?? []).map((r: any) => ({ insumoId: r.insumo_id, nome: r.nome, excluido: r.excluido, motivo: r.motivo }))
     },
@@ -905,7 +908,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       }))
     },
     async receitas() {
-      return (ok(await sb.from('receitas').select('*').order('nome')) ?? []).map(paraReceita)
+      return (await todas((de, ate) => sb.from('receitas').select('*').order('nome').order('id').range(de, ate))).map(paraReceita)
     },
     async versoesReceitas() {
       return (await todas((de, ate) => sb.from('receita_versoes').select('*, receita_itens(ordem, insumo_id, sub_receita_id, quantidade, aproveitamento, so_delivery)').order('numero').order('id').range(de, ate))).map(

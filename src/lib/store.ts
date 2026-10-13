@@ -295,6 +295,8 @@ export interface Store {
   controlarEstoque(insumoIds: string[], controla: boolean): Promise<void>
   ativarInsumos(insumoIds: string[], ativo: boolean): Promise<void>
   // Exclui de vez o material sem história; o que tem (ficha, nota, produção…) é inativado e volta com o motivo.
+  // Junta um material duplicado em outro (fichas, estoque, notas…) e tira o duplicado do cadastro.
+  juntarInsumos(origemId: string, destinoId: string): Promise<void>
   excluirInsumos(ids: string[]): Promise<{ insumoId: string; nome: string; excluido: boolean; motivo: string | null }[]>
   receitas(): Promise<Receita[]>
   // Todas as versões de todas as fichas, com os itens (a tela calcula o custo da versão atual).

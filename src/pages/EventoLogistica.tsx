@@ -116,7 +116,13 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
   const [base, setBase] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState(false)
   const [novo, setNovo] = useState('')
-  const produtos = g.receitas.filter((r) => r.tipo === 'produto' && (r.area ?? 'eventos') === 'eventos' && r.ativo)
+  // Heitor (13/10): qualquer produto do cadastro (fichas dos eventos e das lojas) pode entrar no cardápio.
+  const [buscaProduto, setBuscaProduto] = useState('')
+  const produtos = g.receitas.filter((r) => r.tipo === 'produto' && r.ativo).sort((a, b) => a.nome.localeCompare(b.nome))
+  const termosProduto = buscaProduto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(Boolean)
+  const paraAdicionar = produtos.filter((p) => !cardapio.some((c) => c.receitaId === p.id)
+    && termosProduto.every((t) => p.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)))
+  const grupoProduto = (area: string) => paraAdicionar.filter((p) => (p.area ?? 'eventos') === area)
   const receita = (id: string) => g.receitas.find((r) => r.id === id)
   const q = (r: string, dia: string) => numero(grade[`${r}|${dia}`] ?? '') ?? 0
   const finalizados = eventos.filter((x) => x.id !== e.id && x.status === 'finalizado' && g.vendas.some((v) => v.eventoId === x.id))
@@ -309,9 +315,15 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <input className={`${estiloEntrada} sm:w-56!`} placeholder="Buscar produto" value={buscaProduto} aria-label="Buscar produto para o cardápio"
+          onChange={(ev) => { setBuscaProduto(ev.target.value); setNovo('') }} />
         <select className={`${estiloEntrada} sm:w-80!`} value={novo} onChange={(ev) => setNovo(ev.target.value)} aria-label="Produto para adicionar ao cardápio">
-          <option value="">Adicionar produto ao cardápio…</option>
-          {produtos.filter((p) => !cardapio.some((c) => c.receitaId === p.id)).map((p) => <option key={p.id} value={p.id}>{p.nome}{p.linha ? ` (${p.linha})` : ''}</option>)}
+          <option value="">{paraAdicionar.length ? `Adicionar produto ao cardápio (${paraAdicionar.length})…` : 'Nenhum produto com esse nome'}</option>
+          {[['eventos', 'Fichas dos eventos'], ['lojas', 'Fichas das lojas']].map(([area, nome]) => grupoProduto(area).length > 0 && (
+            <optgroup key={area} label={nome}>
+              {grupoProduto(area).map((p) => <option key={p.id} value={p.id}>{p.nome}{p.linha ? ` (${p.linha})` : ''}</option>)}
+            </optgroup>
+          ))}
         </select>
         <Botao
           variante="secundario"
@@ -319,6 +331,7 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
           onClick={() => {
             setCardapio((cs) => [...cs, { receitaId: novo, preco: receita(novo)?.precoVenda ?? null, ordem: cs.length + 1 }])
             setNovo('')
+            setBuscaProduto('')
             setMudou(true)
           }}
         >
@@ -342,7 +355,7 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
 
 // ——— Insumos a providenciar (aba própria, Heitor 13/10): usa a previsão salva ———
 
-export function InsumosDoEvento({ e, d }: { e: Evento; d: DadosLogistica }) {
+export function InsumosDoEvento({ e, d, aoMudar }: { e: Evento; d: DadosLogistica; aoMudar: () => Promise<void> }) {
   const g = d.gestao!
   const saldoBase = useMemo(() => estoqueBase(g.contagensBase, g.enviosTodos), [g.contagensBase, g.enviosTodos])
   const linhas = useMemo(() => g.cardapio.map((c) => ({
@@ -356,7 +369,7 @@ export function InsumosDoEvento({ e, d }: { e: Evento; d: DadosLogistica }) {
       </Vazio>
     )
   }
-  return <InsumosEvento cat={g.cat} eventoId={e.id} nomeEvento={e.nome} saldoBase={saldoBase} linhas={linhas} />
+  return <InsumosEvento cat={g.cat} eventoId={e.id} nomeEvento={e.nome} saldoBase={saldoBase} linhas={linhas} aoMudar={aoMudar} />
 }
 
 // ——— Vendas reais ———
