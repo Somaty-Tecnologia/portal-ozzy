@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react'
 import { Botao } from './ui'
 import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, hoje, inicioDaSemana } from '../lib/datas'
-import { DIAS_SEMANA } from '../lib/turnos'
-import { nomeCurto, type Folga, type Funcionario, type Turno } from '../lib/types'
+import { podeGerenciar } from '../lib/permissoes'
+import { DIAS_SEMANA, setorDaFuncao, turnoDoFreela } from '../lib/turnos'
+import { nomeCurto, type Folga, type Funcionario, type Turno, type TurnoFreela } from '../lib/types'
+
+// Freela que mandou a diária (pendente ou já aprovada) entra no turno em que trabalhou (Heitor, 13/10).
+interface FreelaNoTurno { chave: string; nome: string; data: string; turno: TurnoFreela; unidadeId: string; funcao: string; checkin: boolean }
 
 // Mapa da semana (pedido de 08/10): para cada turno, quem trabalha em cada dia. Sai do turno-padrão de cada
 // pessoa, tirando quem está de folga naquela data (aba Folgas).
@@ -18,10 +22,42 @@ export default function MapaTurnos({ turnos, nomeLocal }: { turnos: Turno[]; nom
   useEffect(() => {
     store.folgas(inicio, addDias(inicio, 6)).then(setFolgas).catch(() => setFolgas([]))
   }, [store, inicio])
+  const [freelas, setFreelas] = useState<FreelaNoTurno[]>([])
+  const gestao = podeGerenciar(eu.nivel)
+  useEffect(() => {
+    if (!gestao) return
+    const fim = addDias(inicio, 6)
+    Promise.all([store.diariasFreela(inicio, fim), store.enviosFreela('pendente'), store.freelancers()])
+      .then(([diarias, pendentes, cadastro]) => {
+        const lista: FreelaNoTurno[] = []
+        const visto = new Set<string>()
+        const por = (nome: string, d: { data: string; turno: TurnoFreela; unidadeId: string; funcao: string }, checkin: boolean) => {
+          const chave = `${nome.toLowerCase()}|${d.data}|${d.turno}|${d.unidadeId}`
+          // Entregador não entra: não é posto de turno.
+          if (!nome || visto.has(chave) || /entreg|motob/i.test(d.funcao)) return
+          visto.add(chave)
+          lista.push({ chave, nome, data: d.data, turno: d.turno, unidadeId: d.unidadeId, funcao: d.funcao, checkin })
+        }
+        for (const e of pendentes) if (e.data >= inicio && e.data <= fim) por(e.nome, e, e.naLoja)
+        for (const d of diarias) por(cadastro.find((c) => c.id === d.freelancerId)?.nome ?? '', d, false)
+        setFreelas(lista)
+      })
+      .catch(() => setFreelas([]))
+  }, [store, inicio, gestao])
 
   const ativos = equipe.filter((f) => f.status === 'ativo').sort((a, b) => a.nome.localeCompare(b.nome))
   const deFolga = (f: Funcionario, d: string) => folgas.some((g) => g.funcionarioId === f.id && g.data === d)
   const locais = [...new Set(turnos.map((t) => t.local))]
+  // Setor do turno = o da maioria de quem está nele; sem ninguém, pelo nome do turno.
+  const setorDoTurno = (t: Turno) => {
+    const conta: Record<string, number> = {}
+    for (const f of ativos) if (f.turnoId === t.id && f.setor) conta[f.setor] = (conta[f.setor] ?? 0) + 1
+    return Object.entries(conta).sort((a, b) => b[1] - a[1])[0]?.[0] ?? setorDaFuncao(t.nome)
+  }
+  const turnoDe = new Map(freelas.map((f) => [f.chave, turnoDoFreela(f, turnos, setorDoTurno)?.id ?? null]))
+  const freelasDo = (t: Turno, d: string) => freelas.filter((f) => f.data === d && turnoDe.get(f.chave) === t.id)
+  const nomeFreela = (f: FreelaNoTurno) => `${nomeCurto(f.nome)}${f.checkin ? ' ✓' : ''}`
+  const dicaFreela = (f: FreelaNoTurno) => `${f.nome} · freela · ${f.funcao}${f.checkin ? ' · check-in na loja' : ''}`
 
   return (
     <div className="space-y-4">
@@ -37,6 +73,10 @@ export default function MapaTurnos({ turnos, nomeLocal }: { turnos: Turno[]; nom
         </div>
         <Botao variante="secundario" onClick={() => setInicio(addDias(inicio, 7))} aria-label="Próxima semana">›</Botao>
       </div>
+
+      {gestao && freelas.length > 0 && (
+        <p className="text-xs text-stone-500"><span className="font-semibold text-violet-700">Roxo</span> = freela que mandou a diária, no turno da loja, período e função dele. ✓ = fez check-in na loja.</p>
+      )}
 
       <div className="grid grid-cols-7 gap-1 sm:hidden">
         {dias.map((d, i) => (
@@ -62,6 +102,7 @@ export default function MapaTurnos({ turnos, nomeLocal }: { turnos: Turno[]; nom
                 const doTurno = ativos.filter((f) => f.turnoId === t.id)
                 const trabalham = doTurno.filter((f) => !deFolga(f, dias[diaCel]))
                 const folgam = doTurno.filter((f) => deFolga(f, dias[diaCel]))
+                const fr = freelasDo(t, dias[diaCel])
                 return (
                   <li key={t.id} className="px-4 py-2.5 text-sm">
                     <div className="flex items-baseline justify-between gap-2">
@@ -69,8 +110,11 @@ export default function MapaTurnos({ turnos, nomeLocal }: { turnos: Turno[]; nom
                       <span className="text-xs text-stone-500 tabular-nums">{h ? `${h.inicio}–${h.fim}` : 'Fechado'}</span>
                     </div>
                     {h &&
-                      (trabalham.length ? (
-                        <p className="mt-0.5 text-stone-700">{trabalham.map((f) => nomeCurto(f.nome)).join(', ')}</p>
+                      (trabalham.length || fr.length ? (
+                        <p className="mt-0.5 text-stone-700">
+                          {trabalham.map((f) => nomeCurto(f.nome)).join(', ')}
+                          {fr.length > 0 && <span className="text-violet-700">{trabalham.length ? ', ' : ''}{fr.map((f) => `${nomeFreela(f)} (freela)`).join(', ')}</span>}
+                        </p>
                       ) : (
                         <p className="mt-0.5 font-semibold text-red-700">Ninguém</p>
                       ))}
@@ -105,15 +149,19 @@ export default function MapaTurnos({ turnos, nomeLocal }: { turnos: Turno[]; nom
                           if (!h) return <td key={d} className="bg-stone-50 px-1.5 py-2 text-stone-400">Fechado</td>
                           const trabalham = doTurno.filter((f) => !deFolga(f, d))
                           const folgam = doTurno.filter((f) => deFolga(f, d))
+                          const fr = freelasDo(t, d)
                           return (
                             <td key={d} className={`px-1.5 py-2 ${d === hoje() ? 'bg-ozzy-400/10' : ''}`}>
                               <div className="mb-1 text-[10px] text-stone-500 tabular-nums">{h.inicio}–{h.fim}</div>
-                              {trabalham.length === 0 ? (
+                              {trabalham.length === 0 && fr.length === 0 ? (
                                 <div className="font-semibold text-red-700">Ninguém</div>
                               ) : (
                                 <ul className="space-y-0.5">
                                   {trabalham.map((f) => (
                                     <li key={f.id} className={`truncate ${f.id === eu.id ? 'font-bold' : ''}`} title={f.nome}>{nomeCurto(f.nome)}</li>
+                                  ))}
+                                  {fr.map((f) => (
+                                    <li key={f.chave} className="truncate text-violet-700" title={dicaFreela(f)}>{nomeFreela(f)} <span className="text-[10px]">freela</span></li>
                                   ))}
                                 </ul>
                               )}

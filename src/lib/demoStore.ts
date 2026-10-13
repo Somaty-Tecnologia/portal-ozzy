@@ -510,6 +510,7 @@ const envios: EnvioFreela[] = (() => {
     e('env2', 2, 'noite', { cpf: '86288366757', celular: '11966665555', nome: 'Lucas Almeida Rocha', pix: 'lucas.rocha@email.com', unidadeId: 'burger-va', funcao: 'Entregador', distanciaLojaM: 4200, enviadoEm: new Date().toISOString() }),
     e('env3', 1, 'noite', { cpf: '86288366757', celular: '11966665555', nome: 'Lucas Almeida Rocha', pix: 'lucas.rocha@email.com', unidadeId: 'burger-va', funcao: 'Entregador', observacao: 'Fiquei até 0h30', naLoja: true, distanciaLojaM: 25 }),
     e('env4', 1, 'manha', { cpf: '39053344705', celular: '11955554444', nome: 'Diego Ferreira Santos', pix: '11955554444', freelancerId: 'fl3', unidadeId: 'pizza', funcao: 'Atendente' }),
+    e('env6', (new Date().getDay() + 6) % 7 + 1, 'manha', { cpf: '71428793860', celular: '11944443333', nome: 'Kelly Cristina Prado', pix: '11944443333', funcao: 'Auxiliar de cozinha', naLoja: true, distanciaLojaM: 30 }),
     e('env5', 2, 'noite', { nome: 'Cibeli Alves da Costa', pix: '11999990012', funcionarioId: 'p-cibeli-costa', unidadeId: 'burger-va', funcao: 'Auxiliar de cozinha', naLoja: true, distanciaLojaM: 60 }),
   ].filter((x) => x.data >= inicioDaSemana(addDias(hoje(), -7)))
 })()

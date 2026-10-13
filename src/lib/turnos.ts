@@ -55,3 +55,29 @@ export const TURNOS_PADRAO: Turno[] = [
   { id: 't-escritorio', local: 'escritorio', nome: 'Escritório', dias: [d('08:30', '17:45', 30), d('08:30', '17:45', 30), d('08:30', '17:45', 30), d('08:30', '17:45', 30), d('08:30', '17:45', 30), F, F] },
   { id: 't-manutencao', local: 'escritorio', nome: 'Manutenção', dias: [d('10:00', '19:45'), d('10:00', '19:45'), d('10:00', '19:45'), d('10:00', '19:45'), d('10:00', '19:45'), F, F] },
 ]
+
+// Freela no mapa dos turnos (Heitor, 13/10): a diária diz loja, dia, manhã/noite e função; o turno certo é o da
+// mesma loja, aberto no dia, do mesmo período (começa antes do meio-dia = manhã) e do mesmo setor da função.
+export const setorDaFuncao = (funcao: string): 'cozinha' | 'atendimento' | null => {
+  const f = funcao.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  if (/atend|caixa|garc|salao|recep/.test(f)) return 'atendimento'
+  if (/chap|cozinh|pizza|aux|prep|cozinheir|copa|lanch/.test(f)) return 'cozinha'
+  return null
+}
+export const periodoDoTurno = (d: DiaTurno): 'manha' | 'noite' => (min(d.inicio) < 12 * 60 ? 'manha' : 'noite')
+export function turnoDoFreela(
+  f: { unidadeId: string; data: string; turno: 'manha' | 'noite'; funcao: string },
+  turnos: Turno[],
+  setorDoTurno: (t: Turno) => string | null,
+): Turno | null {
+  const dia = (new Date(f.data + 'T12:00:00').getDay() + 6) % 7
+  const setor = setorDaFuncao(f.funcao)
+  let melhor: Turno | null = null, nota = -1
+  for (const t of turnos) {
+    const h = t.dias[dia]
+    if (t.local !== f.unidadeId || !h) continue
+    const n = (periodoDoTurno(h) === f.turno ? 2 : 0) + (setor && setorDoTurno(t) === setor ? 1 : 0)
+    if (n > nota) { melhor = t; nota = n }
+  }
+  return melhor
+}
