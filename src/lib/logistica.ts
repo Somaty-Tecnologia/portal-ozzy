@@ -212,3 +212,55 @@ export function estoqueBase(contagens: Inventario[], envios: EnvioEvento[]) {
 
 // Arredonda para cima: unidade inteira; kg e litro em 0,1.
 export const arredondarPara = (unidade: string, q: number) => (unidade === 'un' ? Math.ceil(q - 1e-9) : Math.ceil(q * 10 - 1e-9) / 10)
+
+// Necessidade líquida (Heitor, 13/10): pré-preparo que já tem em estoque não abre nos ingredientes.
+// Ex.: mix de cogumelos trufados em estoque → não precisa comprar cogumelo Paris, shimeji, tomilho e miso para ele.
+// Cada pré-preparo junta toda a demanda (de todos os produtos e sub-fichas), desconta o estoque e só o que
+// falta é aberto nos ingredientes. Processa por nível (o mais alto primeiro) para somar tudo antes de descontar.
+// Chaves: 'i:<insumo>' (material comprado) e 'r:<ficha>' (pré-preparo, inclusive material que tem ficha).
+export interface LinhaNecessidade { precisa: number; estoque: number; falta: number }
+export function necessidadeLiquida(cat: Catalogo, linhas: { receitaId: string; quantidade: number }[], estoqueDe: (chave: string) => number) {
+  const chaveItem = (i: ItemReceita) => {
+    const sub = i.subReceitaId ?? (i.insumoId ? cat.fichaDoInsumo.get(i.insumoId) : undefined)
+    return sub ? 'r:' + sub : 'i:' + i.insumoId
+  }
+  const nivel = new Map<string, number>()
+  const visitar = (rid: string, n: number, pilha: string[]) => {
+    for (const i of cat.atual.get(rid)?.itens ?? []) {
+      const k = chaveItem(i)
+      if (!k.startsWith('r:')) continue
+      const sub = k.slice(2)
+      if (pilha.includes(sub) || (nivel.get(sub) ?? -1) >= n) continue
+      nivel.set(sub, n)
+      visitar(sub, n + 1, [...pilha, sub])
+    }
+  }
+  for (const l of linhas) if (l.quantidade > 0) visitar(l.receitaId, 1, [l.receitaId])
+  const bruto = new Map<string, number>()
+  const explodir = (rid: string, unidades: number) => {
+    const v = cat.atual.get(rid)
+    if (!v) return
+    const f = unidades / (v.rendimento || 1)
+    for (const i of v.itens) somar(bruto, chaveItem(i), (i.quantidade / (i.aproveitamento || 1)) * f)
+  }
+  for (const l of linhas) if (l.quantidade > 0) explodir(l.receitaId, l.quantidade)
+  const out = new Map<string, LinhaNecessidade>()
+  for (const n of [...new Set(nivel.values())].sort((a, b) => a - b)) {
+    for (const [sub, nv] of nivel) {
+      if (nv !== n) continue
+      const k = 'r:' + sub
+      const q = bruto.get(k) ?? 0
+      if (q <= 0) continue
+      const tem = Math.max(0, estoqueDe(k))
+      const falta = Math.max(0, q - tem)
+      out.set(k, { precisa: q, estoque: tem, falta })
+      if (falta > 0) explodir(sub, falta)
+    }
+  }
+  for (const [k, q] of bruto) {
+    if (out.has(k) || q <= 0) continue
+    const tem = Math.max(0, estoqueDe(k))
+    out.set(k, { precisa: q, estoque: tem, falta: Math.max(0, q - tem) })
+  }
+  return out
+}

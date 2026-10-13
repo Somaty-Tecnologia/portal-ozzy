@@ -498,6 +498,7 @@ const diarias: DiariaFreela[] = (() => {
   ].filter((x) => x.data <= hoje())
 })()
 const pagamentos: PagamentoFreela[] = []
+const pedidoInsumosDemo = new Map<string, Record<string, number>>()
 // Diárias mandadas pelo link (freelancer) e pelo login (funcionário), esperando a gestão aprovar.
 const envios: EnvioFreela[] = (() => {
   const e = (id: string, dias: number, turno: 'manha' | 'noite', x: Partial<EnvioFreela>): EnvioFreela => ({
@@ -2313,6 +2314,16 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       if (i >= 0) freelasEventoDemo[i] = linha
       else freelasEventoDemo.push(linha)
       return espera(structuredClone(linha))
+    },
+    async pedidoInsumosEvento(eventoId) {
+      exigeGestao()
+      return espera({ ...(pedidoInsumosDemo.get(eventoId) ?? {}) })
+    },
+    async salvarPedidoInsumosEvento(eventoId, valores) {
+      exigeGestao()
+      const m = { ...(pedidoInsumosDemo.get(eventoId) ?? {}) }
+      for (const [k, q] of Object.entries(valores)) { if (q === null) delete m[k]; else m[k] = q }
+      pedidoInsumosDemo.set(eventoId, m)
     },
     async diariasFreelaEvento(filtro) {
       exigeGestao()

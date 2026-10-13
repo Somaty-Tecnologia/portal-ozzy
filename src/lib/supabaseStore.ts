@@ -1061,6 +1061,16 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         : ok(await sb.from('freelas_evento').insert(linha).select('*').single())
       return paraFreelaEvento(r)
     },
+    async pedidoInsumosEvento(eventoId) {
+      const r = ok(await sb.from('evento_pedido_insumos').select('insumo_id, quantidade').eq('evento_id', eventoId)) ?? []
+      return Object.fromEntries(r.map((x: any) => [x.insumo_id, Number(x.quantidade)]))
+    },
+    async salvarPedidoInsumosEvento(eventoId, valores) {
+      const sim = Object.entries(valores).filter(([, q]) => q !== null).map(([insumo_id, q]) => ({ evento_id: eventoId, insumo_id, quantidade: q, atualizado_em: new Date().toISOString() }))
+      const nao = Object.entries(valores).filter(([, q]) => q === null).map(([id]) => id)
+      if (sim.length) ok(await sb.from('evento_pedido_insumos').upsert(sim, { onConflict: 'evento_id,insumo_id' }))
+      if (nao.length) ok(await sb.from('evento_pedido_insumos').delete().eq('evento_id', eventoId).in('insumo_id', nao))
+    },
     async diariasFreelaEvento(filtro) {
       let q = sb.from('evento_freela_diarias').select('*')
       q = 'eventoId' in filtro ? q.eq('evento_id', filtro.eventoId).neq('status', 'recusado') : q.eq('status', filtro.status)

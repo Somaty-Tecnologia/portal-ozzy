@@ -335,6 +335,9 @@ export interface Store {
   // Freelancers de eventos (base separada da das lojas; só a gestão).
   freelasEvento(): Promise<FreelaEvento[]>
   salvarFreelaEvento(f: Omit<FreelaEvento, 'id'> & { id?: string }): Promise<FreelaEvento>
+  // "Pedir (final)" dos insumos a providenciar do evento (0088): insumoId → quantidade; null apaga.
+  pedidoInsumosEvento(eventoId: string): Promise<Record<string, number>>
+  salvarPedidoInsumosEvento(eventoId: string, valores: Record<string, number | null>): Promise<void>
   diariasFreelaEvento(filtro: { eventoId: string } | { status: 'pendente' }): Promise<DiariaFreelaEvento[]>
   lancarDiariaFreelaEvento(d: { eventoId: string; freelaId: string; data: string; funcao: string; valor: number; observacao: string | null }): Promise<void>
   aprovarDiariaFreelaEvento(id: string, valor: number, funcao: string, usarPixNovo: boolean): Promise<void>

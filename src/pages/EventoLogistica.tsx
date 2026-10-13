@@ -23,6 +23,7 @@ const inteiro = (n: number) => Math.round(n).toLocaleString('pt-BR')
 export const ABAS_EVENTO = [
   { id: '', nome: 'Resumo' },
   { id: 'previsao', nome: 'Cardápio e previsão' },
+  { id: 'insumos', nome: 'Insumos a providenciar' },
   { id: 'vendas', nome: 'Vendas' },
   { id: 'separacao', nome: 'Separação' },
   { id: 'sobras', nome: 'Sobras do dia' },
@@ -127,7 +128,6 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
   const fatTotal = dias.reduce((s, x) => s + fatDia(x), 0)
   const custoTotal = dias.reduce((s, x) => s + custoDia(x), 0)
   const faltaFicha = semFicha(g.cat, cardapio.map((c) => c.receitaId))
-  const saldoBase = useMemo(() => estoqueBase(g.contagensBase, g.enviosTodos), [g.contagensBase, g.enviosTodos])
 
   const aplicarSugestao = () => {
     let card = cardapio
@@ -331,10 +331,32 @@ export function CardapioPrevisao({ e, eventos, d, aoMudar }: { e: Evento; evento
         </p>
       )}
       {mudou && <p className="text-sm font-semibold text-amber-700">Alterações não salvas.</p>}
-      <InsumosEvento cat={g.cat} nomeEvento={e.nome} saldoBase={saldoBase}
-        linhas={cardapio.map((c) => ({ receitaId: c.receitaId, quantidade: dias.reduce((s, x) => s + q(c.receitaId, x), 0) }))} />
+      {cardapio.length > 0 && (
+        <button className="text-sm font-semibold text-sky-700 hover:underline" onClick={() => ir(`eventos/${e.id}/insumos`)}>
+          Ver os insumos a providenciar{mudou ? ' (salve a previsão antes)' : ''} →
+        </button>
+      )}
     </div>
   )
+}
+
+// ——— Insumos a providenciar (aba própria, Heitor 13/10): usa a previsão salva ———
+
+export function InsumosDoEvento({ e, d }: { e: Evento; d: DadosLogistica }) {
+  const g = d.gestao!
+  const saldoBase = useMemo(() => estoqueBase(g.contagensBase, g.enviosTodos), [g.contagensBase, g.enviosTodos])
+  const linhas = useMemo(() => g.cardapio.map((c) => ({
+    receitaId: c.receitaId, quantidade: g.previsao.filter((p) => p.receitaId === c.receitaId).reduce((s, p) => s + p.quantidade, 0),
+  })), [g.cardapio, g.previsao])
+  if (!linhas.some((l) => l.quantidade > 0)) {
+    return (
+      <Vazio>
+        Ainda não tem previsão de vendas salva.{' '}
+        <button className="font-semibold underline" onClick={() => ir(`eventos/${e.id}/previsao`)}>Fazer em Cardápio e previsão</button>
+      </Vazio>
+    )
+  }
+  return <InsumosEvento cat={g.cat} eventoId={e.id} nomeEvento={e.nome} saldoBase={saldoBase} linhas={linhas} />
 }
 
 // ——— Vendas reais ———
