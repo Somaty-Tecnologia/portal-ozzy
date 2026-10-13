@@ -381,7 +381,7 @@ export interface Store {
   lancarProducao(p: NovaProducao): Promise<string>
   desfazerProducao(id: string): Promise<void>
   // Fechamento das lojas (09/10): quem é da loja conta e pede; a produção vê os pedidos e o que preparar.
-  listaFechamento(unidadeId: string, setor: SetorFechamento, data: string): Promise<ItemFechamento[]>
+  listaFechamento(unidadeId: string, setor: SetorFechamento, data: string, para?: string): Promise<ItemFechamento[]>
   fechamentos(de: string, ate: string): Promise<Fechamento[]>
   pedidosTirarFechamento(): Promise<PedidoTirarFechamento[]> // pendentes
   caixaTurnos(unidadeId: string, de: string, ate: string): Promise<CaixaTurno[]>

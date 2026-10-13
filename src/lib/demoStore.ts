@@ -2906,11 +2906,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       else produtosVendaDemo.push(novo)
       return espera(structuredClone(novo))
     },
-    async listaFechamento(unidadeId, setor, data) {
+    async listaFechamento(unidadeId, setor, data, para = addDias(data, 1)) {
       const u = exigeEu()
       if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.unidadeId === unidadeId)) return espera([])
-      const f = fechamentosDemo.find((x) => x.unidadeId === unidadeId && x.setor === setor && x.data === data)
-      const dia = (new Date(addDias(data, 1) + 'T12:00:00').getDay() + 6) % 7
+      const f = fechamentosDemo.find((x) => x.unidadeId === unidadeId && x.setor === setor && x.data === data && x.para === para)
+      const dia = (new Date(para + 'T12:00:00').getDay() + 6) % 7
       return espera(listaFechDemo.filter((i) => i.unidadeId === unidadeId && i.setor === setor && i.ativo).map((i): ItemFechamento => {
         const c = f && contagensFechDemo.find((x) => x.fechamentoId === f.id && x.itemId === i.id)
         return {
@@ -2997,10 +2997,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async enviarFechamento(e) {
       const u = exigeEu()
       if (!(podeGerenciar(u.nivel) || u.unidadeId === e.unidadeId)) throw new Error('Só quem é desta loja (ou a gestão) envia o fechamento.')
-      let f = fechamentosDemo.find((x) => x.unidadeId === e.unidadeId && x.setor === e.setor && x.data === e.data)
+      const para = e.para ?? addDias(e.data, 1)
+      let f = fechamentosDemo.find((x) => x.unidadeId === e.unidadeId && x.setor === e.setor && x.data === e.data && x.para === para)
       const dados = { responsavel: e.responsavel.trim() || null, observacao: e.observacao.trim() || null, fala: e.fala.trim() || null, enviadoEm: agora(), enviadoPor: u.id }
       if (f) Object.assign(f, dados)
-      else fechamentosDemo.push((f = { id: novoId('fc'), unidadeId: e.unidadeId, setor: e.setor, data: e.data, para: addDias(e.data, 1), ...dados }))
+      else fechamentosDemo.push((f = { id: novoId('fc'), unidadeId: e.unidadeId, setor: e.setor, data: e.data, para, ...dados }))
       const id = f.id
       for (let j = contagensFechDemo.length - 1; j >= 0; j--) if (contagensFechDemo[j].fechamentoId === id) contagensFechDemo.splice(j, 1)
       for (const i of e.itens) contagensFechDemo.push({ fechamentoId: id, itemId: i.itemId, contagem: i.contagem, sugestao: i.sugestao, pedido: i.pedido || null })

@@ -1528,6 +1528,8 @@ export interface EnvioFechamento {
   unidadeId: string
   setor: SetorFechamento
   data: string
+  // Dia do pedido: o seguinte (padrão) ou o mesmo dia (Heitor, 13/10).
+  para?: string
   responsavel: string
   observacao: string
   fala: string

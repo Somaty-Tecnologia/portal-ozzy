@@ -1548,8 +1548,8 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         ? ok(await sb.from('produtos_venda').update(linha).eq('id', p.id).select().single())
         : ok(await sb.from('produtos_venda').insert(linha).select().single()))
     },
-    async listaFechamento(unidadeId, setor, data) {
-      return (ok(await sb.rpc('itens_fechamento', { p_unidade: unidadeId, p_setor: setor, p_data: data })) ?? []).map((r: any): ItemFechamento => ({
+    async listaFechamento(unidadeId, setor, data, para) {
+      return (ok(await sb.rpc('itens_fechamento', { p_unidade: unidadeId, p_setor: setor, p_data: data, p_para: para ?? null })) ?? []).map((r: any): ItemFechamento => ({
         itemId: r.item_id, insumoId: r.insumo_id, nome: r.nome, categoria: r.categoria ?? null, unidadeContagem: r.unidade_contagem, ordem: r.ordem, prePreparo: r.pre_preparo,
         ideal: numeroOuNulo(r.ideal), contagem: numeroOuNulo(r.contagem), sugestao: numeroOuNulo(r.sugestao), pedido: numeroOuNulo(r.pedido),
       }))
@@ -1606,7 +1606,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async enviarFechamento(f) {
       return ok(await sb.rpc('enviar_fechamento', {
         p_unidade: f.unidadeId, p_setor: f.setor, p_data: f.data, p_responsavel: f.responsavel, p_obs: f.observacao, p_fala: f.fala,
-        p_itens: f.itens.map((i) => ({ item_id: i.itemId, contagem: i.contagem, sugestao: i.sugestao, pedido: i.pedido })),
+        p_itens: f.itens.map((i) => ({ item_id: i.itemId, contagem: i.contagem, sugestao: i.sugestao, pedido: i.pedido })), p_para: f.para ?? null,
       })) as string
     },
     async inventariosEstoque(centroCustoId) {

@@ -38,6 +38,8 @@ export default function Fechamento() {
   const [data, setData] = useState(dataPadrao)
   // Heitor (13/10): o caixa da loja fica junto do fechamento.
   const [aba, setAba] = useState<'pedido' | 'caixa'>('pedido')
+  // Heitor (13/10): pedido para o dia seguinte (padrão) ou para o mesmo dia.
+  const [hoje_, setHoje] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -68,12 +70,22 @@ export default function Fechamento() {
           <input type="date" value={data} max={addDias(hoje(), 1)} onChange={(e) => e.target.value && setData(e.target.value)} className={`${estiloEntrada} w-40!`} />
         </label>
       </div>
-      {aba === 'caixa' ? <Caixa loja={loja} data={data} /> : <TelaFechamento key={`${loja}|${setor}|${data}`} loja={loja} setor={setor} data={data} />}
+      {aba === 'pedido' && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-stone-600">Pedido para</span>
+          <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-200">
+            {([[false, `amanhã (${diaSemana(addDias(data, 1)).slice(0, 3).toLowerCase()} ${dataCurta(addDias(data, 1))})`], [true, `hoje (${diaSemana(data).slice(0, 3).toLowerCase()} ${dataCurta(data)})`]] as const).map(([h, nome]) => (
+              <button key={String(h)} onClick={() => setHoje(h)} className={`rounded-lg px-3 py-1.5 font-semibold ${hoje_ === h ? 'bg-carvao text-white' : 'text-stone-600'}`}>{nome}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {aba === 'caixa' ? <Caixa loja={loja} data={data} /> : <TelaFechamento key={`${loja}|${setor}|${data}|${hoje_}`} loja={loja} setor={setor} data={data} para={hoje_ ? data : addDias(data, 1)} />}
     </div>
   )
 }
 
-function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFechamento; data: string }) {
+function TelaFechamento({ loja, setor, data, para }: { loja: string; setor: SetorFechamento; data: string; para: string }) {
   const { store, eu, avisar, nomeDe } = useApp()
   const [itens, setItens] = useState<ItemFechamento[] | null>(null)
   const [enviado, setEnviado] = useState<FechamentoT | null>(null)
@@ -96,14 +108,13 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   const [paraIncluir, setParaIncluir] = useState<string[]>([])
   const rec = useRef<ReturnType<typeof criarReconhecedor>>(null)
   const suportaVoz = typeof window !== 'undefined' && !!((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
-  const para = addDias(data, 1)
 
   const carregar = useCallback(async () => {
     try {
-      const [lista, fechs, tirar] = await Promise.all([store.listaFechamento(loja, setor, data), store.fechamentos(data, data), store.pedidosTirarFechamento().catch(() => [])])
+      const [lista, fechs, tirar] = await Promise.all([store.listaFechamento(loja, setor, data, para), store.fechamentos(data, data), store.pedidosTirarFechamento().catch(() => [])])
       setParaTirar(new Map(tirar.filter((x) => x.setor === setor && x.tipo === 'tirar' && x.insumoId).map((x) => [x.insumoId!, x.motivo])))
       setParaIncluir(tirar.filter((x) => x.setor === setor && x.tipo === 'incluir').map((x) => x.nome))
-      const f = fechs.find((x) => x.unidadeId === loja && x.setor === setor) ?? null
+      const f = fechs.find((x) => x.unidadeId === loja && x.setor === setor && x.para === para) ?? null
       setItens(lista)
       setEnviado(f)
       setCont(Object.fromEntries(lista.filter((i) => i.contagem !== null).map((i) => [i.itemId, numTexto(i.contagem)])))
@@ -118,7 +129,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
     } catch (e) {
       setErro((e as Error).message)
     }
-  }, [store, loja, setor, data])
+  }, [store, loja, setor, data, para])
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => () => rec.current?.stop(), [])
 
@@ -229,17 +240,22 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
   const enviar = async () => {
     const faltam = itens.filter((i) => !paraTirar.has(i.insumoId)).length - contados.filter((i) => !paraTirar.has(i.insumoId)).length
     if (faltam > 0 && !confirm(`${faltam} ${faltam === 1 ? 'item ficou' : 'itens ficaram'} sem contagem. Enviar assim?`)) return
+    // Heitor (13/10): um botão só: envia para a produção e já abre o WhatsApp com o pedido (por enquanto vai no grupo também).
+    // A janela abre no clique (senão o celular bloqueia) e recebe o endereço depois que salvou.
+    const zap = pedidos.length ? window.open('', '_blank') : null
     setSalvando(true)
     try {
       await store.enviarFechamento({
-        unidadeId: loja, setor, data, responsavel, observacao: obs, fala,
+        unidadeId: loja, setor, data, para, responsavel, observacao: obs, fala,
         itens: itens.filter((i) => lerValor(cont[i.itemId] ?? '') !== null || (lerValor(ped[i.itemId] ?? '') ?? 0) > 0).map((i) => ({
           itemId: i.itemId, contagem: lerValor(cont[i.itemId] ?? ''), sugestao: sugestao(i), pedido: Math.max(0, lerValor(ped[i.itemId] ?? '') ?? 0) || null,
         })),
       })
       avisar(enviado ? 'Fechamento atualizado' : 'Fechamento enviado para a produção')
+      if (zap) zap.location.href = `https://wa.me/?text=${encodeURIComponent(textoWhats())}`
       await carregar()
     } catch (e) {
+      zap?.close()
       avisar((e as Error).message)
     } finally {
       setSalvando(false)
@@ -340,10 +356,7 @@ function TelaFechamento({ loja, setor, data }: { loja: string; setor: SetorFecha
             try { await navigator.clipboard.writeText(textoWhats()); avisar('Pedido copiado') } catch { avisar('Não consegui copiar') }
           }}>Copiar</Botao>
           <Botao variante="secundario" disabled={!pedidos.length} onClick={imprimirPedido}>Imprimir</Botao>
-          {/* Heitor (13/10): por enquanto o pedido também vai no grupo do WhatsApp; abre o WhatsApp com o texto pronto. */}
-          <a className="inline-flex items-center justify-center rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white aria-disabled:pointer-events-none aria-disabled:opacity-50"
-            aria-disabled={!pedidos.length} href={`https://wa.me/?text=${encodeURIComponent(textoWhats())}`} target="_blank" rel="noreferrer">WhatsApp</a>
-          <Botao onClick={enviar} disabled={salvando}>{salvando ? 'Enviando…' : enviado ? 'Enviar de novo' : 'Enviar pedido'}</Botao>
+          <Botao onClick={enviar} disabled={salvando}>{salvando ? 'Enviando…' : enviado ? 'Enviar de novo' : 'Enviar pedido'}{pedidos.length > 0 && ' + WhatsApp'}</Botao>
         </div>
       </div>
     </div>
