@@ -6,6 +6,7 @@ import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
 import { ir } from '../lib/rota'
+import { FaleComCozinha, OrcamentoRefeicoes, Recados, VotacaoCozinha, VotacaoDaSemana } from './RefeicoesVotacao'
 import type { Funcionario, Insumo, ModeloRefeicao, QuemCome, Refeicao, TipoModeloRefeicao, VotosRefeicao } from '../lib/types'
 
 // Refeição do dia (Heitor, 13/10). O manutencista cuida da comida da equipe:
@@ -19,6 +20,8 @@ export const ABAS_REFEICOES = [
   { id: '', nome: 'Refeição do dia' },
   { id: 'montar', nome: 'Montar o prato', cozinha: true },
   { id: 'historico', nome: 'Histórico e custo', cozinha: true },
+  { id: 'votacao', nome: 'Votação do cardápio', cozinha: true },
+  { id: 'recados', nome: 'Recados da equipe', cozinha: true },
   { id: 'avaliacoes', nome: 'O que a equipe gosta', cozinha: true },
   { id: 'pratos', nome: 'Pratos salvos', cozinha: true },
 ]
@@ -53,7 +56,18 @@ export default function Refeicoes({ sub, param }: { sub?: string; param?: string
         : aba === 'historico' ? <Historico />
         : aba === 'avaliacoes' ? <Avaliacoes />
         : aba === 'pratos' ? <Pratos />
-        : <RefeicoesDaSemana completo />}
+        : aba === 'votacao' ? <VotacaoCozinha />
+        : aba === 'recados' ? <Recados />
+        : (
+          <>
+            <RefeicoesDaSemana completo />
+            <VotacaoDaSemana />
+            <details className="rounded-2xl bg-white p-4 ring-1 ring-stone-200">
+              <summary className="cursor-pointer font-bold">💬 Fale com a cozinha <span className="font-normal text-stone-500">(anônimo)</span></summary>
+              <div className="mt-2"><FaleComCozinha /></div>
+            </details>
+          </>
+        )}
     </div>
   )
 }
@@ -64,6 +78,7 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
   const { store, eu, avisar } = useApp()
   const [lista, setLista] = useState<Refeicao[] | null>(null)
   const [votos, setVotos] = useState<VotosRefeicao[]>([])
+  const [comentar, setComentar] = useState<{ id: string; critica: boolean } | null>(null)
   const de = addDias(hoje(), -7)
   const carregar = useCallback(async () => {
     try {
@@ -86,6 +101,8 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
     const atual = votos.find((v) => v.refeicaoId === r.id)?.meuVoto ?? 0
     const novo = atual === voto ? 0 : voto
     setVotos((vs) => [...vs.filter((v) => v.refeicaoId !== r.id), { ...(vs.find((v) => v.refeicaoId === r.id) ?? { refeicaoId: r.id, positivos: null, negativos: null }), meuVoto: novo || null }])
+    // Não gostou: já abre o recado para contar o porquê (opcional e anônimo).
+    if (novo === -1) setComentar({ id: r.id, critica: true })
     try {
       await store.votarRefeicao(r.id, novo as -1 | 0 | 1)
       if (souCozinha(eu)) setVotos(await store.votosRefeicoes(de, hoje()))
@@ -97,7 +114,8 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
   const linha = (r: Refeicao, grande: boolean) => {
     const v = votos.find((x) => x.refeicaoId === r.id)
     return (
-      <div key={r.id} className={`flex items-center gap-3 ${grande ? 'rounded-2xl bg-white p-4 ring-1 ring-stone-200' : 'px-3 py-2.5'}`}>
+      <div key={r.id} className={grande ? 'rounded-2xl bg-white p-4 ring-1 ring-stone-200' : 'px-3 py-2.5'}>
+      <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           {grande && <div className="text-xs font-semibold tracking-wide text-stone-500 uppercase">Hoje{deHoje.length > 1 ? ` · ${nomeLocal(r.centroCustoId)}` : ''}</div>}
           <div className={grande ? 'text-lg font-bold' : 'font-semibold'}>{r.prato}</div>
@@ -114,7 +132,16 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
             className={`grid size-11 place-items-center rounded-full text-xl ring-1 transition ${v?.meuVoto === 1 ? 'bg-emerald-500 ring-emerald-600' : 'bg-white ring-stone-300 grayscale hover:grayscale-0'}`}>👍</button>
           <button onClick={() => votar(r, -1)} aria-label={`Não gostei de ${r.prato}`} aria-pressed={v?.meuVoto === -1}
             className={`grid size-11 place-items-center rounded-full text-xl ring-1 transition ${v?.meuVoto === -1 ? 'bg-red-500 ring-red-600' : 'bg-white ring-stone-300 grayscale hover:grayscale-0'}`}>👎</button>
+          <button onClick={() => setComentar(comentar?.id === r.id ? null : { id: r.id, critica: false })} aria-label={`Comentar ${r.prato}`} aria-expanded={comentar?.id === r.id}
+            className={`grid size-11 place-items-center rounded-full text-xl ring-1 transition ${comentar?.id === r.id ? 'bg-ozzy-100 ring-carvao' : 'bg-white ring-stone-300 grayscale hover:grayscale-0'}`}>💬</button>
         </div>
+      </div>
+      {comentar?.id === r.id && (
+        <div className="mt-2">
+          <FaleComCozinha key={r.id + String(comentar.critica)} refeicao={r} tipoInicial={comentar.critica ? 'critica' : 'elogio'}
+            titulo={comentar.critica ? `Quer contar o que não estava legal em ${r.prato}?` : undefined} aoEnviar={() => setComentar(null)} />
+        </div>
+      )}
       </div>
     )
   }
@@ -128,7 +155,7 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
           <div className="divide-y divide-stone-100 rounded-2xl bg-white ring-1 ring-stone-200">{anteriores.map((r) => linha(r, false))}</div>
         </>
       )}
-      {(completo || hojeOrd.length > 0) && <p className="text-xs text-stone-500">Seu voto é anônimo: ninguém, nem quem cozinha, vê quem votou. Toque de novo para tirar o voto.</p>}
+      {(completo || hojeOrd.length > 0) && <p className="text-xs text-stone-500">Seu voto e seus recados são anônimos: ninguém, nem quem cozinha, vê quem mandou. Toque de novo para tirar o voto.</p>}
     </section>
   )
 }
@@ -431,6 +458,7 @@ function Historico() {
   const refeicoes = linhas.reduce((t, r) => t + (r.pessoas ?? 0), 0)
   return (
     <div className="space-y-3">
+      <OrcamentoRefeicoes />
       <div className="flex flex-wrap items-center gap-2">
         <select className={`${estiloEntrada} w-auto! py-2!`} value={dias} onChange={(e) => setDias(Number(e.target.value))} aria-label="Período">
           {[7, 30, 90].map((d) => <option key={d} value={d}>Últimos {d} dias</option>)}

@@ -2,7 +2,7 @@ import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, pod
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
-import type { CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -468,6 +468,32 @@ const votosDemo = new Map<string, { positivos: number; negativos: number; meus: 
   ['rf1', { positivos: 9, negativos: 2, meus: new Map() }],
   ['rf2', { positivos: 4, negativos: 5, meus: new Map() }],
 ])
+// Votação do cardápio (0102): uma aberta agora para a semana que vem e a da semana passada já fechada.
+const proximaSegunda = addDias(inicioDaSemana(hoje()), 7)
+const votacoesDemo: VotacaoCardapio[] = [
+  { id: 'vc1', semana: proximaSegunda, abreEm: addDias(hoje(), -1), fechaEm: addDias(hoje(), 2), maxEscolhas: 3, observacao: null, opcoes: [
+    { id: 'vo1', nome: 'Strogonoff de Frango', descricao: 'Com batata palha', modeloId: null, ordem: 0 },
+    { id: 'vo2', nome: 'Escondidinho de Carne Moída', descricao: null, modeloId: 'mr1', ordem: 1 },
+    { id: 'vo3', nome: 'Feijoada', descricao: 'Com couve e laranja', modeloId: null, ordem: 2 },
+    { id: 'vo4', nome: 'Frango Grelhado', descricao: null, modeloId: 'mr2', ordem: 3 },
+    { id: 'vo5', nome: 'Lasanha à Bolonhesa', descricao: null, modeloId: null, ordem: 4 },
+  ] },
+  { id: 'vc0', semana: inicioDaSemana(hoje()), abreEm: addDias(inicioDaSemana(hoje()), -2), fechaEm: addDias(inicioDaSemana(hoje()), -1), maxEscolhas: 3, observacao: null, opcoes: [
+    { id: 'vo01', nome: 'Escondidinho de Carne Moída', descricao: null, modeloId: 'mr1', ordem: 0 },
+    { id: 'vo02', nome: 'Frango Grelhado', descricao: null, modeloId: 'mr2', ordem: 1 },
+    { id: 'vo03', nome: 'Macarrão ao Sugo', descricao: null, modeloId: null, ordem: 2 },
+  ] },
+]
+// Votos de exemplo por opção (sem pessoa); os de quem está logado ficam à parte.
+const votosCardapioBase: Record<string, number> = { vo1: 7, vo2: 5, vo3: 9, vo4: 2, vo5: 6, vo01: 11, vo02: 6, vo03: 4 }
+const participantesBase: Record<string, number> = { vc1: 12, vc0: 14 }
+const meusVotosCardapio = new Map<string, Set<string>>() // `${pessoa}:${votação}` -> opções
+const recadosDemo: RecadoRefeicao[] = [
+  { id: 'rc1', tipo: 'elogio', texto: 'O escondidinho de ontem estava muito bom, pode repetir!', refeicaoId: 'rf1', votacaoId: null, data: addDias(hoje(), -1), lidoEm: null },
+  { id: 'rc2', tipo: 'critica', texto: 'O frango veio meio seco e a porção ficou pequena para quem fecha a loja.', refeicaoId: 'rf2', votacaoId: null, data: addDias(hoje(), -2), lidoEm: null },
+  { id: 'rc3', tipo: 'sugestao', texto: 'Podia ter uma feijoada numa sexta.', refeicaoId: null, votacaoId: 'vc1', data: addDias(hoje(), -1), lidoEm: null },
+]
+let metaRefeicaoDemo: number | null = 12
 const modelosRefeicaoDemo: ModeloRefeicao[] = [
   { id: 'mr1', nome: 'Escondidinho de Carne Moída', tipo: 'prato', ativo: true, modoPreparo: null,
     itens: [{ nome: 'Carne moída', quantidade: 0.15, unidade: 'kg', insumoId: 'in26' }, { nome: 'Batata', quantidade: 0.25, unidade: 'kg', insumoId: 'in27' }, { nome: 'Arroz tipo 1', quantidade: 0.0786, unidade: 'kg', insumoId: 'in24' }, { nome: 'Feijão carioca', quantidade: 0.0571, unidade: 'kg', insumoId: 'in25' }] },
@@ -1768,6 +1794,73 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const atual = m.id ? modelosRefeicaoDemo.find((x) => x.id === m.id) : undefined
       if (atual) Object.assign(atual, dados)
       else modelosRefeicaoDemo.push({ ...dados, id: novoId('mr') })
+      return espera(undefined)
+    },
+    async votacoesCardapio(desde) {
+      exigeEu()
+      return espera(votacoesDemo.filter((v) => v.fechaEm >= desde).sort((a, b) => b.semana.localeCompare(a.semana)).map((v) => ({ ...v, opcoes: v.opcoes.map((o) => ({ ...o })) })))
+    },
+    async salvarVotacao(v) {
+      exigeCozinha()
+      if (!v.opcoes.length) throw new Error('Coloque pelo menos uma opção.')
+      if (votacoesDemo.some((x) => x.semana === v.semana && x.id !== v.id)) throw new Error('Já existe uma votação para esta semana.')
+      let atual = v.id ? votacoesDemo.find((x) => x.id === v.id) : undefined
+      if (!atual) { atual = { id: novoId('vc'), semana: v.semana, abreEm: v.abreEm, fechaEm: v.fechaEm, maxEscolhas: v.maxEscolhas, observacao: null, opcoes: [] }; votacoesDemo.push(atual) }
+      Object.assign(atual, { semana: v.semana, abreEm: v.abreEm, fechaEm: v.fechaEm, maxEscolhas: v.maxEscolhas, observacao: v.observacao?.trim() || null })
+      atual.opcoes = v.opcoes.map((o, ordem) => ({ id: o.id ?? novoId('vo'), nome: nomeItem(o.nome), descricao: o.descricao?.trim() || null, modeloId: o.modeloId, ordem }))
+      return espera(undefined)
+    },
+    async excluirVotacao(id) {
+      exigeCozinha()
+      const k = votacoesDemo.findIndex((x) => x.id === id)
+      if (k >= 0) votacoesDemo.splice(k, 1)
+      return espera(undefined)
+    },
+    async votarCardapio(votacaoId, opcoes) {
+      const u = exigeEu()
+      const v = votacoesDemo.find((x) => x.id === votacaoId)
+      if (!v) throw new Error('Votação não encontrada.')
+      if (hoje() < v.abreEm) throw new Error('A votação ainda não abriu.')
+      if (hoje() > v.fechaEm) throw new Error('A votação já fechou.')
+      if (opcoes.length > v.maxEscolhas) throw new Error(`Escolha no máximo ${v.maxEscolhas} pratos.`)
+      meusVotosCardapio.set(`${u.id}:${votacaoId}`, new Set(opcoes.filter((o) => v.opcoes.some((x) => x.id === o))))
+      return espera(undefined)
+    },
+    async resultadoVotacao(votacaoId) {
+      const u = exigeEu()
+      const v = votacoesDemo.find((x) => x.id === votacaoId)
+      if (!v) return espera([])
+      const cozinha = podeGerenciar(u.nivel) || u.nivel === 'manutencao'
+      const todos = [...meusVotosCardapio.entries()].filter(([k]) => k.endsWith(':' + votacaoId))
+      const participantes = (participantesBase[votacaoId] ?? 0) + todos.filter(([, s]) => s.size).length
+      const meus = meusVotosCardapio.get(`${u.id}:${votacaoId}`) ?? new Set()
+      return espera(v.opcoes.map((o) => ({
+        opcaoId: o.id, minha: meus.has(o.id), participantes,
+        votos: cozinha || hoje() > v.fechaEm ? (votosCardapioBase[o.id] ?? 0) + todos.filter(([, s]) => s.has(o.id)).length : null,
+      })))
+    },
+    async enviarRecadoRefeicao(tipo, texto, refeicaoId, votacaoId) {
+      exigeEu()
+      if (!texto.trim()) throw new Error('Escreva o recado.')
+      recadosDemo.unshift({ id: novoId('rc'), tipo, texto: texto.trim().slice(0, 1000), refeicaoId: refeicaoId ?? null, votacaoId: votacaoId ?? null, data: hoje(), lidoEm: null })
+      return espera(undefined)
+    },
+    async recadosRefeicao(desde) {
+      exigeCozinha()
+      return espera(recadosDemo.filter((r) => r.data >= desde).map((r) => ({ ...r })))
+    },
+    async marcarRecadosLidos(ids) {
+      exigeCozinha()
+      for (const r of recadosDemo) if (ids.includes(r.id) && !r.lidoEm) r.lidoEm = agora()
+      return espera(undefined)
+    },
+    async metaRefeicao() {
+      exigeCozinha()
+      return espera(metaRefeicaoDemo)
+    },
+    async salvarMetaRefeicao(valor) {
+      exigeGestao()
+      metaRefeicaoDemo = valor
       return espera(undefined)
     },
     async quemCome(data) {

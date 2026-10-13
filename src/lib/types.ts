@@ -1704,6 +1704,33 @@ export interface VotosRefeicao {
   negativos: number | null
   meuVoto: number | null
 }
+// Votação do cardápio e recados anônimos (0102, Heitor 13/10).
+export interface VotacaoCardapio {
+  id: string
+  semana: string // segunda-feira da semana votada
+  abreEm: string
+  fechaEm: string
+  maxEscolhas: number
+  observacao: string | null
+  opcoes: { id: string; nome: string; descricao: string | null; modeloId: string | null; ordem: number }[]
+}
+export interface ResultadoVotacao {
+  opcaoId: string
+  // null para quem não cozinha enquanto a votação está aberta.
+  votos: number | null
+  minha: boolean
+  participantes: number
+}
+export type TipoRecado = 'elogio' | 'critica' | 'sugestao'
+export interface RecadoRefeicao {
+  id: string
+  tipo: TipoRecado
+  texto: string
+  refeicaoId: string | null
+  votacaoId: string | null
+  data: string
+  lidoEm: string | null
+}
 export interface QuemCome {
   equipe: { id: string; nome: string; local: string; unidadeId: string; turno: string | null; horario: DiaTurno | null }[]
   motoboys: { id: string; nome: string; local: string }[]

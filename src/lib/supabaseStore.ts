@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1406,6 +1406,57 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       }
       if (m.id) ok(await sb.from('refeicao_modelos').update(linha).eq('id', m.id))
       else ok(await sb.from('refeicao_modelos').insert(linha))
+    },
+    async votacoesCardapio(desde) {
+      return (ok(await sb.from('refeicao_votacoes').select('*, refeicao_votacao_opcoes(*)').gte('fecha_em', desde).order('semana', { ascending: false })) ?? []).map((v: any): VotacaoCardapio => ({
+        id: v.id, semana: v.semana, abreEm: v.abre_em, fechaEm: v.fecha_em, maxEscolhas: v.max_escolhas, observacao: v.observacao,
+        opcoes: (v.refeicao_votacao_opcoes ?? []).map((o: any) => ({ id: o.id, nome: o.nome, descricao: o.descricao, modeloId: o.modelo_id, ordem: o.ordem }))
+          .sort((a: { ordem: number }, b: { ordem: number }) => a.ordem - b.ordem),
+      }))
+    },
+    async salvarVotacao(v) {
+      const linha = { semana: v.semana, abre_em: v.abreEm, fecha_em: v.fechaEm, max_escolhas: v.maxEscolhas, observacao: v.observacao?.trim() || null }
+      const id: string = v.id
+        ? (ok(await sb.from('refeicao_votacoes').update(linha).eq('id', v.id)), v.id)
+        : ok(await sb.from('refeicao_votacoes').insert(linha).select('id').single())!.id
+      const ficam = v.opcoes.filter((o) => o.id).map((o) => o.id!)
+      const atuais: { id: string }[] = ok(await sb.from('refeicao_votacao_opcoes').select('id').eq('votacao_id', id)) ?? []
+      const sair = atuais.map((o) => o.id).filter((x) => !ficam.includes(x))
+      if (sair.length) ok(await sb.from('refeicao_votacao_opcoes').delete().in('id', sair))
+      for (const [ordem, o] of v.opcoes.entries()) {
+        const dados = { votacao_id: id, nome: nomeItem(o.nome), descricao: o.descricao?.trim() || null, modelo_id: o.modeloId, ordem }
+        if (o.id) ok(await sb.from('refeicao_votacao_opcoes').update(dados).eq('id', o.id))
+        else ok(await sb.from('refeicao_votacao_opcoes').insert(dados))
+      }
+    },
+    async excluirVotacao(id) {
+      ok(await sb.from('refeicao_votacoes').delete().eq('id', id))
+    },
+    async votarCardapio(votacaoId, opcoes) {
+      ok(await sb.rpc('votar_cardapio', { p_votacao: votacaoId, p_opcoes: opcoes }))
+    },
+    async resultadoVotacao(votacaoId) {
+      return (ok(await sb.rpc('resultado_votacao', { p_votacao: votacaoId })) ?? []).map((r: any): ResultadoVotacao => ({
+        opcaoId: r.opcao_id, votos: r.votos, minha: r.minha, participantes: r.participantes,
+      }))
+    },
+    async enviarRecadoRefeicao(tipo, texto, refeicaoId, votacaoId) {
+      ok(await sb.rpc('enviar_recado_refeicao', { p_tipo: tipo, p_texto: texto, p_refeicao: refeicaoId ?? null, p_votacao: votacaoId ?? null }))
+    },
+    async recadosRefeicao(desde) {
+      return (ok(await sb.from('refeicao_recados').select('*').gte('data', desde).order('data', { ascending: false })) ?? []).map((r: any): RecadoRefeicao => ({
+        id: r.id, tipo: r.tipo, texto: r.texto, refeicaoId: r.refeicao_id, votacaoId: r.votacao_id, data: r.data, lidoEm: r.lido_em,
+      }))
+    },
+    async marcarRecadosLidos(ids) {
+      if (ids.length) ok(await sb.rpc('marcar_recados_lidos', { p_ids: ids }))
+    },
+    async metaRefeicao() {
+      const r = ok(await sb.from('refeicao_config').select('meta_por_refeicao').maybeSingle())
+      return r?.meta_por_refeicao != null ? Number(r.meta_por_refeicao) : null
+    },
+    async salvarMetaRefeicao(valor) {
+      ok(await sb.from('refeicao_config').update({ meta_por_refeicao: valor, atualizado_em: new Date().toISOString() }).eq('id', true))
     },
     async quemCome(data) {
       return ok(await sb.rpc('quem_come', { p_data: data }))

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefeicoesDaSemana } from './Refeicoes'
+import { RefeicoesDaSemana, souCozinha } from './Refeicoes'
+import { RecadosNovos, VotacaoDaSemana } from './RefeicoesVotacao'
 import PedidosTirarLista from '../components/PedidosTirarLista'
 import { atendeChamados } from '../lib/permissoes'
 import { chamadoEmAberto, nomeCurto, type Chamado } from '../lib/types'
@@ -80,6 +81,8 @@ export default function Inicio() {
 
       <DependeDeMim />
       <RefeicoesDaSemana />
+      <VotacaoDaSemana aviso />
+      {souCozinha(eu) && <RecadosNovos />}
       {gestao && <ComprasAtrasadas />}
       {gestao && <PedidosTirarLista aviso />}
       {(eu.nivel === 'administrativo' || eu.nivel === 'proprietario') && <PrecosForaDoPadrao />}

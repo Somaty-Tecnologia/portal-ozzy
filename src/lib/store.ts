@@ -1,4 +1,4 @@
-import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe } from './types'
+import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, TipoRecado } from './types'
 import type { CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, PedidoTirarFechamento, CaixaTurno, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
@@ -247,6 +247,17 @@ export interface Store {
   modelosRefeicao(): Promise<ModeloRefeicao[]>
   salvarModeloRefeicao(m: Omit<ModeloRefeicao, 'id'> & { id?: string }): Promise<void>
   quemCome(data: string): Promise<QuemCome>
+  // Votação do cardápio, recados anônimos e meta de custo (0102).
+  votacoesCardapio(desde: string): Promise<VotacaoCardapio[]>
+  salvarVotacao(v: Omit<VotacaoCardapio, 'id' | 'opcoes'> & { id?: string; opcoes: { id?: string; nome: string; descricao: string | null; modeloId: string | null }[] }): Promise<void>
+  excluirVotacao(id: string): Promise<void>
+  votarCardapio(votacaoId: string, opcoes: string[]): Promise<void>
+  resultadoVotacao(votacaoId: string): Promise<ResultadoVotacao[]>
+  enviarRecadoRefeicao(tipo: TipoRecado, texto: string, refeicaoId?: string | null, votacaoId?: string | null): Promise<void>
+  recadosRefeicao(desde: string): Promise<RecadoRefeicao[]>
+  marcarRecadosLidos(ids: string[]): Promise<void>
+  metaRefeicao(): Promise<number | null>
+  salvarMetaRefeicao(valor: number | null): Promise<void>
   freelancers(): Promise<Freelancer[]>
   salvarFreelancer(f: Omit<Freelancer, 'id'> & { id?: string }): Promise<Freelancer>
   // Leva junto diárias e envios; recusa se já houver pagamento marcado.
