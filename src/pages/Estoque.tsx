@@ -14,14 +14,15 @@ import {
 } from '../lib/types'
 
 export const ABAS_ESTOQUE = [
-  { id: '', nome: 'Notas fiscais' },
-  { id: 'saldo', nome: 'Saldo por loja' },
+  // Heitor (13/10): Estoque abre direto no Saldo por loja.
+  { id: '', nome: 'Saldo por loja' },
+  { id: 'notas', nome: 'Notas fiscais' },
   { id: 'movimentos', nome: 'Movimentos' },
 ]
 
-// Módulo Estoque (09/10): tudo começa pela nota fiscal. #/estoque, #/estoque/nota/<id>, #/estoque/saldo, #/estoque/movimentos.
+// Módulo Estoque (09/10): tudo começa pela nota fiscal. #/estoque (saldo), #/estoque/notas, #/estoque/nota/<id>, #/estoque/movimentos.
 export default function Estoque({ sub, param }: { sub?: string; param?: string }) {
-  const aba = sub === 'nota' ? '' : ABAS_ESTOQUE.some((a) => a.id && a.id === sub) ? sub! : ''
+  const aba = sub === 'nota' ? 'notas' : sub === 'saldo' ? '' : ABAS_ESTOQUE.some((a) => a.id && a.id === sub) ? sub! : ''
   return (
     <div className="space-y-4">
       <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
@@ -36,9 +37,9 @@ export default function Estoque({ sub, param }: { sub?: string; param?: string }
         ))}
       </div>
       {sub === 'nota' && param ? <DetalheNota id={param} />
-        : aba === 'saldo' ? <Saldo />
+        : aba === 'notas' ? <Notas />
         : aba === 'movimentos' ? <Movimentos />
-        : <Notas />}
+        : <Saldo />}
     </div>
   )
 }
@@ -360,7 +361,7 @@ function DetalheNota({ id }: { id: string }) {
     if (!confirm('Excluir esta nota? Dá para importar o XML de novo depois.')) return
     try {
       await store.excluirNota(n!.id)
-      ir('estoque')
+      ir('estoque/notas')
     } catch (e) {
       setAviso((e as Error).message)
     }
@@ -369,7 +370,7 @@ function DetalheNota({ id }: { id: string }) {
   const insumosAtivos = c.insumos.filter((i) => i.ativo)
   return (
     <div className="space-y-4">
-      <button className="text-sm text-stone-500 hover:underline" onClick={() => ir('estoque')}>← Notas fiscais</button>
+      <button className="text-sm text-stone-500 hover:underline" onClick={() => ir('estoque/notas')}>← Notas fiscais</button>
       <Cartao className="space-y-1">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -633,7 +634,7 @@ function Saldo() {
   const { c, erro: erroCad } = useCadastros()
   const [saldos, setSaldos] = useState<SaldoEstoque[] | null>(null)
   const [erro, setErro] = useState('')
-  const [centro, setCentro] = useState('burger-psd')
+  const [centro, setCentro] = useState('central')
   const [busca, setBusca] = useState('')
   const [mov, setMov] = useState<{ insumoId: string } | null>(null)
   const carregar = useCallback(() => {
