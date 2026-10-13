@@ -1759,18 +1759,23 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async quemCome(data) {
       exigeCozinha()
       const dia = (new Date(data + 'T12:00:00').getDay() + 6) % 7
-      const equipe = funcionarios.filter((f) => f.status === 'ativo' && f.nivel !== 'proprietario' && (!f.dataAdmissao || f.dataAdmissao <= data)).flatMap((f) => {
+      const fora: { id: string; nome: string; local: string; motivo: string }[] = []
+      const equipe = funcionarios.filter((f) => f.status === 'ativo' && f.nivel !== 'proprietario').flatMap((f) => {
         const t = turnos.find((x) => x.id === f.turnoId)
         const g = folgas.find((x) => x.funcionarioId === f.id && x.data === data)
-        const ferias = feriasDemo.some((x) => x.funcionarioId === f.id && data >= x.inicio && data <= addDias(x.inicio, x.dias - 1))
-        const trabalha = g ? g.tipo === 'trabalha' : !!t?.dias[dia]
-        return trabalha && !ferias ? [{ id: f.id, nome: f.nome, local: t?.local ?? f.unidadeId, unidadeId: f.unidadeId, turno: t?.nome ?? null, horario: t?.dias[dia] ?? null }] : []
+        const motivo = f.dataAdmissao && f.dataAdmissao > data ? 'admissão depois deste dia'
+          : feriasDemo.some((x) => x.funcionarioId === f.id && data >= x.inicio && data <= addDias(x.inicio, x.dias - 1)) ? 'férias'
+          : g?.tipo === 'trabalha' ? null : g?.tipo === 'feriado' ? 'folga de feriado' : g ? 'folga'
+          : !t || !t.dias.some(Boolean) ? null : !t.dias[dia] ? 'o turno não trabalha neste dia' : null
+        const local = t?.local ?? f.unidadeId
+        if (motivo) { fora.push({ id: f.id, nome: f.nome, local, motivo }); return [] }
+        return [{ id: f.id, nome: f.nome, local, unidadeId: f.unidadeId, turno: t?.nome ?? null, horario: t?.dias[dia] ?? null }]
       })
       const motoboys = escalaMotoboyDemo.filter((e) => e.data === data).flatMap((e) => {
         const m = motoboysDemo.find((x) => x.id === e.motoboyId && x.ativo)
         return m ? [{ id: m.id, nome: m.nome, local: e.unidadeId }] : []
       })
-      return espera({ equipe: equipe.sort((a, b) => a.local.localeCompare(b.local) || a.nome.localeCompare(b.nome, 'pt-BR')), motoboys })
+      return espera({ equipe: equipe.sort((a, b) => a.local.localeCompare(b.local) || a.nome.localeCompare(b.nome, 'pt-BR')), motoboys, fora: fora.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) })
     },
     async motoboyQuemSou(celular) {
       const cel = celular.replace(/\D/g, '').slice(-11)

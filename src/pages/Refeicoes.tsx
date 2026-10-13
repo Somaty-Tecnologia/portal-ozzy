@@ -345,7 +345,7 @@ function Montar({ inicial }: { inicial?: string }) {
 function QuemComePainel({ quem, local, data, aoUsar }: { quem: QuemCome | null; local: string; data: string; aoUsar: (n: number) => void }) {
   if (!quem) return null
   const grupos = new Map<string, { nome: string; detalhe: string }[]>()
-  for (const p of quem.equipe) grupos.set(p.local, [...(grupos.get(p.local) ?? []), { nome: p.nome, detalhe: p.horario ? `${p.horario.inicio}–${p.horario.fim}` : 'fora do turno' }])
+  for (const p of quem.equipe) grupos.set(p.local, [...(grupos.get(p.local) ?? []), { nome: p.nome, detalhe: p.horario ? `${p.horario.inicio}–${p.horario.fim}` : p.turno ? 'fora do turno' : 'sem turno cadastrado' }])
   for (const m of quem.motoboys) grupos.set(m.local, [...(grupos.get(m.local) ?? []), { nome: m.nome, detalhe: 'motoboy' }])
   const total = quem.equipe.length + quem.motoboys.length
   const daqui = juntos(local).reduce((t, l) => t + (grupos.get(l)?.length ?? 0), 0)
@@ -366,6 +366,14 @@ function QuemComePainel({ quem, local, data, aoUsar }: { quem: QuemCome | null; 
             </div>
           ))}
         </div>
+      )}
+      {(quem.fora?.length ?? 0) > 0 && (
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer text-stone-600">Não estão neste dia: {quem.fora!.length}</summary>
+          <ul className="mt-1 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+            {quem.fora!.map((p) => <li key={p.id} className="flex justify-between gap-2"><span>{p.nome}</span><span className="text-xs text-stone-500">{p.motivo}</span></li>)}
+          </ul>
+        </details>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
         <Botao variante="secundario" className="py-1.5!" onClick={() => aoUsar(daqui)}>Usar {daqui} ({juntos(local).map(nomeLocal).join(' + ')})</Botao>

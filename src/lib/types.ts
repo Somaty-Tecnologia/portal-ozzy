@@ -1654,4 +1654,6 @@ export interface VotosRefeicao {
 export interface QuemCome {
   equipe: { id: string; nome: string; local: string; unidadeId: string; turno: string | null; horario: DiaTurno | null }[]
   motoboys: { id: string; nome: string; local: string }[]
+  // Da equipe, mas fora neste dia, com o motivo (folga, férias, turno fechado).
+  fora?: { id: string; nome: string; local: string; motivo: string }[]
 }
