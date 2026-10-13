@@ -153,7 +153,7 @@ export default function Escala() {
                 {dias.map((d) => {
                   const fds = [0, 6].includes(new Date(d + 'T12:00:00').getDay())
                   return (
-                    <th key={d} className={`px-0.5 py-1.5 text-center font-semibold ${d === hoje() ? 'text-ozzy-700' : ''} ${fds ? 'bg-stone-50' : ''}`}>
+                    <th key={d} className={`px-0.5 py-1.5 text-center font-semibold ${d === hoje() ? 'rounded-t-lg bg-carvao text-white' : fds ? 'bg-stone-50' : ''}`}>
                       <div className="text-[10px] font-normal">{diaSemana(d).slice(0, 3)}</div>
                       <div>{Number(d.slice(8, 10))}</div>
                     </th>
@@ -173,7 +173,7 @@ export default function Escala() {
                     const folga = folgaDe(p.id, d)
                     const auto = !!registro(p.id, d)?.automatica
                     return (
-                      <td key={d} className="px-0.5 py-1 text-center">
+                      <td key={d} className={`px-0.5 py-1 text-center ${d === hoje() ? 'bg-stone-300' : ''}`}>
                         <button
                           disabled={!gestao}
                           onClick={() => alternar(p.id, d)}
