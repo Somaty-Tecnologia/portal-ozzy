@@ -341,6 +341,10 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       const ps = (pessoas ?? []).map((r: any) => ({ id: r.id, turnoId: r.turno_id, status: r.status, dataAdmissao: r.data_admissao }))
       return comFolgasDoTurno(marcadas, ps, (turnos ?? []) as any[], inicio, fim, opcoes?.comTrabalha)
     },
+    async folgasDaEquipe(inicio, fim) {
+      const r = ok(await sb.rpc('folgas_da_equipe', { p_inicio: inicio, p_fim: fim })) as any[]
+      return (r ?? []).map((x) => ({ id: `${x.funcionarioId}:${x.data}`, funcionarioId: x.funcionarioId, data: x.data, tipo: x.tipo, automatica: x.automatica || undefined, nome: x.nome, unidadeId: x.unidadeId, setor: x.setor }))
+    },
     async definirFolga(fid, data, tipo) {
       if (!tipo) ok(await sb.from('folgas').delete().eq('funcionario_id', fid).eq('data', data))
       else ok(await sb.from('folgas').upsert({ funcionario_id: fid, data, tipo }, { onConflict: 'funcionario_id,data' }))
@@ -1305,7 +1309,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         nome: nomeProprio(m.nome), unidade_id: m.unidadeId || null, pix: texto(m.pix), telefone: m.telefone ? soDigitos(m.telefone) || null : null,
         cpf: m.cpf ? soDigitos(m.cpf) || null : null, observacao: texto(m.observacao), ativo: m.ativo,
         responsavel: !!m.responsavel, ...(m.adicionalResponsavel !== undefined ? { adicional_responsavel: m.adicionalResponsavel } : {}),
-        ...(m.valorDiaria !== undefined ? { valor_diaria: m.valorDiaria, entregas_incluidas: m.entregasIncluidas ?? 10, valor_entrega: m.valorEntrega ?? 4 } : {}),
+        ...(m.valorDiaria !== undefined ? { valor_diaria: m.valorDiaria, valor_diaria_fds: m.valorDiariaFds ?? 115, entregas_incluidas: m.entregasIncluidas ?? 10, valor_entrega: m.valorEntrega ?? 4 } : {}),
       }
       if (!linha.nome) throw new Error('Diga o nome.')
       const r = m.id
@@ -1639,7 +1643,7 @@ const paraNota = (r: any): NotaFiscal => ({
 const paraMotoboy = (r: any): Motoboy => ({
   id: r.id, nome: r.nome, unidadeId: r.unidade_id, pix: r.pix, telefone: r.telefone, cpf: r.cpf, observacao: r.observacao, ativo: r.ativo,
   responsavel: !!r.responsavel, adicionalResponsavel: numeroOuNulo(r.adicional_responsavel) ?? 125,
-  valorDiaria: numeroOuNulo(r.valor_diaria) ?? 100, entregasIncluidas: numeroOuNulo(r.entregas_incluidas) ?? 10, valorEntrega: numeroOuNulo(r.valor_entrega) ?? 4,
+  valorDiaria: numeroOuNulo(r.valor_diaria) ?? 100, valorDiariaFds: numeroOuNulo(r.valor_diaria_fds) ?? 115, entregasIncluidas: numeroOuNulo(r.entregas_incluidas) ?? 10, valorEntrega: numeroOuNulo(r.valor_entrega) ?? 4,
 })
 const paraContaPagar = (r: any): ContaPagar => ({
   id: r.id, centroCustoId: r.centro_custo_id, contaId: r.conta_id, fornecedorId: r.fornecedor_id, funcionarioId: r.funcionario_id ?? null, motoboyId: r.motoboy_id ?? null, favorecido: r.favorecido, descricao: r.descricao,

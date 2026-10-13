@@ -1272,6 +1272,15 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const visiveis = funcionarios.filter((f) => podeVerFuncionario(u, f))
       return espera(comFolgasDoTurno(marcadas, visiveis, turnos, inicio, fim, opcoes?.comTrabalha))
     },
+    async folgasDaEquipe(inicio, fim) {
+      exigeCozinha()
+      const ativos = funcionarios.filter((f) => f.status === 'ativo')
+      const marcadas = folgas.filter((g) => g.data >= inicio && g.data <= fim && g.tipo !== 'trabalha')
+      return espera(comFolgasDoTurno(marcadas, ativos, turnos, inicio, fim).flatMap((g) => {
+        const p = porId(g.funcionarioId)
+        return p && p.status === 'ativo' ? [{ ...g, nome: p.nome, unidadeId: p.unidadeId, setor: p.setor ?? null }] : []
+      }))
+    },
     async alternarFolga(fid, data) {
       exigeGestao()
       const i = folgas.findIndex((g) => g.funcionarioId === fid && g.data === data)
@@ -1781,7 +1790,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const cel = celular.replace(/\D/g, '').slice(-11)
       if (cel.length < 10) return espera({ tipo: 'invalido' as const })
       const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
-      return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4 } : { tipo: 'nao_achei' as const })
+      return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, valorDiariaFds: m.valorDiariaFds ?? 115, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4 } : { tipo: 'nao_achei' as const })
     },
     async motoboyCadastrar(c) {
       const atual = await this.motoboyQuemSou(c.celular)

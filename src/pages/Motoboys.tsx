@@ -287,7 +287,7 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, envios, con
                   const c = calcularMotoboy(m, diasNumero(l))
                   return c.dias > 0 && (
                     <p className="text-xs text-stone-500">
-                      {c.dias} {c.dias === 1 ? 'diária' : 'diárias'} × {reais(m?.valorDiaria ?? 100)} · {c.entregasTotal} entregas, {c.entregasExtras} além das {m?.entregasIncluidas ?? 10} do dia × {reais(m?.valorEntrega ?? 4)}
+                      {c.dias - c.diasFds > 0 && <>{c.dias - c.diasFds} × {reais(m?.valorDiaria ?? 100)}</>}{c.dias - c.diasFds > 0 && c.diasFds > 0 && ' + '}{c.diasFds > 0 && <>{c.diasFds} sáb/dom × {reais(m?.valorDiariaFds ?? 115)}</>} · {c.entregasTotal} entregas, {c.entregasExtras} além das {m?.entregasIncluidas ?? 10} do dia × {reais(m?.valorEntrega ?? 4)}
                     </p>
                   )
                 })()}
@@ -552,7 +552,7 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     nome: existente?.nome ?? '', unidadeId: existente?.unidadeId ?? lojaPadrao, pix: existente?.pix ?? '', telefone: existente?.telefone ?? '',
     cpf: existente?.cpf ?? '', observacao: existente?.observacao ?? '', ativo: existente?.ativo ?? true,
     responsavel: existente?.responsavel ?? false, adicional: texto(existente?.adicionalResponsavel ?? 125),
-    valorDiaria: texto(existente?.valorDiaria ?? 100), incluidas: String(existente?.entregasIncluidas ?? 10), valorEntrega: texto(existente?.valorEntrega ?? 4),
+    valorDiaria: texto(existente?.valorDiaria ?? 100), valorDiariaFds: texto(existente?.valorDiariaFds ?? 115), incluidas: String(existente?.entregasIncluidas ?? 10), valorEntrega: texto(existente?.valorEntrega ?? 4),
   })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -563,10 +563,10 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     setErro('')
     setSalvando(true)
     try {
-      const { adicional, valorDiaria, incluidas, valorEntrega, ...resto } = f
-      if ([valorDiaria, incluidas, valorEntrega].some((x) => lerNumero(x) === null)) { setSalvando(false); return setErro('Confira diária, entregas incluídas e valor por entrega.') }
+      const { adicional, valorDiaria, valorDiariaFds, incluidas, valorEntrega, ...resto } = f
+      if ([valorDiaria, valorDiariaFds, incluidas, valorEntrega].some((x) => lerNumero(x) === null)) { setSalvando(false); return setErro('Confira diária, entregas incluídas e valor por entrega.') }
       if (f.responsavel && lerNumero(adicional) === null) { setSalvando(false); return setErro('Diga o valor do adicional do responsável.') }
-      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, valorDiaria: lerNumero(valorDiaria)!, entregasIncluidas: Math.round(lerNumero(incluidas)!), valorEntrega: lerNumero(valorEntrega)!, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
+      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, valorDiaria: lerNumero(valorDiaria)!, valorDiariaFds: lerNumero(valorDiariaFds)!, entregasIncluidas: Math.round(lerNumero(incluidas)!), valorEntrega: lerNumero(valorEntrega)!, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
       aoSalvar()
     } catch (err) {
       setErro((err as Error).message)
@@ -588,8 +588,9 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
           <Campo rotulo="Celular" dica="É com ele que o motoboy entra no link para mandar o dia."><input className={estiloEntrada} inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} /></Campo>
           <Campo rotulo="CPF (opcional)" dica="Precisa para o Pix em lote."><input className={estiloEntrada} inputMode="numeric" value={f.cpf} onChange={(e) => setF({ ...f, cpf: e.target.value })} /></Campo>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Campo rotulo="Diária (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorDiaria} onChange={(e) => setF({ ...f, valorDiaria: e.target.value })} /></Campo>
+        <div className="grid grid-cols-2 gap-3">
+          <Campo rotulo="Diária seg a sex (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorDiaria} onChange={(e) => setF({ ...f, valorDiaria: e.target.value })} /></Campo>
+          <Campo rotulo="Diária sáb e dom (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorDiariaFds} onChange={(e) => setF({ ...f, valorDiariaFds: e.target.value })} /></Campo>
           <Campo rotulo="Entregas na diária"><input className={estiloEntrada} inputMode="numeric" value={f.incluidas} onChange={(e) => setF({ ...f, incluidas: e.target.value })} /></Campo>
           <Campo rotulo="Por entrega a mais (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorEntrega} onChange={(e) => setF({ ...f, valorEntrega: e.target.value })} /></Campo>
         </div>

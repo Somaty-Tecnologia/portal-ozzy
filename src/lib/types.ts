@@ -122,6 +122,12 @@ export interface Folga {
   // Folga que vem do turno (dia sem horário, ex.: segunda), sem ninguém precisar marcar.
   automatica?: boolean
 }
+// Folga vista pelo manutencista (folgas_da_equipe): só nome, loja e setor da pessoa.
+export interface FolgaDaEquipe extends Folga {
+  nome: string
+  unidadeId: string
+  setor: Funcionario['setor']
+}
 
 export const NIVEIS: { valor: Nivel; nome: string }[] = [
   { valor: 'funcionario', nome: 'Funcionário' },
@@ -451,15 +457,19 @@ export interface Motoboy {
   adicionalResponsavel?: number
   // Pagamento por dia (Heitor, 12/10): a diária inclui as primeiras entregas; as seguintes pagam por entrega.
   valorDiaria?: number
+  // Sábado e domingo (Heitor, 13/10: padrão R$ 115).
+  valorDiariaFds?: number
   entregasIncluidas?: number
   valorEntrega?: number
 }
 // Quanto um motoboy ganha na semana pelas entregas de cada dia (dia sem número = não trabalhou).
-export const calcularMotoboy = (m: Pick<Motoboy, 'valorDiaria' | 'entregasIncluidas' | 'valorEntrega'> | undefined, dias: Record<string, number>) => {
-  const valorDiaria = m?.valorDiaria ?? 100, incluidas = m?.entregasIncluidas ?? 10, valorEntrega = m?.valorEntrega ?? 4
+export const fimDeSemana = (d: string) => [0, 6].includes(new Date(d + 'T12:00:00').getDay())
+export const calcularMotoboy = (m: Pick<Motoboy, 'valorDiaria' | 'valorDiariaFds' | 'entregasIncluidas' | 'valorEntrega'> | undefined, dias: Record<string, number>) => {
+  const valorDiaria = m?.valorDiaria ?? 100, valorFds = m?.valorDiariaFds ?? 115, incluidas = m?.entregasIncluidas ?? 10, valorEntrega = m?.valorEntrega ?? 4
   const qtds = Object.values(dias)
   const extras = qtds.reduce((t, q) => t + Math.max(0, q - incluidas), 0)
-  return { dias: qtds.length, entregasTotal: qtds.reduce((t, q) => t + q, 0), entregasExtras: extras, diarias: qtds.length * valorDiaria, entregas: Math.round(extras * valorEntrega * 100) / 100 }
+  const fds = Object.keys(dias).filter(fimDeSemana).length
+  return { dias: qtds.length, diasFds: fds, entregasTotal: qtds.reduce((t, q) => t + q, 0), entregasExtras: extras, diarias: (qtds.length - fds) * valorDiaria + fds * valorFds, entregas: Math.round(extras * valorEntrega * 100) / 100 }
 }
 // Horário dos motoboys por loja e dia (0 = segunda … 6 = domingo); dia sem turno = fechado.
 export interface TurnoMotoboy { unidadeId: string; dia: number; inicio: string; fim: string }
@@ -480,7 +490,7 @@ export interface EnvioMotoboy {
   motivo: string | null
   enviadoEm: string
 }
-export type QuemSouMotoboy = { tipo: 'invalido' | 'nao_achei' } | { tipo: 'motoboy'; nome: string; unidadeId: string | null; valorDiaria: number; entregasIncluidas: number; valorEntrega: number }
+export type QuemSouMotoboy = { tipo: 'invalido' | 'nao_achei' } | { tipo: 'motoboy'; nome: string; unidadeId: string | null; valorDiaria: number; valorDiariaFds: number; entregasIncluidas: number; valorEntrega: number }
 export interface NovoEnvioMotoboy { celular: string; unidadeId: string; data: string; entregas: number; extras: ExtraMotoboy[]; observacao: string; fotos: Blob[] }
 export interface SemanaMotoboy {
   id: string

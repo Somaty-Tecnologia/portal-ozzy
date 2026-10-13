@@ -1,4 +1,4 @@
-import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome } from './types'
+import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe } from './types'
 import type { CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia } from './types'
 
@@ -130,6 +130,8 @@ export interface Store {
 
   // Inclui as folgas automáticas do turno. 'trabalha' só vem com comTrabalha (tela de marcar folgas).
   folgas(inicio: string, fim: string, opcoes?: { comTrabalha?: boolean }): Promise<Folga[]>
+  // Manutencista (faz a comida) e gestão: folgas de todos, só com nome, loja e setor (Heitor, 13/10).
+  folgasDaEquipe(inicio: string, fim: string): Promise<FolgaDaEquipe[]>
   alternarFolga(funcionarioId: string, data: string): Promise<void>
   // Só a gestão: tipo null tira a folga do dia.
   definirFolga(funcionarioId: string, data: string, tipo: TipoFolga | null): Promise<void>

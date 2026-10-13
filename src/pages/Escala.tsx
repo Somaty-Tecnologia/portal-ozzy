@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Impressao from '../components/Impressao'
 import { Botao, Titulo, Vazio, estiloEntrada } from '../components/ui'
 import { useApp } from '../lib/contexto'
-import { addDias, dataCurta, dataLonga, diaSemana, hoje, indiceSemana, inicioDaSemana } from '../lib/datas'
+import { addDias, addMeses, dataLonga, diaSemana, hoje, indiceSemana, mesDe, nomeMesAno, primeiroDia, ultimoDia } from '../lib/datas'
 import { podeGerenciar } from '../lib/permissoes'
 import { apelidoUnidade, type Folga, type Funcionario, type TipoFolga, type Turno } from '../lib/types'
 
@@ -22,17 +22,38 @@ function OpcoesLocal() {
   )
 }
 
+// Quem aparece nas folgas: a equipe do contexto, ou (manutencista) só nome/loja/setor vindos de folgas_da_equipe.
+type PessoaFolga = Pick<Funcionario, 'id' | 'nome' | 'unidadeId' | 'setor' | 'status'> & { cargo?: string }
+// Primeiro nome + o seguinte ("Kauã de Oliveira", não "Kauã de").
+const curto = (nome: string) => {
+  const ps = nome.split(' ')
+  return ps.slice(0, /^(de|da|do|dos|das|e)$/i.test(ps[1] ?? '') ? 3 : 2).join(' ')
+}
+const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
 export default function Escala() {
   const { eu, store, equipe, avisar } = useApp()
   const gestao = podeGerenciar(eu.nivel)
-  // Abre nos próximos 30 dias para todos (Heitor, 13/10), não só para a gestão.
-  const [visao, setVisao] = useState<'semana' | '30'>('30')
-  const [inicio, setInicio] = useState(inicioDaSemana(hoje()))
+  // O manutencista faz a comida da equipe e vê as folgas de todos (Heitor, 13/10).
+  const verTodos = !gestao && eu.nivel === 'manutencao'
+  // Abre no mês, para a gerente definir as folgas do mês inteiro (Heitor, 13/10); a semana saiu.
+  const [visao, setVisao] = useState<'mes' | '30'>('mes')
+  const [mes, setMes] = useState(mesDe(hoje()))
   const [folgas, setFolgas] = useState<Folga[]>([])
-  const [unidade, setUnidade] = useState(gestao ? '' : eu.unidadeId)
-  const dias = Array.from({ length: 7 }, (_, i) => addDias(inicio, i))
+  const [daEquipe, setDaEquipe] = useState<PessoaFolga[]>([])
+  const [unidade, setUnidade] = useState(gestao || verTodos ? '' : eu.unidadeId)
+  const ini = primeiroDia(mes)
+  const fim = ultimoDia(mes)
+  const dias = Array.from({ length: Number(fim.slice(8, 10)) }, (_, i) => addDias(ini, i))
 
-  const carregar = useCallback(() => store.folgas(inicio, addDias(inicio, 6), { comTrabalha: true }).then(setFolgas), [store, inicio])
+  const lerFolgas = useCallback(async (de: string, ate: string, comTrabalha?: boolean): Promise<{ folgas: Folga[]; pessoas: PessoaFolga[] }> => {
+    if (!verTodos) return { folgas: await store.folgas(de, ate, { comTrabalha }), pessoas: [] }
+    const r = await store.folgasDaEquipe(de, ate)
+    const pessoas = new Map<string, PessoaFolga>()
+    for (const g of r) pessoas.set(g.funcionarioId, { id: g.funcionarioId, nome: g.nome, unidadeId: g.unidadeId, setor: g.setor, status: 'ativo' })
+    return { folgas: r, pessoas: [...pessoas.values()] }
+  }, [store, verTodos])
+  const carregar = useCallback(() => lerFolgas(ini, fim, true).then((r) => { setFolgas(r.folgas); setDaEquipe(r.pessoas) }), [lerFolgas, ini, fim])
   const [turnos, setTurnos] = useState<Turno[]>([])
   useEffect(() => {
     store.turnos().then(setTurnos).catch(() => setTurnos([]))
@@ -45,7 +66,8 @@ export default function Escala() {
     carregar()
   }, [carregar])
 
-  const pessoas = equipe
+  const base: PessoaFolga[] = verTodos ? [...daEquipe, ...equipe.filter((f) => !daEquipe.some((p) => p.id === f.id))] : equipe
+  const pessoas = base
     .filter((f) => f.status === 'ativo' && daArea(f, unidade))
     .sort((a, b) => (a.id === eu.id ? -1 : b.id === eu.id ? 1 : a.nome.localeCompare(b.nome)))
 
@@ -74,6 +96,7 @@ export default function Escala() {
         : g?.tipo === 'trabalha' ? 'Volta a ser folga do turno' : 'Folga removida',
     )
   }
+  const folgasNoMes = (fid: string) => dias.filter((d) => folgaDe(fid, d)).length
 
   return (
     <div>
@@ -81,9 +104,9 @@ export default function Escala() {
         acao={
           (
             <div className="flex rounded-xl bg-stone-200 p-1 text-sm font-semibold">
-              {(['semana', '30'] as const).map((v) => (
+              {(['mes', '30'] as const).map((v) => (
                 <button key={v} onClick={() => setVisao(v)} className={`rounded-lg px-3 py-1.5 ${visao === v ? 'bg-white shadow-sm' : 'text-stone-600'}`}>
-                  {v === 'semana' ? 'Semana' : 'Próximos 30 dias'}
+                  {v === 'mes' ? 'Mês' : 'Próximos 30 dias'}
                 </button>
               ))}
             </div>
@@ -93,75 +116,78 @@ export default function Escala() {
         Folgas
       </Titulo>
       {visao === '30' ? (
-        <Proximos30 unidade={unidade} setUnidade={setUnidade} />
+        <Proximos30 unidade={unidade} setUnidade={setUnidade} lerFolgas={lerFolgas} />
       ) : (
       <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Botao variante="secundario" onClick={() => setInicio(addDias(inicio, -7))} aria-label="Semana anterior">
+        <Botao variante="secundario" onClick={() => setMes(addMeses(mes, -1))} aria-label="Mês anterior">
           ‹
         </Botao>
-        <span className="min-w-40 text-center text-sm font-semibold">
-          {dataLonga(inicio)} a {dataCurta(addDias(inicio, 6))}
-        </span>
-        <Botao variante="secundario" onClick={() => setInicio(addDias(inicio, 7))} aria-label="Próxima semana">
+        <span className="min-w-40 text-center text-sm font-semibold">{nomeMesAno(mes).replace(/^./, (c) => c.toUpperCase())}</span>
+        <Botao variante="secundario" onClick={() => setMes(addMeses(mes, 1))} aria-label="Próximo mês">
           ›
         </Botao>
-        {gestao && (
-          <select className={`${estiloEntrada} w-auto! py-2!`} value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+        {mes !== mesDe(hoje()) && <Botao variante="secundario" onClick={() => setMes(mesDe(hoje()))}>Este mês</Botao>}
+        {(gestao || verTodos) && (
+          <select className={`${estiloEntrada} w-auto! py-2!`} value={unidade} onChange={(e) => setUnidade(e.target.value)} aria-label="Unidade">
             <OpcoesLocal />
           </select>
         )}
       </div>
-      {gestao && (
-        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
-          <span>Toque num dia para trocar:</span>
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-500" /> folga</span>
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-sky-600" /> folga de feriado</span>
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-200" /> folga do turno (dia sem horário, entra sozinha)</span>
-        </p>
-      )}
+      <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
+        {gestao && <span>Toque num dia para trocar:</span>}
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-500" /> folga</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-sky-600" /> folga de feriado</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-ozzy-100" /> folga do turno (dia sem horário, entra sozinha)</span>
+      </p>
 
       {pessoas.length === 0 ? (
         <Vazio>Ninguém nesta unidade.</Vazio>
       ) : (
         <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-stone-500">
-                <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-semibold">Pessoa</th>
-                {dias.map((d) => (
-                  <th key={d} className={`px-1 py-2 text-center font-semibold ${d === hoje() ? 'text-ozzy-700' : ''}`}>
-                    <div>{diaSemana(d)}</div>
-                    <div className="text-xs font-normal">{dataCurta(d)}</div>
-                  </th>
-                ))}
+                <th className="sticky left-0 z-10 min-w-36 bg-white px-3 py-2 text-left font-semibold">Pessoa</th>
+                {dias.map((d) => {
+                  const fds = [0, 6].includes(new Date(d + 'T12:00:00').getDay())
+                  return (
+                    <th key={d} className={`px-0.5 py-1.5 text-center font-semibold ${d === hoje() ? 'text-ozzy-700' : ''} ${fds ? 'bg-stone-50' : ''}`}>
+                      <div className="text-[10px] font-normal">{diaSemana(d).slice(0, 3)}</div>
+                      <div>{Number(d.slice(8, 10))}</div>
+                    </th>
+                  )
+                })}
+                <th className="px-2 py-1.5 text-center text-xs font-semibold" title="Folgas no mês">Folgas</th>
               </tr>
             </thead>
             <tbody>
               {pessoas.map((p) => (
                 <tr key={p.id} className={`border-b border-stone-100 last:border-0 ${p.id === eu.id ? 'bg-ozzy-50' : ''}`}>
-                  <td className={`sticky left-0 z-10 px-3 py-2 ${p.id === eu.id ? 'bg-ozzy-50' : 'bg-white'}`}>
-                    <div className="font-semibold">{p.id === eu.id ? 'Você' : p.nome}</div>
-                    <div className="text-xs text-stone-500">{p.cargo}</div>
+                  <td className={`sticky left-0 z-10 px-3 py-1.5 ${p.id === eu.id ? 'bg-ozzy-50' : 'bg-white'}`}>
+                    <div className="whitespace-nowrap font-semibold">{p.id === eu.id ? 'Você' : curto(p.nome)}</div>
+                    {p.cargo && <div className="text-xs text-stone-500">{p.cargo}</div>}
                   </td>
                   {dias.map((d) => {
                     const folga = folgaDe(p.id, d)
                     const auto = !!registro(p.id, d)?.automatica
                     const trabalha = registro(p.id, d)?.tipo === 'trabalha'
                     return (
-                      <td key={d} className="px-1 py-1.5 text-center">
+                      <td key={d} className="px-0.5 py-1 text-center">
                         <button
                           disabled={!gestao}
                           onClick={() => alternar(p.id, d)}
-                          className={`h-9 w-full min-w-11 rounded-lg text-xs font-bold transition ${
-                            folga === 'feriado' ? 'bg-sky-600 text-white' : auto ? 'bg-ozzy-200 text-carvao' : folga ? 'bg-ozzy-500 text-carvao' : trabalha ? 'bg-stone-100 text-stone-600' : 'bg-stone-50 text-stone-300'
+                          title={`${dataLonga(d)}: ${folga === 'feriado' ? 'folga de feriado' : folga ? (auto ? 'folga do turno' : 'folga') : 'trabalha'}`}
+                          className={`h-8 w-8 rounded-md text-[10px] font-bold transition ${
+                            folga === 'feriado' ? 'bg-sky-600 text-white' : auto ? 'bg-ozzy-100 text-carvao' : folga ? 'bg-ozzy-500 text-carvao' : trabalha ? 'bg-stone-100 text-stone-600' : 'bg-stone-50 text-stone-300'
                           } ${gestao ? 'hover:ring-2 hover:ring-carvao' : 'cursor-default'}`}
                         >
-                          {folga === 'feriado' ? 'FERIADO' : folga ? 'FOLGA' : trabalha ? 'TRAB.' : '·'}
+                          {folga === 'feriado' ? 'FER' : folga ? 'F' : trabalha ? 'T' : '·'}
                         </button>
                       </td>
                     )
                   })}
+                  <td className="px-2 text-center text-sm font-semibold text-stone-600">{folgasNoMes(p.id)}</td>
                 </tr>
               ))}
             </tbody>
@@ -174,12 +200,14 @@ export default function Escala() {
   )
 }
 
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const MESES = MES_CURTO
 const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
 
 // Calendário dos próximos 30 dias (todos veem; a gestão manda no grupo).
-function Proximos30({ unidade, setUnidade }: { unidade: string; setUnidade: (u: string) => void }) {
-  const { store, equipe, nomeUnidade, avisar } = useApp()
+function Proximos30({ unidade, setUnidade, lerFolgas }: { unidade: string; setUnidade: (u: string) => void; lerFolgas: (de: string, ate: string) => Promise<{ folgas: Folga[]; pessoas: PessoaFolga[] }> }) {
+  const { equipe: daCasa, nomeUnidade, avisar } = useApp()
+  const [daEquipe, setDaEquipe] = useState<PessoaFolga[]>([])
+  const equipe: PessoaFolga[] = [...daEquipe, ...daCasa.filter((f) => !daEquipe.some((p) => p.id === f.id))]
   const [folgas, setFolgas] = useState<Folga[] | null>(null)
   const [imprimir, setImprimir] = useState(false)
   const ini = hoje()
@@ -187,8 +215,8 @@ function Proximos30({ unidade, setUnidade }: { unidade: string; setUnidade: (u: 
   const dias = Array.from({ length: 30 }, (_, i) => addDias(ini, i))
 
   useEffect(() => {
-    store.folgas(ini, fim).then(setFolgas)
-  }, [store, ini, fim])
+    lerFolgas(ini, fim).then((r) => { setFolgas(r.folgas); setDaEquipe(r.pessoas) })
+  }, [lerFolgas, ini, fim])
   if (!folgas) return <p className="text-stone-400">Carregando…</p>
 
   const pessoa = (id: string) => equipe.find((p) => p.id === id)
@@ -198,11 +226,6 @@ function Proximos30({ unidade, setUnidade }: { unidade: string; setUnidade: (u: 
       .map((g) => ({ g, p: pessoa(g.funcionarioId) }))
       .filter((x) => x.p && x.p.status === 'ativo' && daArea(x.p, unidade))
       .sort((a, b) => a.p!.nome.localeCompare(b.p!.nome))
-  // Primeiro nome + o seguinte ("Kauã de Oliveira", não "Kauã de").
-  const curto = (nome: string) => {
-    const ps = nome.split(' ')
-    return ps.slice(0, /^(de|da|do|dos|das|e)$/i.test(ps[1] ?? '') ? 3 : 2).join(' ')
-  }
   const comLoja = (id: string) => (unidade ? '' : ` (${apelidoUnidade(nomeUnidade(pessoa(id)!.unidadeId))})`)
 
   const texto = () => {

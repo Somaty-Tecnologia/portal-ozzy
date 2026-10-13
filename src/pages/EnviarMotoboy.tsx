@@ -190,7 +190,7 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
             <Campo rotulo="Quantas entregas você fez no total?">
               <input className={estiloEntrada + ' text-center text-2xl! font-bold'} inputMode="numeric" value={entregas} onChange={(e) => setEntregas(e.target.value.replace(/\D/g, ''))} placeholder="0" required />
             </Campo>
-            <p className="-mt-2 text-xs text-stone-500">Coloque <b>todas</b> as entregas do dia, não só as extras: o portal faz a conta. A diária de {reais(Number(quem.valorDiaria ?? 100))} já inclui as {quem.entregasIncluidas ?? 10} primeiras entregas do dia. Da {(quem.entregasIncluidas ?? 10) + 1}ª em diante, {reais(Number(quem.valorEntrega ?? 4))} por entrega.</p>
+            <p className="-mt-2 text-xs text-stone-500">Coloque <b>todas</b> as entregas do dia, não só as extras: o portal faz a conta. A diária ({reais(Number(quem.valorDiaria ?? 100))}, ou {reais(Number(quem.valorDiariaFds ?? 115))} no sábado e domingo) já inclui as {quem.entregasIncluidas ?? 10} primeiras entregas do dia. Da {(quem.entregasIncluidas ?? 10) + 1}ª em diante, {reais(Number(quem.valorEntrega ?? 4))} por entrega.</p>
 
             <div className="space-y-2">
               <div className="text-sm font-semibold">Fotos das notinhas</div>
