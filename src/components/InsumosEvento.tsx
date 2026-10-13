@@ -188,26 +188,14 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
 
   // Planilha para mexer à vontade (Heitor, 13/10): Providenciar e Custo são fórmulas, então mudar a quantidade,
   // o que tem na base ou o preço já refaz a conta.
-  // Heitor (13/10, depois): a planilha volta com todas as colunas.
+  // Planilha de compras (Heitor, 13/10): quem recebe só precisa saber o que comprar e onde, do jeito que a
+  // tela mostra (ex.: "4 fardos de 12 un"). Sem pré-preparos (vão para a produção) e sem o que não precisa pedir.
   const planilha = () => {
-    const nomeEstoque = estoqueDe === 'base' ? 'base de eventos' : centros.find((c) => c.id === estoqueDe)?.nome ?? 'estoque'
-    const xs = [...lista].sort((a, b) => (a.categoria || '~').localeCompare(b.categoria || '~', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'))
-    const cab = ['Categoria', 'Insumo', 'Fornecedor', 'Unidade', 'Precisa', `Estoque (${nomeEstoque})`, 'Providenciar', 'Pedir (final)', 'Embalagem', 'Qtd na embalagem', 'Nº de embalagens', 'Preço unit.', 'Custo']
-    const rows: Celula[][] = [cab.map((v) => ({ v, s: 'cabecalho' as const }))]
-    xs.forEach((x, i) => {
-      const r = i + 2
-      // Pedir (final) em branco = usa o Providenciar.
-      const pedir = `IF(H${r}="",G${r},H${r})`
-      rows.push([
-        x.categoria || 'Sem categoria', x.nome, x.fornecedor, x.unidade, x.precisa, Math.max(0, x.estoque ?? 0),
-        { f: descontar ? `MAX(0,E${r}-F${r})` : `E${r}`, s: 'numero' }, x.final, x.embalagem ?? '', x.porEmbalagem,
-        { f: `IF(N(J${r})>0,ROUNDUP(${pedir}/J${r},0),"")`, s: 'numero' },
-        { v: x.preco, s: 'reais' }, { f: `${pedir}*L${r}`, s: 'reais' },
-      ])
-    })
-    const n = xs.length + 1
-    rows.push([{ v: 'Total', s: 'total' }, null, null, null, null, null, null, null, null, null, null, null, { f: `SUM(M2:M${n})`, s: 'totalReais' }])
-    baixarXlsx(`Insumos ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Insumos', rows, [18, 34, 24, 9, 11, 14, 13, 13, 12, 10, 12, 13, 14])
+    const xs = lista.filter((x) => !ehPreparo(x) && x.pedir > 0)
+      .sort((a, b) => (a.fornecedor || '~').localeCompare(b.fornecedor || '~', 'pt-BR') || (a.categoria || '~').localeCompare(b.categoria || '~', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'))
+    const rows: Celula[][] = [['Fornecedor', 'Categoria', 'Insumo', 'Comprar', 'Comprado'].map((v) => ({ v, s: 'cabecalho' as const }))]
+    for (const x of xs) rows.push([x.fornecedor || 'Sem fornecedor', x.categoria || 'Sem categoria', x.nome, textoEmb(x) ?? `${qtd(x.pedir)} ${x.unidade}`, ''])
+    baixarXlsx(`Compras ${nomeEvento}`.replace(/[\\/:*?"<>|]/g, ' ').trim(), 'Compras', rows, [28, 22, 36, 24, 11])
   }
 
   if (!linhas.some((l) => l.quantidade > 0)) return null
@@ -222,7 +210,7 @@ export default function InsumosEvento({ cat, eventoId, linhas, saldoBase, nomeEv
             onClick={() => navigator.clipboard.writeText(texto()).then(() => avisar('Lista copiada para o WhatsApp'), () => avisar('Não deu para copiar neste aparelho'))}>
             Copiar compras p/ WhatsApp
           </Botao>
-          <Botao variante="secundario" className="py-1.5!" disabled={!lista.length} onClick={planilha}>Baixar planilha</Botao>
+          <Botao variante="secundario" className="py-1.5!" disabled={!lista.length} onClick={planilha}>Baixar lista de compras</Botao>
           <Botao variante="secundario" className="py-1.5!" onClick={() => window.print()}>Imprimir</Botao>
         </div>
       </div>
