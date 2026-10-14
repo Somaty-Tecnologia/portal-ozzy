@@ -4,6 +4,7 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { MaterialDoCadastro } from './Refeicoes'
+import FichasProntas, { type FichaResolvida } from '../components/FichasProntasRefeicao'
 import { podeGerenciar } from '../lib/permissoes'
 import { ir } from '../lib/rota'
 import type { Insumo, PreparoRefeicao, Producao } from '../lib/types'
@@ -190,6 +191,18 @@ function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: Prep
   const [modo, setModo] = useState(salvo?.modo ?? preparo?.modoPreparo ?? '')
   const [ativo, setAtivo] = useState(salvo?.ativo ?? preparo?.ativo ?? true)
   const [salvando, setSalvando] = useState(false)
+  // Começar de uma ficha pronta (Heitor, 14/10): ingredientes já ligados ao cadastro, para N porções.
+  const [fichas, setFichas] = useState(false)
+  const [porcoes, setPorcoes] = useState<number | null>(20)
+  const usarFicha = (f: FichaResolvida) => {
+    const n = porcoes || 1
+    setFichas(false)
+    setMexeu(true)
+    if (!nome.trim()) setNome(f.nome)
+    if (!modo.trim()) setModo(f.modo)
+    setItens((is) => [...is.filter((i) => i.insumoId), ...f.itens.filter((i) => i.insumo).map((i) => ({ insumoId: i.insumo!.id, quantidade: Math.round(i.quantidade * n * 1000) / 1000 }))])
+    if (f.faltam.length) avisar(`Falta no cadastro: ${f.faltam.join(', ')}. Peça ao administrativo.`)
+  }
   // Cada mudança fica guardada até salvar ou descartar.
   const [mexeu, setMexeu] = useState(!!salvo)
   useEffect(() => {
@@ -219,6 +232,15 @@ function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: Prep
             <button className="font-semibold text-stone-600 underline" onClick={descartar}>Descartar rascunho</button>
           </div>
         )}
+        {!preparo && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm ring-1 ring-stone-200">
+            <span>Começar de uma ficha pronta, para</span>
+            <CampoNumero className={`${estiloEntrada} w-16! py-1! text-right`} valor={porcoes} aoMudar={setPorcoes} inputMode="numeric" aria-label="Porções" />
+            <span>porções</span>
+            <Botao variante="secundario" className="py-1.5!" onClick={() => setFichas(true)}>📖 Fichas prontas</Botao>
+          </div>
+        )}
+        {fichas && <FichasProntas insumos={insumos} vezes={porcoes || 1} rotulo="porções" aoUsar={usarFicha} aoFechar={() => setFichas(false)} />}
         <Campo rotulo="Nome (ex.: Feijão, Arroz, Vinagrete)"><input className={estiloEntrada} value={nome} onChange={(e) => { setMexeu(true); setNome(e.target.value) }} /></Campo>
         <div>
           <div className="mb-1 text-sm font-medium text-stone-700">Ingredientes de uma receita</div>
@@ -241,7 +263,7 @@ function EditarPreparo({ preparo, insumos, aoFechar, aoSalvar }: { preparo: Prep
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Uma receita rende"><CampoNumero className={estiloEntrada} valor={rendimento} aoMudar={(n) => { setMexeu(true); setRendimento(n) }} inputMode="decimal" aria-label="Rendimento" /></Campo>
+          <Campo rotulo="Uma receita rende" dica={!rendimento ? 'Pese depois de pronto e coloque aqui.' : undefined}><CampoNumero className={estiloEntrada} valor={rendimento} aoMudar={(n) => { setMexeu(true); setRendimento(n) }} inputMode="decimal" aria-label="Rendimento" /></Campo>
           <Campo rotulo="Unidade">
             <select className={estiloEntrada} value={unidade} onChange={(e) => { setMexeu(true); setUnidade(e.target.value) }}>
               <option value="kg">kg</option><option value="l">litro</option><option value="un">unidade</option>

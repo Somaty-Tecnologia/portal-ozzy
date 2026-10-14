@@ -8,6 +8,7 @@ import { podeGerenciar } from '../lib/permissoes'
 import { ir } from '../lib/rota'
 import PreparosRefeicao from './RefeicoesPreparos'
 import { FaleComCozinha, OrcamentoRefeicoes, Recados, VotacaoCozinha, VotacaoDaSemana } from './RefeicoesVotacao'
+import FichasProntas, { type FichaResolvida } from '../components/FichasProntasRefeicao'
 import type { Funcionario, Insumo, ModeloRefeicao, QuemCome, Refeicao, TipoModeloRefeicao, VotosRefeicao } from '../lib/types'
 
 // Refeição do dia (Heitor, 13/10). O manutencista cuida da comida da equipe:
@@ -207,6 +208,13 @@ function Montar({ inicial }: { inicial?: string }) {
   const [linhas, setLinhas] = useState<Linha[]>([])
   const [usados, setUsados] = useState<ModeloRefeicao[]>([])
   const [salvando, setSalvando] = useState(false)
+  const [fichas, setFichas] = useState(false)
+  const usarFicha = (f: FichaResolvida) => {
+    setFichas(false)
+    usarModelo({ id: 'ficha:' + f.nome, nome: f.nome, tipo: f.tipo, modoPreparo: f.modo, ativo: true,
+      itens: f.itens.map((i) => ({ nome: i.insumo?.nome ?? i.nome, quantidade: i.quantidade, unidade: i.insumo?.unidade ?? i.unidade, insumoId: i.insumo?.id ?? null })) }, true)
+    if (f.faltam.length) avisar(`Falta no cadastro: ${f.faltam.join(', ')}. Peça ao administrativo ou tire a linha.`)
+  }
 
   useEffect(() => {
     Promise.all([store.insumos(), store.modelosRefeicao()]).then(([i, m]) => { setInsumos(i); setModelos(m) }, (e) => avisar((e as Error).message))
@@ -239,12 +247,13 @@ function Montar({ inicial }: { inicial?: string }) {
   const semPreco = linhas.filter((l) => l.insumoId && l.quantidade && porId.get(l.insumoId)?.preco == null).length
   const mudar = (chave: string, x: Partial<Linha>) => setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, ...x } : l)))
 
-  const usarModelo = (m: ModeloRefeicao) => {
+  const usarModelo = (m: ModeloRefeicao, daFicha = false) => {
     const n = pessoas ?? 1
     setLinhas((ls) => {
       const r = [...ls.filter((l) => l.insumoId || l.texto || l.quantidade)]
       for (const it of m.itens) {
-        const ins = acharInsumo(insumos, it.nome, it.insumoId)
+        // Ficha pronta já vem com o material achado (pelo código); o que não achou fica para escolher.
+        const ins = daFicha ? insumos.find((x) => x.id === it.insumoId) : acharInsumo(insumos, it.nome, it.insumoId)
         const q = Math.round(it.quantidade * n * 1000) / 1000
         const ja = ins && r.find((l) => l.insumoId === ins.id)
         if (ja) ja.quantidade = Math.round(((ja.quantidade ?? 0) + q) * 1000) / 1000
@@ -319,8 +328,10 @@ function Montar({ inicial }: { inicial?: string }) {
                 </optgroup>
               ))}
             </select>
+            <Botao variante="secundario" className="py-2!" onClick={() => setFichas(true)}>📖 Fichas prontas</Botao>
             <span className="text-xs text-stone-500">Calcula as quantidades para {pessoas ?? 1} {pessoas === 1 ? 'pessoa' : 'pessoas'}. Ao salvar, este prato fica guardado para repetir.</span>
           </div>
+          {fichas && <FichasProntas insumos={insumos} vezes={pessoas ?? 1} rotulo={pessoas === 1 ? 'pessoa' : 'pessoas'} aoUsar={usarFicha} aoFechar={() => setFichas(false)} />}
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <Campo rotulo="Prato do dia">
               <input className={estiloEntrada} value={prato} onChange={(e) => setPrato(e.target.value)} />
@@ -354,7 +365,7 @@ function Montar({ inicial }: { inicial?: string }) {
                     <span className="w-8 text-sm text-stone-500">{ins?.unidade ?? ''}</span>
                     <span className="w-20 text-right text-sm text-stone-600">{ins ? (ins.preco == null ? 'sem preço' : reais(custo(l))) : ''}</span>
                     <button className="px-1 text-stone-400 hover:text-red-600" onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))} aria-label="Tirar ingrediente">✕</button>
-                    {l.dica && !l.insumoId && <span className="basis-full text-xs text-amber-700">“{l.dica}” não está mais no cadastro: escolha outro material ou tire a linha.</span>}
+                    {l.dica && !l.insumoId && <span className="basis-full text-xs text-amber-700">“{l.dica}” não está no cadastro: escolha outro material, peça ao administrativo ou tire a linha.</span>}
                   </div>
                 )
               })}

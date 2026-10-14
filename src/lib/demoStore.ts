@@ -204,6 +204,21 @@ const fornecedoresDemo: Fornecedor[] = [
 const ins = (id: string, nome: string, categoria: string, unidade: Insumo['unidade'], preco: number | null, fornecedorId: string | null, extra: Partial<Insumo> = {}): Insumo => ({
   id, nome, categoria, unidade, embalagem: null, embalagemQtd: null, preco, precoEm: haHoras(24 * 5), fornecedorId, observacao: null, ativo: true, ...extra,
 })
+// Materiais usados nas fichas prontas da refeição que a demonstração não tem: entram uma vez (sem preço).
+let fichasDemoProntas = false
+async function materiaisDasFichasDemo() {
+  if (fichasDemoProntas) return
+  fichasDemoProntas = true
+  const { fichas } = (await import('./fichasProntas.json')).default as { fichas: { itens: { codigo: string | null; nome: string; unidade: string }[] }[] }
+  const simples = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const nomes = new Set(insumosDemo.map((i) => simples(i.nome)))
+  let n = 0
+  for (const f of fichas) for (const it of f.itens) {
+    if (!it.codigo || nomes.has(simples(it.nome))) continue
+    nomes.add(simples(it.nome))
+    insumosDemo.push({ ...ins(`in-f${++n}`, it.nome, 'Cadastro da Eclética', it.unidade as Insumo['unidade'], 0, null), preco: null, ecleticaCodigo: it.codigo })
+  }
+}
 const insumosDemo: Insumo[] = [
   ins('in1', 'Pão focaccia (forma)', 'Pães', 'un', 28, 'fo1'),
   ins('in2', 'Presunto cru', 'Frios e embutidos', 'kg', 150, 'fo1'),
@@ -2334,6 +2349,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async insumos() {
       const u = exigeEu()
       if (!(podeGerenciar(u.nivel) || vejoProducao(u) || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
+      await materiaisDasFichasDemo()
       return structuredClone(insumosDemo).map((i) => ({ ...i, prePreparo: prePreparoDemo.has(i.id) })).sort((a, b) => a.nome.localeCompare(b.nome))
     },
     async salvarInsumo(i) {
