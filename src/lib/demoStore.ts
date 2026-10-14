@@ -530,9 +530,12 @@ const modelosRefeicaoDemo: ModeloRefeicao[] = [
 ]
 // Uma notinha de exemplo (desenho) para a conferência na demonstração.
 const notinhaDemo = (n: number) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="300" height="420" fill="#fffef6"/><g font-family="monospace" font-size="18" fill="#222"><text x="20" y="40">THE OZZY BURGER</text><text x="20" y="80">Pedido #${4810 + n}</text><text x="20" y="120">Entrega - Rua Exemplo, ${n * 37}</text><text x="20" y="160">1x Ozzy Classic</text><text x="20" y="190">1x Batata média</text><text x="20" y="240">Total R$ ${(48 + n * 3).toFixed(2)}</text></g></svg>`)
+// Print de GPS de exemplo (desenho) para as entregas acima de 6 km.
+const gpsDemo = (km: number) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="300" height="420" fill="#e8f0e8"/><path d="M40 360 C 90 300, 60 200, 150 180 S 240 90, 260 60" stroke="#1a73e8" stroke-width="8" fill="none"/><circle cx="40" cy="360" r="10" fill="#222"/><circle cx="260" cy="60" r="10" fill="#d93025"/><rect x="20" y="380" width="260" height="30" rx="8" fill="#fff"/><text x="34" y="401" font-family="sans-serif" font-size="16" fill="#222">${String(km).replace('.', ',')} km · 18 min</text></svg>`)
 const enviosMotoboyDemo: EnvioMotoboy[] = [
-  { id: 'emb1', motoboyId: 'mb1', unidadeId: 'burger-psd', data: addDias(hoje(), -1), entregas: 13, extras: [{ descricao: 'Entrega longe (Osasco)', valor: 8 }], observacao: 'Choveu bastante',
-    fotos: [1, 2, 3].map(notinhaDemo), status: 'pendente', entregasConferidas: null, motivo: null, enviadoEm: new Date().toISOString() },
+  { id: 'emb1', motoboyId: 'mb1', unidadeId: 'burger-psd', data: addDias(hoje(), -1), entregas: 13, extras: [{ descricao: 'Pedágio', valor: 8 }], observacao: 'Choveu bastante',
+    fotos: [1, 2, 3].map(notinhaDemo), status: 'pendente', entregasConferidas: null, motivo: null, enviadoEm: new Date().toISOString(),
+    longas: 2, fotosLongas: [7.4, 8.1].map(gpsDemo), longasConferidas: null, valorLongas: null },
 ]
 
 const freelas: Freelancer[] = [
@@ -2040,7 +2043,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const cel = celular.replace(/\D/g, '').slice(-11)
       if (cel.length < 10) return espera({ tipo: 'invalido' as const })
       const m = motoboysDemo.find((x) => x.ativo && (x.telefone ?? '').replace(/\D/g, '').slice(-11) === cel)
-      return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, valorDiariaFds: m.valorDiariaFds ?? 115, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4 } : { tipo: 'nao_achei' as const })
+      return espera(m ? { tipo: 'motoboy' as const, nome: m.nome.split(' ')[0], unidadeId: m.unidadeId, valorDiaria: m.valorDiaria ?? 100, valorDiariaFds: m.valorDiariaFds ?? 115, entregasIncluidas: m.entregasIncluidas ?? 10, valorEntrega: m.valorEntrega ?? 4, valorEntregaLonge: m.valorEntregaLonge ?? 4 } : { tipo: 'nao_achei' as const })
     },
     async motoboyCadastrar(c) {
       const atual = await this.motoboyQuemSou(c.celular)
@@ -2058,9 +2061,12 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const atual = enviosMotoboyDemo.find((x) => x.motoboyId === m.id && x.unidadeId === e.unidadeId && x.data === e.data && x.status !== 'recusado')
       if (atual?.status === 'aprovado') throw new Error('Esse dia já foi conferido e aprovado. Se precisar mudar, fale com a gerente.')
       const fotos = e.fotos.map((f) => URL.createObjectURL(f))
-      const dados = { entregas: e.entregas, extras: e.extras.filter((x) => x.descricao.trim() && x.valor), observacao: e.observacao.trim() || null, enviadoEm: new Date().toISOString() }
-      if (atual) Object.assign(atual, dados, { fotos: [...atual.fotos, ...fotos] })
-      else enviosMotoboyDemo.push({ id: novoId('emb'), motoboyId: m.id, unidadeId: e.unidadeId, data: e.data, fotos, status: 'pendente', entregasConferidas: null, motivo: null, ...dados })
+      const gps = e.fotosLongas.map((f) => URL.createObjectURL(f))
+      if (e.longas > e.entregas) throw new Error('As entregas acima de 6 km não podem passar do total de entregas.')
+      if (e.longas > 0 && !gps.length && !atual?.fotosLongas.length) throw new Error('Mande o print do GPS das entregas acima de 6 km.')
+      const dados = { longas: e.longas, entregas: e.entregas, extras: e.extras.filter((x) => x.descricao.trim() && x.valor), observacao: e.observacao.trim() || null, enviadoEm: new Date().toISOString() }
+      if (atual) Object.assign(atual, dados, { fotos: [...atual.fotos, ...fotos], fotosLongas: [...atual.fotosLongas, ...gps] })
+      else enviosMotoboyDemo.push({ id: novoId('emb'), motoboyId: m.id, unidadeId: e.unidadeId, data: e.data, fotos, fotosLongas: gps, longasConferidas: null, valorLongas: null, status: 'pendente', entregasConferidas: null, motivo: null, ...dados })
       return espera(undefined)
     },
     async enviosMotoboys(de, ate) {
@@ -2070,16 +2076,17 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async fotosEnvioMotoboy(caminhos) {
       return espera(caminhos)
     },
-    async resolverEnvioMotoboy(id, aprovar, entregas, motivo) {
+    async resolverEnvioMotoboy(id, aprovar, entregas, motivo, longas) {
       exigeGestao()
       const x = enviosMotoboyDemo.find((e) => e.id === id)
-      if (x) Object.assign(x, { status: aprovar ? 'aprovado' : 'recusado', entregasConferidas: aprovar ? entregas : null, motivo: motivo.trim() || null })
+      if (x) Object.assign(x, { status: aprovar ? 'aprovado' : 'recusado', entregasConferidas: aprovar ? entregas : null, motivo: motivo.trim() || null,
+        longasConferidas: aprovar ? longas?.quantidade ?? 0 : null, valorLongas: aprovar ? longas?.valor ?? 0 : null })
       return espera(undefined)
     },
     async reabrirEnvioMotoboy(id) {
       exigeGestao()
       const x = enviosMotoboyDemo.find((e) => e.id === id)
-      if (x) Object.assign(x, { status: 'pendente', entregasConferidas: null, motivo: null })
+      if (x) Object.assign(x, { status: 'pendente', entregasConferidas: null, motivo: null, longasConferidas: null, valorLongas: null })
       return espera(undefined)
     },
     async semanasMotoboys(de, ate) {

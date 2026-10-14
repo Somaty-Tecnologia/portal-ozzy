@@ -482,6 +482,8 @@ export interface Motoboy {
   valorDiariaFds?: number
   entregasIncluidas?: number
   valorEntrega?: number
+  // Adicional por entrega acima de 6 km, com print do GPS (Heitor, 14/10: padrão R$ 4).
+  valorEntregaLonge?: number
 }
 // Quanto um motoboy ganha na semana pelas entregas de cada dia (dia sem número = não trabalhou).
 export const fimDeSemana = (d: string) => [0, 6].includes(new Date(d + 'T12:00:00').getDay())
@@ -510,9 +512,15 @@ export interface EnvioMotoboy {
   entregasConferidas: number | null
   motivo: string | null
   enviadoEm: string
+  // Entregas acima de 6 km (com print do GPS) e o que a gestão aprovou delas.
+  longas: number
+  fotosLongas: string[]
+  longasConferidas: number | null
+  valorLongas: number | null
 }
-export type QuemSouMotoboy = { tipo: 'invalido' | 'nao_achei' } | { tipo: 'motoboy'; nome: string; unidadeId: string | null; valorDiaria: number; valorDiariaFds: number; entregasIncluidas: number; valorEntrega: number }
-export interface NovoEnvioMotoboy { celular: string; unidadeId: string; data: string; entregas: number; extras: ExtraMotoboy[]; observacao: string; fotos: Blob[] }
+export const EXTRA_LONGE = 'acima de 6 km'
+export type QuemSouMotoboy = { tipo: 'invalido' | 'nao_achei' } | { tipo: 'motoboy'; nome: string; unidadeId: string | null; valorDiaria: number; valorDiariaFds: number; entregasIncluidas: number; valorEntrega: number; valorEntregaLonge: number }
+export interface NovoEnvioMotoboy { celular: string; unidadeId: string; data: string; entregas: number; extras: ExtraMotoboy[]; observacao: string; fotos: Blob[]; longas: number; fotosLongas: Blob[] }
 export interface SemanaMotoboy {
   id: string
   motoboyId: string

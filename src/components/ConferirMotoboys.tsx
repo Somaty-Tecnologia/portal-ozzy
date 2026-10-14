@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import qrcode from 'qrcode-generator'
-import { Botao, Modal, Selo, Vazio } from './ui'
+import { Botao, Modal, Selo, Vazio, estiloEntrada } from './ui'
 import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, diaSemana, hoje } from '../lib/datas'
-import { reais } from '../lib/financeiro'
+import { lerNumero, reais } from '../lib/financeiro'
 import { apelidoUnidade, calcularMotoboy, type EnvioMotoboy, type EscalaMotoboy, type Motoboy } from '../lib/types'
 import { linkMotoboy } from '../pages/EnviarMotoboy'
+
+const texto = (n: number) => n.toFixed(2).replace('.', ',')
 
 // Conferência dos dias que os motoboys mandaram pelo link (Heitor, 12/10): a gestão olha as fotos das notinhas,
 // conta, ajusta o número de entregas se precisar e aprova. O dia aprovado entra sozinho no Pagamento da semana.
@@ -55,11 +57,12 @@ export default function ConferirMotoboys({ motoboys, aoMudar }: { motoboys: Moto
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{m?.nome ?? 'Motoboy'}</span>
                   <span className="text-sm text-stone-500">{apelidoUnidade(nomeUnidade(e.unidadeId))} · {diaSemana(e.data).toLowerCase()} {dataCurta(e.data)}</span>
-                  {e.status === 'aprovado' && <Selo cor="verde">Aprovado · {e.entregasConferidas} entregas</Selo>}
+                  {e.status === 'aprovado' && <Selo cor="verde">Aprovado · {e.entregasConferidas} entregas{(e.longasConferidas ?? 0) > 0 ? ` · ${e.longasConferidas} acima de 6 km ${reais(e.valorLongas ?? 0)}` : ''}</Selo>}
                   {e.status === 'recusado' && <Selo cor="vermelho">Recusado</Selo>}
                 </div>
                 <div className="text-sm text-stone-600">
                   {e.entregas} {e.entregas === 1 ? 'entrega' : 'entregas'} · {e.fotos.length} {e.fotos.length === 1 ? 'foto' : 'fotos'}
+                  {e.longas > 0 && ` · ${e.longas} acima de 6 km (${e.fotosLongas.length} ${e.fotosLongas.length === 1 ? 'print' : 'prints'})`}
                   {e.extras.length > 0 && ` · a mais: ${e.extras.map((x) => `${x.descricao} ${reais(x.valor)}`).join(', ')}`}
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -83,21 +86,36 @@ function Conferencia({ envio: e, motoboy: m, aoFechar, aoMudar }: { envio: Envio
   const [urls, setUrls] = useState<string[] | null>(null)
   const [contadas, setContadas] = useState(e.entregasConferidas ?? e.entregas)
   const [ocupado, setOcupado] = useState(false)
+  // Entregas acima de 6 km: quantas valeram pelos prints e o valor final (sugerido: quantidade × valor do cadastro).
+  const valorLonge = m?.valorEntregaLonge ?? 4
+  const [longas, setLongas] = useState(e.longasConferidas ?? e.longas)
+  const [valorFinal, setValorFinal] = useState<string | null>(e.valorLongas !== null ? texto(e.valorLongas) : null)
+  const [gps, setGps] = useState<string[] | null>(null)
   useEffect(() => {
     store.fotosEnvioMotoboy(e.fotos).then(setUrls, () => setUrls([]))
-  }, [store, e.fotos])
+    store.fotosEnvioMotoboy(e.fotosLongas).then(setGps, () => setGps([]))
+  }, [store, e.fotos, e.fotosLongas])
+  const sugerido = longas * valorLonge
+  const valorLongas = valorFinal === null ? sugerido : lerNumero(valorFinal)
 
   const resolver = async (aprovar: boolean) => {
     let motivo = ''
     if (!aprovar) {
       motivo = prompt('Por que está recusando? (o motoboy pode mandar de novo)')?.trim() ?? ''
       if (!motivo) return
-    } else if (contadas !== e.entregas) {
-      motivo = `Disse ${e.entregas}, conferido ${contadas}`
+    } else {
+      if (valorLongas === null || valorLongas < 0) return avisar('Confira o valor das entregas acima de 6 km.')
+      if (longas > contadas) return avisar('As entregas acima de 6 km não podem passar das conferidas.')
+      const notas = [
+        contadas !== e.entregas && `Disse ${e.entregas}, conferido ${contadas}`,
+        longas !== e.longas && `Acima de 6 km: disse ${e.longas}, valeram ${longas}`,
+        longas > 0 && Math.abs((valorLongas ?? 0) - sugerido) > 0.004 && `Valor acima de 6 km ${reais(valorLongas ?? 0)} (seria ${reais(sugerido)})`,
+      ].filter(Boolean)
+      motivo = notas.join(' · ')
     }
     setOcupado(true)
     try {
-      await store.resolverEnvioMotoboy(e.id, aprovar, aprovar ? contadas : null, motivo)
+      await store.resolverEnvioMotoboy(e.id, aprovar, aprovar ? contadas : null, motivo, aprovar ? { quantidade: longas, valor: longas > 0 ? valorLongas ?? 0 : 0 } : undefined)
       avisar(aprovar ? 'Aprovado: já está no pagamento da semana' : 'Recusado')
       await aoMudar()
     } catch (err) {
@@ -125,6 +143,20 @@ function Conferencia({ envio: e, motoboy: m, aoFechar, aoMudar }: { envio: Envio
           {e.observacao && <div className="mt-1 rounded-lg bg-stone-50 px-2 py-1">“{e.observacao}”</div>}
           {e.extras.map((x, i) => <div key={i}>A mais: <b>{x.descricao}</b> {reais(x.valor)}</div>)}
         </div>
+        {e.longas > 0 && (
+          <div className="space-y-2 rounded-xl bg-sky-50 p-3 ring-1 ring-sky-200">
+            <div className="text-sm font-semibold">Disse {e.longas} {e.longas === 1 ? 'entrega' : 'entregas'} acima de 6 km · {e.fotosLongas.length} {e.fotosLongas.length === 1 ? 'print' : 'prints'} do GPS</div>
+            {gps === null ? <p className="text-stone-400">Carregando prints…</p> : gps.length === 0 ? <p className="text-sm text-red-700">Sem print do GPS.</p> : (
+              <div className="grid grid-cols-3 gap-2">
+                {gps.map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noreferrer" className="block">
+                    <img src={u} alt={`Print do GPS ${i + 1}`} className="w-full rounded-lg ring-1 ring-sky-200" loading="lazy" />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <p className="text-xs text-stone-500">Conte as notinhas nas fotos (toque na foto para abrir grande). Se a conta não bater, ajuste o número antes de aprovar.</p>
         {urls === null ? <p className="text-stone-400">Carregando fotos…</p> : urls.length === 0 ? <Vazio>Sem fotos.</Vazio> : (
           <div className="grid grid-cols-2 gap-2">
@@ -145,9 +177,28 @@ function Conferencia({ envio: e, motoboy: m, aoFechar, aoMudar }: { envio: Envio
                 <button className="grid size-9 place-items-center rounded-lg bg-stone-100 text-lg font-bold" onClick={() => setContadas(contadas + 1)} aria-label="Uma a mais">+</button>
               </div>
             </div>
+            {(e.longas > 0 || longas > 0) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-2">
+                <span className="text-sm">Acima de 6 km:</span>
+                <div className="flex items-center gap-1">
+                  <button className="grid size-9 place-items-center rounded-lg bg-stone-100 text-lg font-bold" onClick={() => setLongas(Math.max(0, longas - 1))} aria-label="Uma a menos acima de 6 km">−</button>
+                  <span className={`w-10 text-center text-xl font-bold ${longas !== e.longas ? 'text-amber-700' : ''}`}>{longas}</span>
+                  <button className="grid size-9 place-items-center rounded-lg bg-stone-100 text-lg font-bold" onClick={() => setLongas(longas + 1)} aria-label="Uma a mais acima de 6 km">+</button>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  Valor final R$
+                  <input className={estiloEntrada + ' w-24! py-1.5!'} inputMode="decimal" aria-label="Valor final das entregas acima de 6 km"
+                    value={valorFinal ?? texto(sugerido)} onChange={(ev) => setValorFinal(ev.target.value)} />
+                </label>
+                <p className="w-full text-xs text-stone-500">
+                  Sugerido: {longas} × {reais(valorLonge)} = {reais(sugerido)}.{valorFinal !== null && <> <button className="font-semibold text-sky-700" onClick={() => setValorFinal(null)}>Voltar ao sugerido</button></>}
+                </p>
+              </div>
+            )}
             <p className="text-xs text-stone-500">
               Dia: {reais(c.diarias)} de diária{c.entregasExtras > 0 ? ` + ${c.entregasExtras} × ${reais(m?.valorEntrega ?? 4)} = ${reais(c.diarias + c.entregas)}` : ''}
               {e.extras.length > 0 && ` + a mais ${reais(e.extras.reduce((t, x) => t + x.valor, 0))}`}
+              {longas > 0 && ` + acima de 6 km ${reais(valorLongas ?? 0)}`}
             </p>
             <div className="flex gap-2">
               <Botao variante="perigo" className="flex-1" disabled={ocupado} onClick={() => resolver(false)}>Recusar</Botao>
@@ -156,7 +207,7 @@ function Conferencia({ envio: e, motoboy: m, aoFechar, aoMudar }: { envio: Envio
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2 rounded-xl bg-stone-50 p-3 text-sm">
-            <span>{e.status === 'aprovado' ? `Aprovado com ${e.entregasConferidas} entregas` : 'Recusado'}{e.motivo ? ` · ${e.motivo}` : ''}</span>
+            <span>{e.status === 'aprovado' ? `Aprovado com ${e.entregasConferidas} entregas${(e.longasConferidas ?? 0) > 0 ? `, ${e.longasConferidas} acima de 6 km (${reais(e.valorLongas ?? 0)})` : ''}` : 'Recusado'}{e.motivo ? ` · ${e.motivo}` : ''}</span>
             <Botao variante="secundario" className="py-1.5!" disabled={ocupado} onClick={reabrir}>Voltar para conferir</Botao>
           </div>
         )}

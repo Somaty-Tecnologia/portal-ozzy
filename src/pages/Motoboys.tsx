@@ -4,7 +4,7 @@ import { useApp } from '../lib/contexto'
 import { addDias, dataCurta, hoje, indiceSemana, inicioDaSemana } from '../lib/datas'
 import { lerNumero } from '../lib/financeiro'
 import { soDigitos } from '../lib/store'
-import { apelidoUnidade, calcularMotoboy, nomeCurto, type EnvioMotoboy, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
+import { EXTRA_LONGE, apelidoUnidade, calcularMotoboy, nomeCurto, type EnvioMotoboy, type EscalaMotoboy, type ExtraMotoboy, type Motoboy, type SemanaMotoboy, type TurnoMotoboy } from '../lib/types'
 import { reais } from '../lib/financeiro'
 import ArquivoBanco from '../components/ArquivoBanco'
 import ConferirMotoboys from '../components/ConferirMotoboys'
@@ -154,6 +154,11 @@ function SemanaLoja({ pagamento, loja, motoboys, semanas, escalados, envios, con
         for (const x of e.extras) {
           const descricao = `${dataCurta(e.data)} ${x.descricao}`
           if (!l.extras.some((y) => y.descricao === descricao)) { l.extras.push({ descricao, valor: texto(x.valor) }); veio = true }
+        }
+        // Entregas acima de 6 km aprovadas: o valor final que a gestão definiu na conferência.
+        if ((e.longasConferidas ?? 0) > 0 && (e.valorLongas ?? 0) > 0) {
+          const descricao = `${dataCurta(e.data)} ${e.longasConferidas} ${e.longasConferidas === 1 ? 'entrega' : 'entregas'} ${EXTRA_LONGE}`
+          if (!l.extras.some((y) => y.descricao === descricao)) { l.extras.push({ descricao, valor: texto(e.valorLongas!) }); veio = true }
         }
       }
       if (veio) {
@@ -552,7 +557,7 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     nome: existente?.nome ?? '', unidadeId: existente?.unidadeId ?? lojaPadrao, pix: existente?.pix ?? '', telefone: existente?.telefone ?? '',
     cpf: existente?.cpf ?? '', observacao: existente?.observacao ?? '', ativo: existente?.ativo ?? true,
     responsavel: existente?.responsavel ?? false, adicional: texto(existente?.adicionalResponsavel ?? 125),
-    valorDiaria: texto(existente?.valorDiaria ?? 100), valorDiariaFds: texto(existente?.valorDiariaFds ?? 115), incluidas: String(existente?.entregasIncluidas ?? 10), valorEntrega: texto(existente?.valorEntrega ?? 4),
+    valorDiaria: texto(existente?.valorDiaria ?? 100), valorDiariaFds: texto(existente?.valorDiariaFds ?? 115), incluidas: String(existente?.entregasIncluidas ?? 10), valorEntrega: texto(existente?.valorEntrega ?? 4), valorLonge: texto(existente?.valorEntregaLonge ?? 4),
   })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -563,10 +568,10 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
     setErro('')
     setSalvando(true)
     try {
-      const { adicional, valorDiaria, valorDiariaFds, incluidas, valorEntrega, ...resto } = f
-      if ([valorDiaria, valorDiariaFds, incluidas, valorEntrega].some((x) => lerNumero(x) === null)) { setSalvando(false); return setErro('Confira diária, entregas incluídas e valor por entrega.') }
+      const { adicional, valorDiaria, valorDiariaFds, incluidas, valorEntrega, valorLonge, ...resto } = f
+      if ([valorDiaria, valorDiariaFds, incluidas, valorEntrega, valorLonge].some((x) => lerNumero(x) === null)) { setSalvando(false); return setErro('Confira diária, entregas incluídas e valor por entrega.') }
       if (f.responsavel && lerNumero(adicional) === null) { setSalvando(false); return setErro('Diga o valor do adicional do responsável.') }
-      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, valorDiaria: lerNumero(valorDiaria)!, valorDiariaFds: lerNumero(valorDiariaFds)!, entregasIncluidas: Math.round(lerNumero(incluidas)!), valorEntrega: lerNumero(valorEntrega)!, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
+      await store.salvarMotoboy({ ...resto, adicionalResponsavel: lerNumero(adicional) ?? 125, valorDiaria: lerNumero(valorDiaria)!, valorDiariaFds: lerNumero(valorDiariaFds)!, entregasIncluidas: Math.round(lerNumero(incluidas)!), valorEntrega: lerNumero(valorEntrega)!, valorEntregaLonge: lerNumero(valorLonge)!, id: existente?.id, unidadeId: f.unidadeId || null, pix: f.pix || null, telefone: f.telefone || null, cpf: f.cpf || null, observacao: f.observacao || null })
       aoSalvar()
     } catch (err) {
       setErro((err as Error).message)
@@ -593,6 +598,7 @@ function FormMotoboy({ existente, lojaPadrao, aoFechar, aoSalvar }: { existente?
           <Campo rotulo="Diária sáb e dom (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorDiariaFds} onChange={(e) => setF({ ...f, valorDiariaFds: e.target.value })} /></Campo>
           <Campo rotulo="Entregas na diária"><input className={estiloEntrada} inputMode="numeric" value={f.incluidas} onChange={(e) => setF({ ...f, incluidas: e.target.value })} /></Campo>
           <Campo rotulo="Por entrega a mais (R$)"><input className={estiloEntrada} inputMode="decimal" value={f.valorEntrega} onChange={(e) => setF({ ...f, valorEntrega: e.target.value })} /></Campo>
+          <Campo rotulo="Entrega acima de 6 km (R$ a mais)" dica="Com print do GPS."><input className={estiloEntrada} inputMode="decimal" value={f.valorLonge} onChange={(e) => setF({ ...f, valorLonge: e.target.value })} /></Campo>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.checked })} /> Responsável pelos motoboys

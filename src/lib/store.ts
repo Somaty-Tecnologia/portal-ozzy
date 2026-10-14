@@ -243,7 +243,7 @@ export interface Store {
   enviarDiaMotoboy(e: NovoEnvioMotoboy): Promise<void>
   enviosMotoboys(de: string, ate: string): Promise<EnvioMotoboy[]>
   fotosEnvioMotoboy(caminhos: string[]): Promise<string[]>
-  resolverEnvioMotoboy(id: string, aprovar: boolean, entregas: number | null, motivo: string): Promise<void>
+  resolverEnvioMotoboy(id: string, aprovar: boolean, entregas: number | null, motivo: string, longas?: { quantidade: number; valor: number }): Promise<void>
   reabrirEnvioMotoboy(id: string): Promise<void>
   // Refeição do dia (0083): todos veem o prato e votam (anônimo); quem cozinha e a gestão montam, com baixa no estoque.
   refeicoes(de: string, ate: string): Promise<Refeicao[]>

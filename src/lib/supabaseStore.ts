@@ -1332,7 +1332,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         nome: nomeProprio(m.nome), unidade_id: m.unidadeId || null, pix: texto(m.pix), telefone: m.telefone ? soDigitos(m.telefone) || null : null,
         cpf: m.cpf ? soDigitos(m.cpf) || null : null, observacao: texto(m.observacao), ativo: m.ativo,
         responsavel: !!m.responsavel, ...(m.adicionalResponsavel !== undefined ? { adicional_responsavel: m.adicionalResponsavel } : {}),
-        ...(m.valorDiaria !== undefined ? { valor_diaria: m.valorDiaria, valor_diaria_fds: m.valorDiariaFds ?? 115, entregas_incluidas: m.entregasIncluidas ?? 10, valor_entrega: m.valorEntrega ?? 4 } : {}),
+        ...(m.valorDiaria !== undefined ? { valor_diaria: m.valorDiaria, valor_diaria_fds: m.valorDiariaFds ?? 115, entregas_incluidas: m.entregasIncluidas ?? 10, valor_entrega: m.valorEntrega ?? 4, valor_entrega_longe: m.valorEntregaLonge ?? 4 } : {}),
       }
       if (!linha.nome) throw new Error('Diga o nome.')
       const r = m.id
@@ -1520,15 +1520,21 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       return ok(await sb.rpc('motoboy_cadastrar', { p_celular: c.celular, p_nome: c.nome, p_cpf: c.cpf, p_pix: c.pix, p_unidade: c.unidadeId || null }))
     },
     async enviarDiaMotoboy(e) {
-      const fotos: string[] = []
-      for (const f of e.fotos) {
-        const caminho = `envios/${e.data}/${crypto.randomUUID()}.jpg`
-        ok(await sb.storage.from('motoboys').upload(caminho, f, { contentType: f.type || 'image/jpeg' }))
-        fotos.push(caminho)
+      const subir = async (lista: Blob[], pasta: string) => {
+        const caminhos: string[] = []
+        for (const f of lista) {
+          const caminho = `envios/${pasta}${e.data}/${crypto.randomUUID()}.jpg`
+          ok(await sb.storage.from('motoboys').upload(caminho, f, { contentType: f.type || 'image/jpeg' }))
+          caminhos.push(caminho)
+        }
+        return caminhos
       }
+      const fotos = await subir(e.fotos, '')
+      const gps = await subir(e.fotosLongas, 'gps/')
       ok(await sb.rpc('motoboy_enviar', {
         p_celular: e.celular, p_unidade: e.unidadeId, p_data: e.data, p_entregas: e.entregas,
         p_extras: e.extras.map((x) => ({ descricao: x.descricao, valor: String(x.valor) })), p_obs: e.observacao, p_fotos: fotos,
+        p_longas: e.longas, p_fotos_longas: gps,
       }))
     },
     async enviosMotoboys(de, ate) {
@@ -1536,6 +1542,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         id: r.id, motoboyId: r.motoboy_id, unidadeId: r.unidade_id, data: r.data, entregas: r.entregas,
         extras: (r.extras ?? []).map((x: any) => ({ descricao: x.descricao, valor: Number(x.valor) })), observacao: r.observacao, fotos: r.fotos ?? [],
         status: r.status, entregasConferidas: r.entregas_conferidas, motivo: r.motivo, enviadoEm: r.enviado_em,
+        longas: r.longas ?? 0, fotosLongas: r.fotos_longas ?? [], longasConferidas: r.longas_conferidas ?? null, valorLongas: numeroOuNulo(r.valor_longas),
       }))
     },
     async fotosEnvioMotoboy(caminhos) {
@@ -1543,8 +1550,8 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       const { data } = await sb.storage.from('motoboys').createSignedUrls(caminhos, 60 * 60)
       return caminhos.map((c) => data?.find((d) => d.path === c)?.signedUrl ?? '')
     },
-    async resolverEnvioMotoboy(id, aprovar, entregas, motivo) {
-      ok(await sb.rpc('motoboy_resolver_envio', { p_id: id, p_aprovar: aprovar, p_entregas: entregas, p_motivo: motivo }))
+    async resolverEnvioMotoboy(id, aprovar, entregas, motivo, longas) {
+      ok(await sb.rpc('motoboy_resolver_envio', { p_id: id, p_aprovar: aprovar, p_entregas: entregas, p_motivo: motivo, p_longas: longas?.quantidade ?? 0, p_valor_longas: longas?.valor ?? 0 }))
     },
     async reabrirEnvioMotoboy(id) {
       ok(await sb.rpc('motoboy_reabrir_envio', { p_id: id }))
@@ -1812,7 +1819,7 @@ const paraNota = (r: any): NotaFiscal => ({
 const paraMotoboy = (r: any): Motoboy => ({
   id: r.id, nome: r.nome, unidadeId: r.unidade_id, pix: r.pix, telefone: r.telefone, cpf: r.cpf, observacao: r.observacao, ativo: r.ativo,
   responsavel: !!r.responsavel, adicionalResponsavel: numeroOuNulo(r.adicional_responsavel) ?? 125,
-  valorDiaria: numeroOuNulo(r.valor_diaria) ?? 100, valorDiariaFds: numeroOuNulo(r.valor_diaria_fds) ?? 115, entregasIncluidas: numeroOuNulo(r.entregas_incluidas) ?? 10, valorEntrega: numeroOuNulo(r.valor_entrega) ?? 4,
+  valorDiaria: numeroOuNulo(r.valor_diaria) ?? 100, valorDiariaFds: numeroOuNulo(r.valor_diaria_fds) ?? 115, entregasIncluidas: numeroOuNulo(r.entregas_incluidas) ?? 10, valorEntrega: numeroOuNulo(r.valor_entrega) ?? 4, valorEntregaLonge: numeroOuNulo(r.valor_entrega_longe) ?? 4,
 })
 const paraContaPagar = (r: any): ContaPagar => ({
   id: r.id, centroCustoId: r.centro_custo_id, contaId: r.conta_id, fornecedorId: r.fornecedor_id, funcionarioId: r.funcionario_id ?? null, motoboyId: r.motoboy_id ?? null, favorecido: r.favorecido, descricao: r.descricao,

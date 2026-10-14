@@ -22,6 +22,9 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
   const [data, setData] = useState(hoje())
   const [entregas, setEntregas] = useState('')
   const [fotos, setFotos] = useState<{ arquivo: File; url: string }[]>([])
+  // Entregas acima de 6 km (Heitor, 14/10): cada uma com o print do GPS, paga um adicional.
+  const [longas, setLongas] = useState('')
+  const [gps, setGps] = useState<{ arquivo: File; url: string }[]>([])
   const [extras, setExtras] = useState<Extra[]>([])
   const [obs, setObs] = useState('')
   const [erro, setErro] = useState('')
@@ -79,6 +82,11 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
     const novas = Array.from(lista).map((arquivo) => ({ arquivo, url: URL.createObjectURL(arquivo) }))
     setFotos((fs) => [...fs, ...novas].slice(0, 40))
   }
+  const escolherGps = (lista: FileList | null) => {
+    if (!lista) return
+    const novas = Array.from(lista).map((arquivo) => ({ arquivo, url: URL.createObjectURL(arquivo) }))
+    setGps((fs) => [...fs, ...novas].slice(0, 40))
+  }
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -86,16 +94,20 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
     if (!loja) return setErro('Escolha a loja.')
     if (n === null || n < 0 || n > 200 || !Number.isInteger(n)) return setErro('Coloque quantas entregas você fez.')
     if (n > 0 && !fotos.length) return setErro('Mande as fotos das notinhas.')
+    const nl = lerNumero(longas) ?? 0
+    if (nl < 0 || !Number.isInteger(nl) || nl > n) return setErro('As entregas acima de 6 km não podem passar do total.')
+    if (nl > 0 && !gps.length) return setErro('Mande o print do GPS das entregas acima de 6 km.')
     const ruim = extras.find((x) => (x.descricao.trim() && !lerNumero(x.valor)) || (!x.descricao.trim() && lerNumero(x.valor)))
     if (ruim) return setErro('No valor a mais, diga o que foi e quanto.')
     setErro('')
     setEnviando(true)
     try {
       const reduzidas = await Promise.all(fotos.map((f) => reduzirFoto(f.arquivo)))
+      const prints = nl > 0 ? await Promise.all(gps.map((f) => reduzirFoto(f.arquivo))) : []
       await store.enviarDiaMotoboy({
         celular: soDigitos(celular), unidadeId: loja, data, entregas: n, observacao: obs,
         extras: extras.filter((x) => x.descricao.trim() && lerNumero(x.valor)).map((x) => ({ descricao: x.descricao.trim(), valor: lerNumero(x.valor)! })),
-        fotos: reduzidas,
+        fotos: reduzidas, longas: nl, fotosLongas: prints,
       })
       setEnviado(true)
     } catch (err) {
@@ -109,6 +121,8 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
     setEnviado(false)
     setEntregas('')
     setFotos([])
+    setLongas('')
+    setGps([])
     setExtras([])
     setObs('')
     setData(hoje())
@@ -212,11 +226,39 @@ export default function EnviarMotoboy({ store }: { store: Store }) {
               <p className="text-xs text-stone-500">Pode pôr várias notinhas na mesma foto, desde que dê para ler o número do pedido.{fotos.length ? ` ${fotos.length} ${fotos.length === 1 ? 'foto' : 'fotos'}.` : ''}</p>
             </div>
 
+            <div className="space-y-2 rounded-xl bg-stone-50 p-3 ring-1 ring-stone-200">
+              <div className="text-sm font-semibold">Entregas acima de 6 km <span className="font-normal text-stone-500">(se teve)</span></div>
+              <div className="flex items-center gap-3">
+                <input className={estiloEntrada + ' w-20! shrink-0 text-center text-lg! font-bold'} inputMode="numeric" value={longas} onChange={(e) => setLongas(e.target.value.replace(/\D/g, ''))} placeholder="0" aria-label="Entregas acima de 6 km" />
+                <p className="text-xs text-stone-500">Cada uma vale {reais(Number(quem.valorEntregaLonge ?? 4))} a mais. Mande o print do GPS de cada uma, mostrando a distância.</p>
+              </div>
+              {(lerNumero(longas) ?? 0) > 0 && (
+                <>
+                  {gps.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {gps.map((f, i) => (
+                        <div key={f.url} className="relative">
+                          <img src={f.url} alt={`Print do GPS ${i + 1}`} className="aspect-[3/4] w-full rounded-lg object-cover ring-1 ring-stone-200" />
+                          <button type="button" onClick={() => setGps(gps.filter((_, j) => j !== i))} aria-label={`Tirar print ${i + 1}`}
+                            className="absolute -top-1.5 -right-1.5 grid size-6 place-items-center rounded-full bg-carvao text-xs text-white">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 bg-white px-3 py-3 text-sm font-semibold text-stone-600">
+                    🗺️ {gps.length ? 'Pôr mais prints' : 'Escolher os prints do GPS'}
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { escolherGps(e.target.files); e.target.value = '' }} />
+                  </label>
+                  {gps.length > 0 && gps.length < (lerNumero(longas) ?? 0) && <p className="text-xs text-amber-700">{gps.length} {gps.length === 1 ? 'print' : 'prints'} para {longas} entregas. Sem o print, a entrega pode não ser aprovada.</p>}
+                </>
+              )}
+            </div>
+
             <div className="space-y-2">
               <div className="text-sm font-semibold">Valor a mais <span className="font-normal text-stone-500">(se teve)</span></div>
               {extras.map((x, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input className={estiloEntrada + ' min-w-0 flex-1'} placeholder="O que foi (entrega longe, pedágio…)" value={x.descricao}
+                  <input className={estiloEntrada + ' min-w-0 flex-1'} placeholder="O que foi (pedágio, chuva…)" value={x.descricao}
                     onChange={(e) => setExtras(extras.map((y, j) => (j === i ? { ...y, descricao: e.target.value } : y)))} />
                   <input className={estiloEntrada + ' w-24! shrink-0'} inputMode="decimal" placeholder="R$" value={x.valor}
                     onChange={(e) => setExtras(extras.map((y, j) => (j === i ? { ...y, valor: e.target.value } : y)))} />
