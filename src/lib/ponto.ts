@@ -20,7 +20,10 @@ export function jornadas(marcacoes: MarcacaoPonto[]): Jornada[] {
   for (const m of validas) {
     const g = grupos[grupos.length - 1]
     const ult = g?.[g.length - 1]
-    const nova = !g || m.tipo === 'entrada' || ult.tipo === 'saida' || Date.parse(m.momento) - Date.parse(ult.momento) > 16 * 3600_000
+    // "Entrada" batida por engano no meio da jornada (ex.: na volta do intervalo) não abre outra jornada:
+    // só abre se a última foi saída, se passou de 16 h ou se é entrada mais de 6 h depois da última batida.
+    const gap = g ? Date.parse(m.momento) - Date.parse(ult.momento) : 0
+    const nova = !g || ult.tipo === 'saida' || gap > 16 * 3600_000 || (m.tipo === 'entrada' && gap > 6 * 3600_000)
     if (nova) grupos.push([m])
     else g.push(m)
   }

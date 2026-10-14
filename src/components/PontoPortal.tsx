@@ -73,8 +73,13 @@ export function BaterPonto({ compacto = false, codigo }: { compacto?: boolean; c
         <button className="text-xs text-white/70 underline" onClick={() => setOutro(true)}>Não é {NOME_MARCACAO[proximo].toLowerCase()}? Escolher outro tipo</button>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {TIPOS.filter((t) => t !== proximo).map((t) => (
-            <button key={t} disabled={!!estado} onClick={() => bater(t)} className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold ring-1 ring-white/30">{NOME_MARCACAO[t]}</button>
+          {/* Heitor, 14/10: gente batia "Entrada" na volta do intervalo. Com a jornada aberta, entrada só como turno novo e com confirmação. */}
+          {TIPOS.filter((t) => t !== proximo && !(proximo === 'saida_intervalo' && t === 'volta_intervalo') && !(proximo === 'volta_intervalo' && t === 'saida_intervalo')).map((t) => (
+            <button key={t} disabled={!!estado} className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold ring-1 ring-white/30"
+              onClick={() => {
+                if (t === 'entrada' && proximo !== 'entrada' && !confirm(`Você ainda não bateu a saída do turno de hoje.\n\nSe está voltando do intervalo, use "${NOME_MARCACAO.volta_intervalo}". Bater "Entrada" começa um turno novo. Continuar?`)) return
+                bater(t)
+              }}>{t === 'entrada' && proximo !== 'entrada' ? 'Entrada de outro turno' : NOME_MARCACAO[t]}</button>
           ))}
         </div>
       )}
