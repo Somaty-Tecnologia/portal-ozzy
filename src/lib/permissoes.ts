@@ -10,6 +10,10 @@ export const podeVerPainel = (n: Nivel) => n === 'proprietario' || n === 'gerent
 export const podeGerenciar = (n: Nivel) => GESTAO.includes(n)
 
 // O proprietário não entra no controle de exames nem assina o regulamento (pedido de 07/10).
+// Menu Produção: gestão, setor Produção e supervisores (Heitor, 14/10).
+export const vejoProducao = (eu: { nivel: Nivel; setor?: string | null }) => podeGerenciar(eu.nivel) || eu.setor === 'producao' || eu.nivel === 'supervisor'
+// Compras e Estoque: gestão e supervisores (Heitor, 14/10).
+export const operaEstoque = (n: Nivel) => podeGerenciar(n) || n === 'supervisor'
 export const isentoDeRotinas = (n: Nivel) => n === 'proprietario'
 
 // Chamados: o manutencista e a gestão veem todos e mudam o andamento.

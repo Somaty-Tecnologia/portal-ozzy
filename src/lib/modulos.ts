@@ -1,4 +1,4 @@
-import { podeGerenciar, vejoResultado } from './permissoes'
+import { operaEstoque, podeGerenciar, vejoProducao, vejoResultado } from './permissoes'
 import { LOJAS_FECHAMENTO, type Funcionario } from './types'
 
 export type IdIcone =
@@ -33,7 +33,7 @@ export const MODULOS: Modulo[] = [
   // Fechamento das lojas (09/10): quem é da PSD ou da Vila conta o estoque no fim do turno e faz o pedido à Central.
   { id: 'fechamento', nome: 'Fechamento e pedido', pronto: true, ve: (eu) => podeGerenciar(eu.nivel) || (LOJAS_FECHAMENTO.includes(eu.unidadeId as never) && eu.nivel !== 'manutencao') },
   // Central de produção (09/10): pedidos das lojas, lista de preparo e o que foi produzido. Gestão e quem é da produção.
-  { id: 'producao', nome: 'Produção', pronto: true, ve: (eu) => podeGerenciar(eu.nivel) || eu.setor === 'producao' },
+  { id: 'producao', nome: 'Produção', pronto: true, ve: (eu) => vejoProducao(eu) },
   { id: 'fichas', nome: 'Fichas técnicas', pronto: true, soGestao: true },
   {
     id: 'financeiro', nome: 'Financeiro', pronto: true, ve: (eu) => vejoResultado(eu.nivel),
@@ -42,12 +42,12 @@ export const MODULOS: Modulo[] = [
   // Cadastros da Eclética (09/10): materiais (insumos), produtos de venda com preço e fornecedores, num lugar só.
   { id: 'cadastros', nome: 'Cadastros', pronto: true, soGestao: true },
   {
-    id: 'compras', nome: 'Compras', pronto: true, ve: (eu) => podeGerenciar(eu.nivel) || eu.setor === 'producao',
+    id: 'compras', nome: 'Compras', pronto: true, ve: (eu) => operaEstoque(eu.nivel) || eu.setor === 'producao',
     resumo: 'Do pedido de compra até a conferência da nota.',
     itens: ['Solicitação de compra por unidade', 'Cotação e aprovação por valor', 'Recebimento com conferência e fotos'],
   },
   {
-    id: 'estoque', soGestao: true, nome: 'Estoque', pronto: true,
+    id: 'estoque', ve: (eu) => operaEstoque(eu.nivel), nome: 'Estoque', pronto: true,
     resumo: 'Entradas, saídas e perdas sob controle.',
     itens: ['Inventário semanal', 'Transferências entre Burger e Pizza', 'Registro de perdas com motivo'],
   },

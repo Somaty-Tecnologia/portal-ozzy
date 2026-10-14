@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Selo, Vazio, estiloEntrada } from '../components/ui'
 import { useApp } from '../lib/contexto'
-import { podeGerenciar } from '../lib/permissoes'
+import { operaEstoque } from '../lib/permissoes'
 import { naHoraDeComprar, quantidadeSugerida, ritmo } from '../lib/compras'
 import { addDias, dataCurta, diaSemana, diasEntre, hoje, inicioDaSemana } from '../lib/datas'
 import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
@@ -544,7 +544,7 @@ export function SemanaCompras() {
         <Botao variante="secundario" onClick={() => setSeg(addDias(seg, -7))} aria-label="Semana anterior">‹</Botao>
         <span className="min-w-40 text-center font-semibold">{dataCurta(seg)} a {dataCurta(fim)}</span>
         <Botao variante="secundario" onClick={() => setSeg(addDias(seg, 7))} aria-label="Semana seguinte">›</Botao>
-        {podeGerenciar(eu.nivel) && <label className="ml-2 flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={comPreco} onChange={(e) => setComPreco(e.target.checked)} /> Mostrar valores</label>}
+        {operaEstoque(eu.nivel) && <label className="ml-2 flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={comPreco} onChange={(e) => setComPreco(e.target.checked)} /> Mostrar valores</label>}
         <div className="ml-auto flex gap-2">
           <Botao variante="secundario" onClick={async () => { try { await navigator.clipboard.writeText(texto()); avisar('Copiado para mandar à equipe') } catch { avisar('Não consegui copiar') } }}>Copiar para o WhatsApp</Botao>
           <Botao variante="secundario" onClick={() => window.print()}>Imprimir</Botao>

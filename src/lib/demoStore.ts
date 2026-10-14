@@ -1,4 +1,4 @@
-import { degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
+import { operaEstoque, vejoProducao, degrau, possoAlterar, atendeChamados, vejoResultado, podeGerenciar, podeVerPainel, podeVerDocumentosDe, podeVerFuncionario } from './permissoes'
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
@@ -1090,6 +1090,17 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     if (!podeGerenciar(u.nivel)) throw new Error('Seu nível de acesso não permite esta ação.')
     return u
   }  // A produção (setor Produção) lança o que preparou: vê fichas, insumos e produções (0069).
+  // Compras e Estoque: gestão e supervisores (14/10).
+  const exigeEstoque = () => {
+    const u = exigeEu()
+    if (!operaEstoque(u.nivel)) throw new Error('Seu nível de acesso não permite esta ação.')
+    return u
+  }
+  const exigeEstoqueOuProducao = () => {
+    const u = exigeEu()
+    if (!(operaEstoque(u.nivel) || vejoProducao(u))) throw new Error('Seu nível de acesso não permite esta ação.')
+    return u
+  }
   const exigeCozinha = () => {
     const u = exigeEu()
     if (!(podeGerenciar(u.nivel) || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
@@ -1097,7 +1108,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
   }
   const exigeGestaoOuProducao = () => {
     const u = exigeEu()
-    if (!(podeGerenciar(u.nivel) || u.setor === 'producao')) throw new Error('Seu nível de acesso não permite esta ação.')
+    if (!(podeGerenciar(u.nivel) || vejoProducao(u))) throw new Error('Seu nível de acesso não permite esta ação.')
     return u
   }
 
@@ -1217,7 +1228,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(uniformes.filter((x) => x.funcionarioId === fid).sort((a, b) => b.data.localeCompare(a.data)))
     },
     async registrarUniforme(e) {
-      const u = exigeGestao()
+      const u = exigeEstoque()
       const nova: EntregaUniforme = {
         id: novoId('u'), funcionarioId: e.funcionarioId, data: e.data, itens: e.itens, observacao: e.observacao || null,
         entreguePor: u.id, criadoEm: agora(),
@@ -1238,7 +1249,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera({ ...valoresUniforme })
     },
     async salvarValoresUniforme(valores) {
-      exigeGestao()
+      exigeEstoque()
       for (const [item, v] of Object.entries(valores)) if (v === null) delete valoresUniforme[item]; else valoresUniforme[item] = v
     },
     async devolucoesUniforme(fid) {
@@ -1605,7 +1616,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       solicitacoesDemo.push({ id, funcionarioId: u.id, itens: n.itens, motivo: n.motivo.trim(), foto: n.foto ? 'demo' : null, status: 'aberta', resposta: null, respondidoPor: null, respondidoEm: null, criadoEm: new Date().toISOString() })
     },
     async responderTrocaUniforme(id, status, resposta) {
-      const u = exigeGestao()
+      const u = exigeEstoque()
       const x = solicitacoesDemo.find((y) => y.id === id)
       if (x) Object.assign(x, { status, resposta: resposta.trim() || null, respondidoPor: status === 'aberta' ? null : u.id, respondidoEm: status === 'aberta' ? null : new Date().toISOString() })
     },
@@ -1636,11 +1647,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera({ ...nova })
     },
     async pedidosUniforme() {
-      exigeGestao()
+      exigeEstoque()
       return espera([...pedidosUniformeDemo].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).map((p) => ({ ...p })))
     },
     async salvarPedidoUniforme(p) {
-      exigeGestao()
+      exigeEstoque()
       const atual = p.id ? pedidosUniformeDemo.find((x) => x.id === p.id) : undefined
       if (atual) {
         Object.assign(atual, p)
@@ -1651,12 +1662,12 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return { ...novo }
     },
     async excluirPedidoUniforme(id) {
-      exigeGestao()
+      exigeEstoque()
       tira(pedidosUniformeDemo, id)
       for (const i of itensPedidoDemo.filter((x) => x.pedidoId === id)) tira(itensPedidoDemo, i.id)
     },
     async itensPedidoUniforme(pid) {
-      exigeGestao()
+      exigeEstoque()
       return espera(itensPedidoDemo.filter((i) => i.pedidoId === pid).map((i) => ({ ...i })))
     },
     async definirItensPedido(pid, fid, itens) {
@@ -1665,17 +1676,17 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       for (const i of itens) itensPedidoDemo.push({ ...i, id: novoId('ip'), pedidoId: pid, funcionarioId: fid })
     },
     async movimentosUniforme() {
-      exigeGestao()
+      exigeEstoque()
       return espera(movUniformeDemo.map((m) => ({ ...m })))
     },
     async movimentarUniformes(linhas) {
-      const u = exigeGestao()
+      const u = exigeEstoque()
       const agora = new Date().toISOString()
       for (const l of linhas)
         movUniformeDemo.push({ ...l, id: novoId('mu'), data: l.data ?? hoje(), observacao: l.observacao ?? null, criadoPor: u.id, criadoEm: agora })
     },
     async desfazerMovimentoUniforme(ref) {
-      exigeGestao()
+      exigeEstoque()
       for (const m of movUniformeDemo.filter((x) => x.referencia === ref)) tira(movUniformeDemo, m.id)
     },
     async equipamentos() {
@@ -2304,7 +2315,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return structuredClone(fornecedoresDemo).sort((a, b) => a.nome.localeCompare(b.nome))
     },
     async salvarFornecedor(f) {
-      exigeGestao()
+      exigeEstoque()
       const nome = f.nome.trim()
       if (fornecedoresDemo.some((x) => x.id !== f.id && x.nome.toLowerCase() === nome.toLowerCase())) throw new Error('Já existe um fornecedor com esse nome.')
       const atual = fornecedoresDemo.find((x) => x.id === f.id)
@@ -2315,7 +2326,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async insumos() {
       const u = exigeEu()
-      if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (!(podeGerenciar(u.nivel) || vejoProducao(u) || u.nivel === 'manutencao')) throw new Error('Seu nível de acesso não permite esta ação.')
       return structuredClone(insumosDemo).map((i) => ({ ...i, prePreparo: prePreparoDemo.has(i.id) })).sort((a, b) => a.nome.localeCompare(b.nome))
     },
     async salvarInsumo(i) {
@@ -2392,7 +2403,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async ativarInsumos(ids, ativo) {
-      exigeGestao()
+      exigeEstoque()
       for (const i of insumosDemo) if (ids.includes(i.id)) i.ativo = ativo
       return espera(undefined)
     },
@@ -2694,11 +2705,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
 
     // Financeiro e estoque.
     async centrosCusto() {
-      exigeGestaoOuProducao()
+      exigeEstoqueOuProducao()
       return espera(centrosDemo.map((c) => ({ ...c })))
     },
     async planoContas() {
-      exigeGestao()
+      exigeEstoque()
       return espera([...planoDemo].sort((a, b) => a.ordem - b.ordem))
     },
     async salvarContaContabil(c) {
@@ -2711,17 +2722,17 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async notasFiscais() {
-      exigeGestao()
+      exigeEstoque()
       return espera(notasDemo.map(({ itens: _, ...n }) => ({ ...n })).sort((a, b) => b.emissao.localeCompare(a.emissao)))
     },
     async notaFiscal(id) {
-      exigeGestao()
+      exigeEstoque()
       const n = notasDemo.find((x) => x.id === id)
       if (!n) throw new Error('Nota não encontrada.')
       return espera({ ...n, itens: (n.itens ?? []).map((i) => ({ ...i })) })
     },
     async importarNota(x) {
-      exigeGestao()
+      exigeEstoque()
       if (notasDemo.some((n) => n.chave === x.chave)) throw new Error(`Esta nota já foi importada (nº ${x.numero}).`)
       const cnpj = soDigitos(x.emitente.cnpj)
       let f = fornecedoresDemo.find((y) => y.cnpj === cnpj)
@@ -2743,7 +2754,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(id)
     },
     async criarNotaManual(x) {
-      exigeGestao()
+      exigeEstoque()
       const f = fornecedoresDemo.find((y) => y.id === x.fornecedorId)
       const id = novoId('nf')
       notasDemo.push({
@@ -2756,7 +2767,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(id)
     },
     async salvarItensNota(notaId, itens) {
-      exigeGestao()
+      exigeEstoque()
       const n = notasDemo.find((x) => x.id === notaId)
       if (!n || n.status !== 'conferir') throw new Error('Esta nota já foi lançada.')
       n.itens = itens.map((i, k) => ({
@@ -2776,7 +2787,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(caminho)
     },
     async lancarNota(id, l) {
-      exigeGestao()
+      exigeEstoque()
       const n = notasDemo.find((x) => x.id === id)
       if (!n) throw new Error('Nota não encontrada.')
       if (n.status === 'lancada') throw new Error('Esta nota já foi lançada.')
@@ -2823,7 +2834,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async estornarNota(id) {
-      exigeGestao()
+      exigeEstoque()
       if (contasPagarDemo.some((c) => c.notaId === id && c.pagoEm)) throw new Error('Esta nota já tem pagamento registrado. Desfaça o pagamento antes.')
       const itens = new Set((notasDemo.find((x) => x.id === id)?.itens ?? []).map((i) => i.id))
       for (let i = contasPagarDemo.length - 1; i >= 0; i--) if (contasPagarDemo[i].notaId === id) contasPagarDemo.splice(i, 1)
@@ -2832,7 +2843,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async excluirNota(id) {
-      exigeGestao()
+      exigeEstoque()
       const n = notasDemo.find((x) => x.id === id)
       if (n?.status === 'conferir') tira(notasDemo, id)
       return espera(undefined)
@@ -3021,11 +3032,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async movimentosEstoque(de, ate) {
-      exigeGestao()
+      exigeEstoque()
       return espera(movimentosDemo.filter((m) => m.data >= de && m.data <= ate).sort((a, b) => b.data.localeCompare(a.data)))
     },
     async saldosEstoque(centroCustoId) {
-      exigeGestao()
+      exigeEstoque()
       const m = new Map<string, { insumoId: string; quantidade: number; custo: number | null; ultima: string }>()
       for (const x of [...movimentosDemo].filter((x) => x.centroCustoId === centroCustoId).sort((a, b) => a.data.localeCompare(b.data) || a.criadoEm.localeCompare(b.criadoEm))) {
         const s = m.get(x.insumoId) ?? { insumoId: x.insumoId, quantidade: 0, custo: null, ultima: x.data }
@@ -3078,7 +3089,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(structuredClone(pedidosCompraDemo).sort((a, b) => b.previsaoEntrega.localeCompare(a.previsaoEntrega)))
     },
     async salvarPedidoCompra(p) {
-      const u = exigeGestao()
+      const u = exigeEstoque()
       if (!p.fornecedorId) throw new Error('Escolha o fornecedor.')
       const itens = p.itens.filter((i) => i.quantidade > 0)
       const total = Math.round(itens.reduce((t, i) => t + i.quantidade * (i.preco ?? 0), 0) * 100) / 100
@@ -3094,7 +3105,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async precosFornecedor(fornecedorId) {
-      exigeGestao()
+      exigeEstoque()
       const r = new Map<string, PrecoFornecedor>()
       for (const p of [...pedidosCompraDemo].filter((x) => x.fornecedorId === fornecedorId && x.status !== 'cancelado').sort((a, b) => a.dataPedido.localeCompare(b.dataPedido) || a.criadoEm.localeCompare(b.criadoEm)))
         for (const i of p.itens) if (i.preco) r.set(i.insumoId, { insumoId: i.insumoId, preco: i.preco, em: p.dataPedido, origem: 'pedido' })
@@ -3103,7 +3114,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera([...r.values()])
     },
     async comprasDoFornecedor(fornecedorId) {
-      exigeGestao()
+      exigeEstoque()
       // Compras por dia (histórico de exemplo + pedidos), últimas 12 semanas.
       const dias = new Map<string, Map<string, number>>()
       const somar = (insumoId: string, dia: string, q: number) => {
@@ -3142,7 +3153,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async listaFechamento(unidadeId, setor, data, para = addDias(data, 1)) {
       const u = exigeEu()
-      if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.unidadeId === unidadeId)) return espera([])
+      if (!(podeGerenciar(u.nivel) || vejoProducao(u) || u.unidadeId === unidadeId)) return espera([])
       const f = fechamentosDemo.find((x) => x.unidadeId === unidadeId && x.setor === setor && x.data === data && x.para === para)
       const dia = (new Date(para + 'T12:00:00').getDay() + 6) % 7
       return espera(listaFechDemo.filter((i) => i.unidadeId === unidadeId && i.setor === setor && i.ativo).map((i): ItemFechamento => {
@@ -3226,7 +3237,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async fechamentos(de, ate) {
       const u = exigeEu()
-      return espera(fechamentosDemo.filter((f) => f.data >= de && f.data <= ate && (podeGerenciar(u.nivel) || u.setor === 'producao' || u.unidadeId === f.unidadeId)).map((f) => ({ ...f })))
+      return espera(fechamentosDemo.filter((f) => f.data >= de && f.data <= ate && (podeGerenciar(u.nivel) || vejoProducao(u) || u.unidadeId === f.unidadeId)).map((f) => ({ ...f })))
     },
     async enviarFechamento(e) {
       const u = exigeEu()
@@ -3257,7 +3268,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async enviarInventario(e) {
       const u = exigeEu()
-      if (!(podeGerenciar(u.nivel) || u.setor === 'producao' || u.unidadeId === e.centroCustoId)) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (!(podeGerenciar(u.nivel) || vejoProducao(u) || u.unidadeId === e.centroCustoId)) throw new Error('Seu nível de acesso não permite esta ação.')
       let v = invLojasDemo.find((x) => x.centroCustoId === e.centroCustoId && x.data === e.data)
       const dados = { responsavel: e.responsavel.trim() || null, observacao: e.observacao.trim() || null, fala: e.fala.trim() || null, enviadoEm: agora(), enviadoPor: u.id }
       if (v) Object.assign(v, dados)
@@ -3280,7 +3291,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async pedidosProducao(para) {
       const u = exigeEu()
-      if (!(podeGerenciar(u.nivel) || u.setor === 'producao')) return espera([])
+      if (!(podeGerenciar(u.nivel) || vejoProducao(u))) return espera([])
       const r = new Map<string, PedidoProducao>()
       for (const f of fechamentosDemo.filter((x) => x.para === para))
         for (const c of contagensFechDemo.filter((x) => x.fechamentoId === f.id && (x.pedido ?? 0) > 0)) {
@@ -3299,7 +3310,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async contarCentral(data, itens) {
       const u = exigeEu()
-      if (!(podeGerenciar(u.nivel) || u.setor === 'producao')) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (!(podeGerenciar(u.nivel) || vejoProducao(u))) throw new Error('Seu nível de acesso não permite esta ação.')
       let n = 0
       for (const i of itens) {
         const saldo = movimentosDemo.filter((m) => m.centroCustoId === 'central' && m.insumoId === i.insumoId).reduce((t, m) => t + m.quantidade, 0)
@@ -3333,7 +3344,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       return espera(undefined)
     },
     async lancarMovimentoEstoque(m) {
-      exigeGestao()
+      exigeEstoque()
       for (const x of Array.isArray(m) ? m : [m]) movimentosDemo.push({ ...x, id: novoId('mv'), custoUnit: x.custoUnit ?? null, notaItemId: null, observacao: x.observacao?.trim() || null, criadoEm: agora() })
       return espera(undefined)
     },

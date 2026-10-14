@@ -8,7 +8,7 @@ import { useApp } from '../lib/contexto'
 import { dataLonga, hoje } from '../lib/datas'
 import { lerNumero, reais } from '../lib/financeiro'
 import { ir } from '../lib/rota'
-import { podeGerenciar } from '../lib/permissoes'
+import { operaEstoque } from '../lib/permissoes'
 import { CORES_CAMISETA, PECAS, consolidado, corCamiseta, descricaoPeca, modelagemDe } from '../lib/uniformes'
 import {
   STATUS_PEDIDO_UNIFORME, apelidoUnidade,
@@ -35,7 +35,7 @@ export const ABAS_COMPRAS = [
 export default function Compras({ sub }: { sub?: string }) {
   const { eu } = useApp()
   // Produção (13/10) só vê as entregas da semana, para marcar o que chegou.
-  if (!podeGerenciar(eu.nivel)) return <div className="space-y-4"><Titulo>Entregas da semana</Titulo><SemanaCompras /></div>
+  if (!operaEstoque(eu.nivel)) return <div className="space-y-4"><Titulo>Entregas da semana</Titulo><SemanaCompras /></div>
   const area = sub === 'semana' || sub === 'uniformes' ? sub : 'pedidos'
   return (
     <div className="space-y-4">

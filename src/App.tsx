@@ -3,7 +3,7 @@ import { ligarAtalhoSalvar } from './lib/atalhoSalvar'
 import { ProvedorApp, useApp } from './lib/contexto'
 import { criarDemoStore } from './lib/demoStore'
 import { criarSupabaseStore } from './lib/supabaseStore'
-import { podeGerenciar, podeVerEquipe } from './lib/permissoes'
+import { operaEstoque, podeGerenciar, podeVerEquipe } from './lib/permissoes'
 import { ir } from './lib/rota'
 import type { Funcionario } from './lib/types'
 import { nomeNivel } from './lib/types'
@@ -149,7 +149,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
     id === 'rh' ? abasRh
       : id === 'cadastros' ? ABAS_CADASTROS
       : id === 'producao' ? ABAS_PRODUCAO.filter((a) => !a.soGestao || podeGerenciar(eu.nivel))
-      : id === 'compras' ? ABAS_COMPRAS.filter((a) => a.id === 'semana' || podeGerenciar(eu.nivel))
+      : id === 'compras' ? ABAS_COMPRAS.filter((a) => a.id === 'semana' || operaEstoque(eu.nivel))
       : id === 'estoque' ? ABAS_ESTOQUE
       : id === 'financeiro' ? ABAS_FINANCEIRO
       : id === 'eventos' ? ABAS_EVENTOS
