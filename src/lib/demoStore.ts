@@ -2,6 +2,7 @@ import { operaEstoque, vejoProducao, degrau, possoAlterar, atendeChamados, vejoR
 import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nomeProprio, soDigitos, type Store } from './store'
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
+import { jornadas } from './ponto'
 import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
@@ -451,9 +452,10 @@ const marcacoesDemo: MarcacaoPonto[] = [1, 2, 3].flatMap((d) => [
 nsrDemo = marcacoesDemo.length
 const codigosPontoDemo = [{ unidadeId: 'burger-psd', codigo: 'demo-psd01' }, { unidadeId: 'burger-va', codigo: 'demo-va001' }, { unidadeId: 'pizza', codigo: 'demo-pz001' }]
 const proximoTipoDemo = (funcionarioId: string, quando = Date.now()): TipoMarcacao => {
-  const u = marcacoesDemo.filter((m) => m.funcionarioId === funcionarioId && !m.desconsiderada && Date.parse(m.momento) <= quando).sort((a, b) => b.momento.localeCompare(a.momento))[0]
-  if (!u || u.tipo === 'saida' || quando - Date.parse(u.momento) > 16 * 3600_000) return 'entrada'
-  return u.tipo === 'entrada' ? 'saida_intervalo' : u.tipo === 'saida_intervalo' ? 'volta_intervalo' : 'saida'
+  const ms = marcacoesDemo.filter((m) => m.funcionarioId === funcionarioId && !m.desconsiderada && Date.parse(m.momento) <= quando).sort((a, b) => a.momento.localeCompare(b.momento))
+  const j = jornadas(ms).at(-1)
+  if (!j || !j.incompleta || quando - Date.parse(j.marcacoes.at(-1)!.momento) > 16 * 3600_000) return 'entrada'
+  return (['entrada', 'saida_intervalo', 'volta_intervalo', 'saida'] as const)[Math.min(j.marcacoes.length, 3)]
 }
 
 const uniformes: EntregaUniforme[] = [
