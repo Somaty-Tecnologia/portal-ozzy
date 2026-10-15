@@ -22,9 +22,17 @@ concurrency: migrations-${{ github.ref_name }}
 jobs:
   migrations:
     runs-on: ubuntu-latest
-    container: public.ecr.aws/docker/library/postgres:17  # espelho da imagem oficial (o Docker Hub falhou em 09/10)
+    # Sem contêiner (15/10: o espelho da imagem também falhou): instala o psql/pg_dump 17 do repositório oficial do Postgres.
     steps:
       - uses: actions/checkout@v4
+
+      - name: Instalar o cliente do Postgres 17
+        run: |
+          for t in 1 2 3; do
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null && sudo apt-get install -y -q postgresql-client-17 > /dev/null && break
+            sleep 10
+          done
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
 
       - name: Aplicar as que faltam
         env:
