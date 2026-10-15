@@ -1,6 +1,9 @@
 import { operaEstoque, podeGerenciar, vejoProducao, vejoResultado } from './permissoes'
 import { LOJAS_FECHAMENTO, type Funcionario } from './types'
 
+// Checklists: até o Heitor aprovar, só a gestão vê no portal de verdade (na demonstração, todos).
+export const CHECKLISTS_PARA_EQUIPE = import.meta.env.MODE === 'preview'
+
 export type IdIcone =
   | 'inicio' | 'rh' | 'freelancers' | 'motoboys' | 'fechamento' | 'producao' | 'fichas' | 'financeiro' | 'cadastros' | 'compras' | 'estoque'
   | 'checklists' | 'regras' | 'treinamentos' | 'manutencao' | 'eventos' | 'refeicoes'
@@ -51,11 +54,10 @@ export const MODULOS: Modulo[] = [
     resumo: 'Entradas, saídas e perdas sob controle.',
     itens: ['Inventário semanal', 'Transferências entre Burger e Pizza', 'Registro de perdas com motivo'],
   },
+  // Checklists (15/10, no lugar do Konclui). Até o Heitor aprovar, só a gestão vê (na demonstração, todos).
   {
-    id: 'checklists', nome: 'Checklists', pronto: false,
+    id: 'checklists', nome: 'Checklists', pronto: true, ve: (eu) => podeGerenciar(eu.nivel) || CHECKLISTS_PARA_EQUIPE,
     resumo: 'Abertura, fechamento e limpeza de cada pessoa.',
-    itens: ['Checklists do dia por cargo', 'Quem fez e quem ficou pendente', 'Controle de temperatura dos equipamentos'],
-    origem: 'Integração com o Conclui.',
   },
   {
     id: 'regras', nome: 'Regras e processos', pronto: true,

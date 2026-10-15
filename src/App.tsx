@@ -27,6 +27,7 @@ import Ponto from './pages/Ponto'
 import Regras from './pages/Regras'
 import Manutencao from './pages/Manutencao'
 import FichasEvento from './pages/FichasEvento'
+import Checklists, { ABAS_CHECKLISTS } from './pages/Checklists'
 import Freelancers from './pages/Freelancers'
 import Motoboys from './pages/Motoboys'
 import Producao, { ABAS_PRODUCAO } from './pages/Producao'
@@ -155,6 +156,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
       : id === 'financeiro' ? ABAS_FINANCEIRO
       : id === 'eventos' ? ABAS_EVENTOS
       : id === 'refeicoes' ? (souCozinha(eu) ? ABAS_REFEICOES : [])
+      : id === 'checklists' ? ABAS_CHECKLISTS.filter((a) => !a.gestao || podeGerenciar(eu.nivel))
       : []
   const caminhoDe = (m: string, aba: string) => (aba ? `${m}/${aba}` : m)
   const abaAtiva = (m: string) => (m === 'rh' ? abaRh : abasDe(m).some((a) => a.id && a.id === sub) ? sub! : '')
@@ -199,6 +201,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
   else if (modulo.id === 'fechamento') conteudo = <Fechamento />
   else if (modulo.id === 'eventos') conteudo = <Eventos sub={sub} param={param} />
   else if (modulo.id === 'refeicoes') conteudo = <Refeicoes sub={sub} param={param} />
+  else if (modulo.id === 'checklists') conteudo = <Checklists sub={sub} param={param} key={sub === 'fazer' ? param : sub} />
   else if (modulo.id !== 'rh') conteudo = <EmBreve modulo={modulo} />
   else if (abaRh === 'turnos') conteudo = <Turnos />
   else if (abaRh === 'folgas') conteudo = <Escala />

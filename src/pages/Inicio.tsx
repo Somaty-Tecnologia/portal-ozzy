@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefeicoesDaSemana, souCozinha } from './Refeicoes'
 import { RecadosNovos, VotacaoDaSemana } from './RefeicoesVotacao'
 import { BaterPonto } from '../components/PontoPortal'
+import { ChecklistsInicio } from './Checklists'
+import { CHECKLISTS_PARA_EQUIPE } from '../lib/modulos'
 import PedidosTirarLista from '../components/PedidosTirarLista'
 import { atendeChamados } from '../lib/permissoes'
 import { chamadoEmAberto, nomeCurto, type Chamado } from '../lib/types'
@@ -82,6 +84,7 @@ export default function Inicio() {
 
       {!isentoDeRotinas(eu.nivel) && <BaterPonto compacto />}
       <DependeDeMim />
+      {(gestao || CHECKLISTS_PARA_EQUIPE) && <ChecklistsInicio />}
       <RefeicoesDaSemana />
       <VotacaoDaSemana aviso />
       {souCozinha(eu) && <RecadosNovos />}

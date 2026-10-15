@@ -1822,3 +1822,63 @@ export interface UltimoFornecedor {
   preco: number | null
   em: string
 }
+
+// ——— Checklists (15/10, no lugar do Konclui) ———
+export type MomentoChecklist = 'abertura' | 'troca' | 'fechamento' | 'outros'
+export const MOMENTOS_CHECKLIST: Record<MomentoChecklist, string> = { abertura: 'Abertura', troca: 'Troca de turno', fechamento: 'Fechamento', outros: 'Outros' }
+export type FrequenciaChecklist = 'diaria' | 'semanal' | 'mensal'
+export const FREQUENCIAS_CHECKLIST: Record<FrequenciaChecklist, string> = { diaria: 'Diária', semanal: 'Semanal', mensal: 'Mensal' }
+export type TipoItemChecklist = 'check' | 'numero' | 'texto'
+export interface ItemChecklist {
+  id?: string
+  ordem: number
+  texto: string
+  tipo: TipoItemChecklist
+  exigeFoto: boolean
+  obrigatorio: boolean
+  minimo: number | null
+  maximo: number | null
+  instrucao: string | null
+  ativo: boolean
+}
+export interface ModeloChecklist {
+  id?: string
+  titulo: string
+  unidadeId: string
+  setor: Setor | null
+  momento: MomentoChecklist
+  frequencia: FrequenciaChecklist
+  // 0 = segunda … 6 = domingo (diária e semanal).
+  diasSemana: number[]
+  diaMes: number | null
+  // Até quando precisa estar finalizado (HH:MM).
+  horario: string
+  toleranciaMin: number
+  responsavelId: string | null
+  ativo: boolean
+  itens: ItemChecklist[]
+}
+export interface ExecucaoChecklist {
+  id: string
+  modeloId: string
+  data: string
+  prazo: string
+  responsavelId: string | null
+  iniciadoEm: string | null
+  finalizadoEm: string | null
+  totalItens: number | null
+  respondidos: number | null
+  pontualidade: number | null
+  esforco: number | null
+  qualidade: number | null
+  score: number | null
+}
+export interface RespostaChecklist {
+  itemId: string
+  textoItem: string
+  valor: string | null
+  conforme: boolean | null
+  foto: string | null
+  observacao: string | null
+  respondidoEm: string
+}

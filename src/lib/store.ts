@@ -1,3 +1,4 @@
+import type { ModeloChecklist, ExecucaoChecklist, RespostaChecklist } from './types'
 import type { Refeicao, NovaRefeicao, ModeloRefeicao, VotosRefeicao, QuemCome, FolgaDaEquipe, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, TipoRecado } from './types'
 import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, CurvaAbc, EnvioInventario, InventarioEstoque, ItemNota, ItemRecibo, ReferenciaPreco } from './types'
 import type { EnvioMotoboy, QuemSouMotoboy, NovoEnvioMotoboy, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, NovoPedidoCompra, PrecoFornecedor, SetorFechamento, ItemFechamento, PedidoTirarFechamento, CaixaTurno, Fechamento, EnvioFechamento, PedidoProducao, ItemListaFechamento, Producao, NovaProducao, Motoboy, SemanaMotoboy, LinhaSemanaMotoboy, TurnoMotoboy, EscalaMotoboy, PagamentoPessoa, CentroCusto, ContaContabil, NotaFiscal, NotaImportada, LancamentoNota, ContaPagar, NovaContaPagar, ContaRecorrente, FormaPagamento, MovimentoEstoque, MovimentoExtrato, RegraExtrato, SaldoExtrato, ExtratoOfx, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, EventoAberto, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, NovoItemEnvio, Inventario, ItemContagem, EventoEscalado, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, ItemReceita, Evento, NovoEvento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, ItemDevolucao, TipoAjustePonto, LocalEnvio, LocalLoja, EnvioFreela, DiaEnviado, QuemSouFreela, StatusEnvioFreela, ContaPagamento, RemessaPagamento, Setor, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, NovoMovimentoUniforme, StatusTroca, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, TipoFolga, Salario, TipoPagamento, Freelancer, DiariaFreela, PagamentoFreela, ResultadoMes, Avaliacao, Chamado, CategoriaChamado, Gravidade, StatusChamado, LeituraRegulamento, Turno, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, ItemUniforme, Folga, Funcionario, Ocorrencia, TipoDocumento, TipoOcorrencia, Unidade, VendaDia, LinhaVenda, ResumoVendas, MediaVenda, UltimoFornecedor } from './types'
@@ -467,6 +468,19 @@ export interface Store {
   eventosAbertosDiaria(): Promise<EventoAberto[]>
   freelaEventoQuemSou(cpf: string, celular: string): Promise<QuemSouFreela>
   enviarDiariasEvento(e: { cpf: string; celular: string; nome: string; pix: string; eventoId: string; funcao: string; dias: { data: string; observacao?: string }[]; local: LocalEnvio | null }): Promise<number>
+
+  // Checklists (15/10, no lugar do Konclui). Execuções são geradas pelo banco quando alguém abre a tela.
+  modelosChecklist(): Promise<ModeloChecklist[]>
+  salvarModeloChecklist(m: ModeloChecklist): Promise<string>
+  // Gera o que falta e devolve as execuções do período (a pessoa vê as dela; a gestão vê todas).
+  execucoesChecklist(de: string, ate: string, funcionarioId?: string | null): Promise<ExecucaoChecklist[]>
+  execucaoChecklist(id: string): Promise<ExecucaoChecklist | null>
+  respostasChecklist(execucaoId: string): Promise<RespostaChecklist[]>
+  responderChecklist(execucaoId: string, itemId: string, r: { valor: string | null; observacao: string | null; foto?: Blob | null }): Promise<void>
+  finalizarChecklist(execucaoId: string): Promise<ExecucaoChecklist>
+  reabrirChecklist(execucaoId: string): Promise<void>
+  trocarResponsavelChecklist(execucaoId: string, funcionarioId: string): Promise<void>
+  fotoChecklist(caminho: string): Promise<string | null>
 }
 
 export const EVENTO_ALTERADO = 'Outra pessoa salvou este evento enquanto você editava. Feche, abra de novo e refaça a alteração.'

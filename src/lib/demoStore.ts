@@ -5,6 +5,8 @@ import { movimentosNovos } from './ofx'
 import { jornadas } from './ponto'
 import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade, LinhaVenda, MediaVenda, UltimoFornecedor } from './types'
 import { chamadoEmAberto } from './types'
+import type { ModeloChecklist, ExecucaoChecklist, RespostaChecklist, ItemChecklist } from './types'
+import { conformeDe, noDia, pontuar, prazoDe } from './checklists'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
 import { resultadosDemo } from './demoLucro'
@@ -319,6 +321,65 @@ const previsoesDemo: Record<string, QtdDiaProduto[]> = {
     { data: addDias(hoje(), d), receitaId: 're4', quantidade: [200, 320, 280][i] },
     { data: addDias(hoje(), d), receitaId: 're3', quantidade: [280, 450, 400][i] },
   ]),
+}
+
+// Checklists de exemplo (15/10). Os de verdade a gestão cadastra (ou vêm do Konclui).
+const itemCk = (texto: string, x: Partial<ItemChecklist> = {}): ItemChecklist =>
+  ({ id: 'ci' + texto.length + texto.slice(0, 6).replace(/\W/g, ''), ordem: 0, texto, tipo: 'check', exigeFoto: false, obrigatorio: true, minimo: null, maximo: null, instrucao: null, ativo: true, ...x })
+const modelosChecklistDemo: ModeloChecklist[] = [
+  {
+    id: 'ck1', titulo: 'Abertura da cozinha (exemplo)', unidadeId: 'burger-psd', setor: 'cozinha', momento: 'abertura', frequencia: 'diaria',
+    diasSemana: [1, 2, 3, 4, 5, 6], diaMes: null, horario: '18:00', toleranciaMin: 15, responsavelId: 'p-cibeli-costa', ativo: true,
+    itens: [
+      itemCk('Ligar chapa e fritadeiras'), itemCk('Conferir validade dos pré-preparos na câmara', { exigeFoto: true }),
+      itemCk('Temperatura da câmara fria (°C)', { tipo: 'numero', minimo: 0, maximo: 5, exigeFoto: true }), itemCk('Montar a praça de montagem'),
+      itemCk('Bancadas higienizadas com álcool 70', { exigeFoto: true }), itemCk('Algo fora do normal?', { tipo: 'texto', obrigatorio: false }),
+    ],
+  },
+  {
+    id: 'ck2', titulo: 'Fechamento do salão (exemplo)', unidadeId: 'burger-psd', setor: 'atendimento', momento: 'fechamento', frequencia: 'diaria',
+    diasSemana: [1, 2, 3, 4, 5, 6], diaMes: null, horario: '23:59', toleranciaMin: 15, responsavelId: 'p-julia-silva', ativo: true,
+    itens: [itemCk('Mesas e cadeiras limpas'), itemCk('Lixo retirado', { exigeFoto: true }), itemCk('Máquinas de cartão no carregador'), itemCk('Luzes e ar desligados')],
+  },
+  {
+    id: 'ck3', titulo: 'Abertura delivery (exemplo)', unidadeId: 'burger-va', setor: 'atendimento', momento: 'abertura', frequencia: 'diaria',
+    diasSemana: [1, 2, 3, 4, 5, 6], diaMes: null, horario: '17:30', toleranciaMin: 15, responsavelId: 'p-dora-ramos', ativo: true,
+    itens: [itemCk('Tablets ligados (iFood, 99Food, Goomer)'), itemCk('Lojas abertas nos apps', { exigeFoto: true }), itemCk('Embalagens repostas')],
+  },
+  {
+    id: 'ck4', titulo: 'Limpeza pesada da cozinha (exemplo)', unidadeId: 'burger-va', setor: 'cozinha', momento: 'outros', frequencia: 'semanal',
+    diasSemana: [1], diaMes: null, horario: '17:00', toleranciaMin: 30, responsavelId: 'p-kaua-silva', ativo: true,
+    itens: [itemCk('Coifa e filtros', { exigeFoto: true }), itemCk('Atrás dos equipamentos', { exigeFoto: true }), itemCk('Ralos')],
+  },
+]
+modelosChecklistDemo.forEach((m) => m.itens.forEach((i, k) => { i.ordem = k + 1; i.id = `${m.id}-i${k + 1}` }))
+const execucoesChecklistDemo: ExecucaoChecklist[] = []
+const respostasChecklistDemo = new Map<string, RespostaChecklist[]>()
+// Histórico de 40 dias com notas variadas (o mesmo resultado em toda carga da demonstração).
+const gerarChecklistsDemo = (de: string, ate: string) => {
+  for (let d = de; d <= ate; d = addDias(d, 1)) {
+    for (const m of modelosChecklistDemo) {
+      if (!m.ativo || !noDia(m, d) || execucoesChecklistDemo.some((e) => e.modeloId === m.id && e.data === d)) continue
+      const e: ExecucaoChecklist = {
+        id: `ex-${m.id}-${d}`, modeloId: m.id!, data: d, prazo: prazoDe(d, m.horario), responsavelId: m.responsavelId,
+        iniciadoEm: null, finalizadoEm: null, totalItens: null, respondidos: null, pontualidade: null, esforco: null, qualidade: null, score: null,
+      }
+      if (d < hoje()) {
+        const h = [...(m.id! + d)].reduce((t, c) => (t * 31 + c.charCodeAt(0)) % 9973, 7)
+        if (h % 100 >= 8) {
+          const atraso = h % 7 === 0 ? 20 + (h % 30) : 0
+          const fim = new Date(new Date(e.prazo).getTime() + (atraso - 25) * 60000)
+          e.iniciadoEm = new Date(fim.getTime() - 20 * 60000).toISOString()
+          e.finalizadoEm = fim.toISOString()
+          const esforco = h % 5 === 0 ? 75 : 100
+          const qualidade = h % 6 === 0 ? 80 : 100
+          const pontualidade = Math.max(0, 100 - 2 * Math.max(0, atraso - 25 - m.toleranciaMin))
+          Object.assign(e, { totalItens: m.itens.length, respondidos: m.itens.length, pontualidade, esforco, qualidade, score: Math.round(((pontualidade + esforco + qualidade) / 3) * 10) / 10 })
+        }
+      }
+      execucoesChecklistDemo.push(e)
+    }
+  }
 }
 const modeloChecklistDemo: ItemModeloChecklist[] = [
   ['Equipamentos', 'Chapa de pão', 'Foca', '2'], ['Equipamentos', 'Extintor', null, '2'], ['Equipamentos', 'Fornos', 'Pizza', 'Grande e médio'],
@@ -2517,6 +2578,82 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       for (let i = vendasEventosDemo.length - 1; i >= 0; i--) if (vendasEventosDemo[i].eventoId === eventoId) vendasEventosDemo.splice(i, 1)
       for (const l of linhas.filter((x) => x.quantidade > 0))
         vendasEventosDemo.push({ ...l, eventoId, produto: receitasDemo.find((r) => r.id === l.receitaId)?.nome ?? '?', origem: 'manual' })
+    },
+    async modelosChecklist() {
+      exigeEu()
+      return structuredClone(modelosChecklistDemo).sort((a, b) => a.titulo.localeCompare(b.titulo))
+    },
+    async salvarModeloChecklist(m) {
+      exigeGestao()
+      if (!m.titulo.trim()) throw new Error('Dê um nome ao checklist.')
+      const id = m.id ?? novoId('ck')
+      const antes = modelosChecklistDemo.find((x) => x.id === id)
+      const ficam = new Set(m.itens.map((i) => i.id))
+      const saem = (antes?.itens ?? []).filter((i) => !ficam.has(i.id)).map((i) => ({ ...i, ativo: false }))
+      const novo: ModeloChecklist = { ...structuredClone(m), id, itens: [...m.itens.map((i, k) => ({ ...i, id: i.id ?? novoId('ci'), ordem: k + 1, ativo: true })), ...saem] }
+      if (antes) Object.assign(antes, novo)
+      else modelosChecklistDemo.push(novo)
+      for (const e of execucoesChecklistDemo) {
+        if (e.modeloId === id && !e.iniciadoEm && e.data >= hoje()) { e.responsavelId = novo.responsavelId; e.prazo = prazoDe(e.data, novo.horario) }
+      }
+      return id
+    },
+    async execucoesChecklist(de, ate, funcionarioId) {
+      const u = exigeEu()
+      gerarChecklistsDemo(addDias(hoje(), -40) > de ? addDias(hoje(), -40) : de, ate < hoje() ? ate : hoje())
+      return structuredClone(execucoesChecklistDemo.filter((e) => e.data >= de && e.data <= ate
+        && (podeGerenciar(u.nivel) || e.responsavelId === u.id) && (!funcionarioId || e.responsavelId === funcionarioId)))
+        .sort((a, b) => a.data.localeCompare(b.data) || a.prazo.localeCompare(b.prazo))
+    },
+    async execucaoChecklist(id) {
+      const u = exigeEu()
+      const e = execucoesChecklistDemo.find((x) => x.id === id)
+      return e && (podeGerenciar(u.nivel) || e.responsavelId === u.id) ? structuredClone(e) : null
+    },
+    async respostasChecklist(execucaoId) {
+      exigeEu()
+      return structuredClone(respostasChecklistDemo.get(execucaoId) ?? [])
+    },
+    async responderChecklist(execucaoId, itemId, r) {
+      const u = exigeEu()
+      const e = execucoesChecklistDemo.find((x) => x.id === execucaoId)
+      if (!e) throw new Error('Checklist não encontrado.')
+      if (e.responsavelId !== u.id && !podeGerenciar(u.nivel)) throw new Error('Este checklist é de outra pessoa.')
+      if (e.finalizadoEm) throw new Error('Este checklist já foi finalizado.')
+      const i = modelosChecklistDemo.find((m) => m.id === e.modeloId)!.itens.find((x) => x.id === itemId)!
+      const lista = respostasChecklistDemo.get(execucaoId) ?? []
+      const antes = lista.find((x) => x.itemId === itemId)
+      const valor = r.valor?.trim() || null
+      const nova: RespostaChecklist = {
+        itemId, textoItem: i.texto, valor, conforme: conformeDe(i, valor), observacao: r.observacao?.trim() || null, respondidoEm: new Date().toISOString(),
+        foto: r.foto ? URL.createObjectURL(r.foto) : (antes?.foto ?? null),
+      }
+      respostasChecklistDemo.set(execucaoId, [...lista.filter((x) => x.itemId !== itemId), nova])
+      e.iniciadoEm ??= new Date().toISOString()
+    },
+    async finalizarChecklist(execucaoId) {
+      const u = exigeEu()
+      const e = execucoesChecklistDemo.find((x) => x.id === execucaoId)!
+      if (e.responsavelId !== u.id && !podeGerenciar(u.nivel)) throw new Error('Este checklist é de outra pessoa.')
+      if (!e.finalizadoEm) {
+        const m = modelosChecklistDemo.find((x) => x.id === e.modeloId)!
+        const agora = new Date()
+        Object.assign(e, pontuar(m, respostasChecklistDemo.get(execucaoId) ?? [], e.prazo, agora), { finalizadoEm: agora.toISOString(), iniciadoEm: e.iniciadoEm ?? agora.toISOString() })
+      }
+      return structuredClone(e)
+    },
+    async reabrirChecklist(execucaoId) {
+      exigeGestao()
+      const e = execucoesChecklistDemo.find((x) => x.id === execucaoId)!
+      Object.assign(e, { finalizadoEm: null, pontualidade: null, esforco: null, qualidade: null, score: null })
+    },
+    async trocarResponsavelChecklist(execucaoId, funcionarioId) {
+      exigeGestao()
+      const e = execucoesChecklistDemo.find((x) => x.id === execucaoId)!
+      if (!e.finalizadoEm) e.responsavelId = funcionarioId
+    },
+    async fotoChecklist(caminho) {
+      return caminho
     },
     async modeloChecklist() {
       exigeGestao()

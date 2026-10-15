@@ -4,6 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
+import type { ModeloChecklist, ItemChecklist, ExecucaoChecklist, RespostaChecklist } from './types'
 import type { PreparoRefeicao, MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia, ResumoVendas, MediaVenda, UltimoFornecedor } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
@@ -975,6 +976,92 @@ export function criarSupabaseStore(url: string, chave: string): Store {
         ok(await sb.from('evento_vendas').insert(l.map((x) => ({
           evento_id: eventoId, data: x.data, receita_id: x.receitaId, produto: receitas.find((r) => r.id === x.receitaId)?.nome ?? '?', quantidade: x.quantidade, total: x.total, origem: 'manual',
         }))))
+    },
+
+    async modelosChecklist() {
+      const [ms, its] = await Promise.all([
+        sb.from('checklist_modelos').select('*').order('titulo'),
+        sb.from('checklist_itens').select('*').order('ordem'),
+      ])
+      const itens = (ok(its) ?? []) as any[]
+      return (ok(ms) ?? []).map((m: any): ModeloChecklist => ({
+        id: m.id, titulo: m.titulo, unidadeId: m.unidade_id, setor: m.setor, momento: m.momento, frequencia: m.frequencia,
+        diasSemana: m.dias_semana ?? [], diaMes: m.dia_mes, horario: String(m.horario).slice(0, 5), toleranciaMin: m.tolerancia_min,
+        responsavelId: m.responsavel_id, ativo: m.ativo,
+        itens: itens.filter((i) => i.modelo_id === m.id).map((i): ItemChecklist => ({
+          id: i.id, ordem: i.ordem, texto: i.texto, tipo: i.tipo, exigeFoto: i.exige_foto, obrigatorio: i.obrigatorio,
+          minimo: i.minimo === null ? null : Number(i.minimo), maximo: i.maximo === null ? null : Number(i.maximo), instrucao: i.instrucao, ativo: i.ativo,
+        })),
+      }))
+    },
+    async salvarModeloChecklist(m) {
+      const linha = {
+        titulo: m.titulo.trim(), unidade_id: m.unidadeId, setor: m.setor, momento: m.momento, frequencia: m.frequencia,
+        dias_semana: m.diasSemana, dia_mes: m.frequencia === 'mensal' ? m.diaMes : null, horario: m.horario, tolerancia_min: m.toleranciaMin,
+        responsavel_id: m.responsavelId, ativo: m.ativo,
+      }
+      const r = m.id
+        ? ok(await sb.from('checklist_modelos').update(linha).eq('id', m.id).select('id').single())
+        : ok(await sb.from('checklist_modelos').insert(linha).select('id').single())
+      const id = r!.id as string
+      // Item tirado não é apagado: fica no histórico das execuções já feitas e some das próximas.
+      const antes = (ok(await sb.from('checklist_itens').select('id').eq('modelo_id', id)) ?? []).map((x: any) => x.id as string)
+      const ficam = new Set(m.itens.filter((i) => i.id).map((i) => i.id!))
+      const sairam = antes.filter((x) => !ficam.has(x))
+      if (sairam.length) ok(await sb.from('checklist_itens').update({ ativo: false }).in('id', sairam))
+      const linhas = m.itens.map((i, k) => ({
+        ...(i.id ? { id: i.id } : {}), modelo_id: id, ordem: k + 1, texto: i.texto.trim(), tipo: i.tipo, exige_foto: i.exigeFoto, obrigatorio: i.obrigatorio,
+        minimo: i.tipo === 'numero' ? i.minimo : null, maximo: i.tipo === 'numero' ? i.maximo : null, instrucao: texto(i.instrucao), ativo: true,
+      }))
+      const novos = linhas.filter((l) => !('id' in l))
+      const velhos = linhas.filter((l) => 'id' in l)
+      if (velhos.length) ok(await sb.from('checklist_itens').upsert(velhos))
+      if (novos.length) ok(await sb.from('checklist_itens').insert(novos))
+      return id
+    },
+    async execucoesChecklist(de, ate, funcionarioId) {
+      // Gera até hoje (dias futuros não contam ainda).
+      const fim = ate < hoje() ? ate : hoje()
+      if (de <= fim) ok(await sb.rpc('gerar_checklists', { p_de: de, p_ate: fim }))
+      const linhas: any[] = []
+      for (let desde = 0; ; desde += 1000) {
+        let q = sb.from('checklist_execucoes').select('*').gte('data', de).lte('data', ate).order('data').order('prazo').range(desde, desde + 999)
+        if (funcionarioId) q = q.eq('responsavel_id', funcionarioId)
+        const r = ok(await q) ?? []
+        linhas.push(...r)
+        if (r.length < 1000) break
+      }
+      return linhas.map(paraExecucaoChecklist)
+    },
+    async execucaoChecklist(id) {
+      const r = ok(await sb.from('checklist_execucoes').select('*').eq('id', id).maybeSingle())
+      return r ? paraExecucaoChecklist(r) : null
+    },
+    async respostasChecklist(execucaoId) {
+      return (ok(await sb.from('checklist_respostas').select('*').eq('execucao_id', execucaoId)) ?? []).map((r: any): RespostaChecklist => ({
+        itemId: r.item_id, textoItem: r.texto_item, valor: r.valor, conforme: r.conforme, foto: r.foto, observacao: r.observacao, respondidoEm: r.respondido_em,
+      }))
+    },
+    async responderChecklist(execucaoId, itemId, r) {
+      let foto: string | null = null
+      if (r.foto) {
+        foto = `${execucaoId}/${itemId}-${Date.now()}.jpg`
+        ok(await sb.storage.from('checklists').upload(foto, r.foto, { contentType: r.foto.type || 'image/jpeg' }))
+      }
+      ok(await sb.rpc('responder_checklist', { p_exec: execucaoId, p_item: itemId, p_valor: r.valor, p_obs: r.observacao, p_foto: foto }))
+    },
+    async finalizarChecklist(execucaoId) {
+      return paraExecucaoChecklist(ok(await sb.rpc('finalizar_checklist', { p_exec: execucaoId })))
+    },
+    async reabrirChecklist(execucaoId) {
+      ok(await sb.rpc('reabrir_checklist', { p_exec: execucaoId }))
+    },
+    async trocarResponsavelChecklist(execucaoId, funcionarioId) {
+      ok(await sb.rpc('trocar_responsavel_checklist', { p_exec: execucaoId, p_func: funcionarioId }))
+    },
+    async fotoChecklist(caminho) {
+      const { data } = await sb.storage.from('checklists').createSignedUrl(caminho, 600)
+      return data?.signedUrl ?? null
     },
 
     async modeloChecklist() {
@@ -1955,5 +2042,13 @@ const paraMarcacao = (r: any): MarcacaoPonto => {
     id: r.id, nsr: Number(r.nsr), funcionarioId: r.funcionario_id, momento: r.momento, tipo: r.tipo, origem: r.origem, unidadeId: r.unidade_id,
     distanciaM: r.distancia_m, naLoja: r.na_loja, motivo: r.motivo, incluidoPor: r.incluido_por, hash: r.hash,
     desconsiderada: d ? { motivo: d.motivo, por: d.por, em: d.em } : null,
+  }
+}
+
+function paraExecucaoChecklist(r: any): ExecucaoChecklist {
+  const n = (v: any) => (v === null || v === undefined ? null : Number(v))
+  return {
+    id: r.id, modeloId: r.modelo_id, data: r.data, prazo: r.prazo, responsavelId: r.responsavel_id, iniciadoEm: r.iniciado_em, finalizadoEm: r.finalizado_em,
+    totalItens: r.total_itens, respondidos: r.respondidos, pontualidade: n(r.pontualidade), esforco: n(r.esforco), qualidade: n(r.qualidade), score: n(r.score),
   }
 }
