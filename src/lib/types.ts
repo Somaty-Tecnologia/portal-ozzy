@@ -1781,3 +1781,40 @@ export interface QuemCome {
   // Da equipe, mas fora neste dia, com o motivo (folga, férias, turno fechado).
   fora?: { id: string; nome: string; local: string; motivo: string }[]
 }
+
+// Vendas por produto das lojas (0108), da exportação "Vendas por cupons" da Eclética.
+export interface LinhaVenda {
+  unidadeId: string
+  data: string
+  codigo: string
+  delivery: boolean
+  nome: string
+  quantidade: number
+  valor: number
+}
+export interface ResumoVendas {
+  unidadeId: string
+  mes: string
+  dias: number
+  primeiro: string
+  ultimo: string
+  quantidade: number
+  valor: number
+}
+// Média de um produto num dia da semana (0 = segunda), por loja e canal.
+export interface MediaVenda {
+  unidadeId: string
+  diaSemana: number
+  codigo: string
+  delivery: boolean
+  nome: string
+  media: number
+  dias: number
+}
+// Fornecedor da última compra de cada material (pedido, nota ou histórico).
+export interface UltimoFornecedor {
+  insumoId: string
+  fornecedorId: string
+  preco: number | null
+  em: string
+}

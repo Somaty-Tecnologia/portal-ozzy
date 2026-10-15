@@ -10,13 +10,16 @@ import { lerValor, mostrarQtd, nomeCentro, reais } from '../lib/financeiro'
 import { podeGerenciar } from '../lib/permissoes'
 import { LOJAS_FECHAMENTO } from '../lib/types'
 import InventarioLojas from './InventarioLojas'
+import VendasLojas from '../components/VendasLojas'
+import { montarCatalogo } from '../lib/custos'
+import { arredondarIdeal, consumo, ligarProdutos, linhasDe } from '../lib/consumoVendas'
 import type { CentroCusto, Fechamento, Insumo, ItemListaFechamento, PedidoProducao, Producao as ProducaoT, Receita, SetorFechamento, VersaoReceita } from '../lib/types'
 
 // Menu Produção (Heitor, 09/10): pedidos das lojas (vindos do fechamento), lista de preparo descontando o que
 // já tem na Central, lançar o que foi produzido (entra o preparo, saem os ingredientes da ficha) e as listas.
 
 interface Dados { insumos: Insumo[]; receitas: Receita[]; versoes: VersaoReceita[]; centros: CentroCusto[]; producoes: ProducaoT[] }
-type Aba = 'pedidos' | 'produzido' | 'inventario' | 'listas'
+type Aba = 'pedidos' | 'produzido' | 'inventario' | 'listas' | 'vendas'
 const NOME_LOJA: Record<string, string> = { 'burger-psd': 'PSD', 'burger-va': 'Vila' }
 const NOME_SETOR: Record<SetorFechamento, string> = { cozinha: 'Cozinha', atendimento: 'Atendimento' }
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -28,6 +31,7 @@ export const ABAS_PRODUCAO = [
   { id: 'produzido', nome: 'Produzido', soGestao: true },
   { id: 'inventario', nome: 'Inventário' },
   { id: 'listas', nome: 'Listas', soGestao: true },
+  { id: 'vendas', nome: 'Vendas das lojas', soGestao: true },
 ]
 export default function Producao({ sub }: { sub?: string }) {
   const { eu } = useApp()
@@ -42,7 +46,7 @@ export default function Producao({ sub }: { sub?: string }) {
         <p className="text-sm text-stone-500">Os pedidos que as lojas mandaram no fechamento, o que precisa preparar, o que foi produzido e o inventário de segunda.</p>
       </div>
       {abas.length > 1 && (
-        <div className={`grid gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold ${abas.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+        <div className={`grid gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold ${abas.length >= 4 ? `grid-cols-2 ${abas.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}` : 'grid-cols-2'}`}>
           {abas.map(([a, nome]) => (
             <button key={a} onClick={() => ir(a === 'pedidos' ? 'producao' : 'producao/' + a)} className={`rounded-lg py-2 ${aba === a ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{nome}</button>
           ))}
@@ -52,6 +56,7 @@ export default function Producao({ sub }: { sub?: string }) {
       {aba === 'produzido' && <Produzido />}
       {aba === 'inventario' && <InventarioLojas />}
       {aba === 'listas' && <Listas />}
+      {aba === 'vendas' && <VendasLojas />}
     </div>
   )
 }
@@ -260,6 +265,9 @@ function Listas() {
   const [novo, setNovo] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [calcular, setCalcular] = useState(false)
+  // Muda o campo do ideal quando a sugestão é aceita (os campos são não controlados).
+  const [versao, setVersao] = useState(0)
   const carregar = useCallback(async () => {
     try {
       const [l, i] = await Promise.all([store.itensListaFechamento(loja, setor), store.insumos()])
@@ -343,6 +351,16 @@ function Listas() {
         {termoNovo.length >= 2 && achados.length === 0 && <p className="mt-2 text-sm text-stone-500">Nada no cadastro com esse nome (ou já está na lista).</p>}
       </div>
       <p className="text-xs text-stone-500">A lista é a mesma nas duas lojas: adicionar, tirar, unidade e “Preparo” valem para as duas. Só o estoque ideal é de cada loja: quanto ela precisa ter no começo de cada dia, na unidade em que conta (em branco = sem sugestão). “Preparo” marca o que a Central prepara.</p>
+      {itens && <Botao variante="secundario" onClick={() => setCalcular(true)}>Calcular o ideal pelas vendas</Botao>}
+      {calcular && itens && (
+        <IdealPelasVendas loja={loja} itens={itens.filter((i) => i.ativo)} insumos={insumos} aoFechar={() => setCalcular(false)}
+          aoUsar={(p) => {
+            for (const [id, ideal] of p) mudar(id, { ideal })
+            setVersao((v) => v + 1)
+            setCalcular(false)
+            avisar('Ideal preenchido pelas vendas. Confira e clique em Salvar.')
+          }} />
+      )}
       {(itens?.length ?? 0) > 8 && <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar na lista" aria-label="Procurar na lista" className={`${estiloEntrada} max-w-xs`} />}
       {!itens ? <p className="text-stone-400">Carregando…</p> : (
         <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
@@ -361,7 +379,7 @@ function Listas() {
                     <td className="px-1 py-1"><input value={i.unidadeContagem} onChange={(e) => mudar(i.id, { unidadeContagem: e.target.value })} className={`${estiloEntrada} w-14! px-1! text-center`} aria-label={`Unidade de ${i.nome}`} /></td>
                     {i.ideal.map((v, k) => (
                       <td key={k} className="px-1 py-1">
-                        <input inputMode="decimal" defaultValue={v === null ? '' : String(v).replace('.', ',')} aria-label={`Ideal de ${i.nome} na ${DIAS_CURTOS[k]}`}
+                        <input key={versao} inputMode="decimal" defaultValue={v === null ? '' : String(v).replace('.', ',')} aria-label={`Ideal de ${i.nome} na ${DIAS_CURTOS[k]}`}
                           onChange={(e) => mudar(i.id, { ideal: i.ideal.map((x, j) => (j === k ? lerValor(e.target.value) : x)) })}
                           className={`${estiloEntrada} w-14! px-1! text-center`} />
                       </td>
@@ -385,6 +403,116 @@ function Listas() {
         </div>
       )}
     </div>
+  )
+}
+
+// ——— Ideal pelas vendas (Heitor, 15/10) ———
+// Para cada dia da semana: a média do que a loja vendeu nesse dia (últimas semanas) × fichas, parando nos itens
+// da lista (um pré-preparo da lista conta como ele mesmo), mais a margem de segurança, arredondado para cima.
+
+function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
+  loja: string
+  itens: ItemListaFechamento[]
+  insumos: Insumo[]
+  aoUsar: (p: Map<string, (number | null)[]>) => void
+  aoFechar: () => void
+}) {
+  const { store } = useApp()
+  const [semanas, setSemanas] = useState(8)
+  const [margem, setMargem] = useState(20)
+  const [calc, setCalc] = useState<{ porItem: Map<string, number[]>; dias: number } | null>(null)
+  const [erro, setErro] = useState('')
+  useEffect(() => {
+    let vivo = true
+    setCalc(null)
+    Promise.all([store.vendasMedias(hoje(), semanas), store.produtosVenda(), store.receitas(), store.versoesReceitas()]).then(([medias, produtos, receitas, versoes]) => {
+      if (!vivo) return
+      const cat = montarCatalogo(insumos, receitas, versoes)
+      const ligar = ligarProdutos(produtos, insumos)
+      const parar = new Set(itens.map((i) => i.insumoId))
+      const daLoja = medias.filter((m) => m.unidadeId === loja)
+      const porItem = new Map<string, number[]>()
+      for (let d = 0; d < 7; d++) {
+        const c = consumo(cat, linhasDe(daLoja.filter((m) => m.diaSemana === d), ligar), parar)
+        for (const [id, q] of c) {
+          const l = porItem.get(id) ?? Array(7).fill(0)
+          l[d] = q
+          porItem.set(id, l)
+        }
+      }
+      setCalc({ porItem, dias: Math.max(0, ...daLoja.map((m) => m.dias)) })
+    }, (e) => vivo && setErro((e as Error).message))
+    return () => { vivo = false }
+  }, [store, loja, semanas, insumos, itens])
+
+  const porId = new Map(insumos.map((i) => [i.id, i]))
+  const linhas = itens.map((i) => {
+    const ins = porId.get(i.insumoId)
+    const c = calc?.porItem.get(i.insumoId)
+    const mesmaUnidade = unidadeIgual(i.unidadeContagem, ins?.unidade)
+    const proposto = c && mesmaUnidade && ins ? c.map((q) => (q > 0 ? arredondarIdeal(q * (1 + margem / 100), ins.unidade) : 0)) : null
+    return { i, ins, proposto, motivo: !c ? 'sem venda pelas fichas' : !mesmaUnidade ? `conta em ${i.unidadeContagem}, a ficha usa ${ins?.unidade ?? '?'}` : '' }
+  })
+  const comProposta = linhas.filter((l) => l.proposto)
+  return (
+    <Modal titulo={`Ideal pelas vendas · ${NOME_LOJA[loja] ?? loja}`} aberto aoFechar={aoFechar}>
+      <div className="space-y-3">
+        <p className="text-sm text-stone-600">
+          Quanto a loja gasta em cada dia da semana pelas vendas e pelas fichas, mais a margem. Precisa das vendas importadas em Produção › Vendas das lojas.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <label className="text-sm">Média das últimas{' '}
+            <select value={semanas} onChange={(e) => setSemanas(Number(e.target.value))} className={`${estiloEntrada} w-auto!`} aria-label="Semanas">
+              {[4, 8, 12].map((n) => <option key={n} value={n}>{n} semanas</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Margem de segurança{' '}
+            <select value={margem} onChange={(e) => setMargem(Number(e.target.value))} className={`${estiloEntrada} w-auto!`} aria-label="Margem">
+              {[0, 10, 20, 30, 50].map((n) => <option key={n} value={n}>{n}%</option>)}
+            </select>
+          </label>
+        </div>
+        {erro ? <p className="text-red-700">{erro}</p> : !calc ? <p className="text-stone-400">Calculando…</p> : !calc.dias ? (
+          <Vazio>Sem vendas desta loja nas últimas {semanas} semanas. Importe em Produção › Vendas das lojas.</Vazio>
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-stone-500"><th className="px-2 py-2">Item</th>{DIAS_CURTOS.map((d) => <th key={d} className="px-1 py-2 text-center">{d}</th>)}</tr></thead>
+                <tbody className="divide-y divide-stone-100">
+                  {linhas.map(({ i, proposto, motivo }) => (
+                    <tr key={i.id}>
+                      <td className="min-w-40 px-2 py-1">{i.nome} <span className="text-xs text-stone-500">{i.unidadeContagem}</span>{motivo && <div className="text-xs text-stone-400">{motivo}</div>}</td>
+                      {DIAS_CURTOS.map((_, k) => {
+                        const atual = i.ideal[k]
+                        const novo = proposto?.[k]
+                        return (
+                          <td key={k} className="px-1 py-1 text-center whitespace-nowrap">
+                            {novo === undefined ? <span className="text-stone-400">{q(atual)}</span> : (
+                              <><span className={novo !== (atual ?? 0) ? 'font-bold' : ''}>{mostrarQtd(novo)}</span>{atual !== null && atual !== novo && <div className="text-[11px] text-stone-400 line-through">{mostrarQtd(atual)}</div>}</>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-stone-500">
+              Em negrito, o calculado (riscado, o de hoje). Itens sem cálculo ficam como estão. Se a Central não entrega em algum dia, o dia anterior
+              precisa cobrir os dois: ajuste à mão depois.
+            </p>
+            <div className="flex gap-2">
+              <Botao disabled={!comProposta.length} onClick={() => aoUsar(new Map(comProposta.map((l) => [l.i.id, l.proposto!.map((x) => (x > 0 ? x : null))])))}>
+                Usar nos {comProposta.length} itens calculados
+              </Botao>
+              <Botao variante="fantasma" onClick={aoFechar}>Fechar</Botao>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   )
 }
 

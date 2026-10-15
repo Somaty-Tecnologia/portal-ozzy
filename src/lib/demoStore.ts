@@ -3,7 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nom
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
 import { jornadas } from './ponto'
-import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade, LinhaVenda, MediaVenda, UltimoFornecedor } from './types'
 import { chamadoEmAberto } from './types'
 import { addDias, addMeses, diasEntre, hoje, inicioDaSemana } from './datas'
 import { avaliacoesDemo, vendasDemo } from './demoVendas'
@@ -1032,6 +1032,23 @@ const produtosVendaDemo: ProdutoVenda[] = [
   pv('pv8', '40', 'COMBO CLÁSSICO (EXEMPLO)', 'Outros', 'COMBOS', 54.9, null),
   pv('pv9', '41', 'QUAL O PONTO DA CARNE?', 'Outros', 'PERGUNTAS', 0, null, 'vinculo'),
 ]
+// Vendas por produto de EXEMPLO (no real vem da exportação da Eclética): últimas 10 semanas, sexta a domingo vendem mais.
+const vendasProdutosDemo: LinhaVenda[] = (() => {
+  const out: LinhaVenda[] = []
+  const base: [string, string, number, boolean][] = [['10', 'BURGER CLÁSSICO (EXEMPLO)', 22, false], ['10', 'BURGER CLÁSSICO (EXEMPLO)', 30, true], ['11', 'BURGER BACON (EXEMPLO)', 14, true],
+    ['318', 'SMASH (100G)', 66, true], ['20', 'BATATA FRITA (EXEMPLO)', 18, true], ['88', 'COCA COLA 350ML LATA', 25, false], ['900', 'SEM PICLES', 6, true], ['41', '2 BURGERS + 2 COCAS', 3, true]]
+  for (let d = 1; d <= 70; d++) {
+    const data = addDias(hoje(), -d)
+    const dow = new Date(data + 'T12:00:00').getDay()
+    const fator = dow === 5 || dow === 6 ? 1.7 : dow === 0 ? 1.4 : dow === 1 ? 0.7 : 1
+    for (const [u, peso] of [['burger-psd', 1], ['burger-va', 0.45]] as const)
+      for (const [k, [codigo, nome, q, delivery]] of base.entries()) {
+        const quantidade = Math.round(q * fator * peso * (0.85 + ((d * 7 + k * 13) % 30) / 100))
+        if (quantidade > 0) out.push({ unidadeId: u, data, codigo, delivery, nome, quantidade, valor: quantidade * 30 })
+      }
+  }
+  return out
+})()
 // Ideal de segunda a domingo (exemplo).
 const pedidosTirarDemo: PedidoTirarFechamento[] = []
 const caixaDemo: CaixaTurno[] = []
@@ -3351,6 +3368,52 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       exigeGestao()
       return espera(listaFechDemo.filter((i) => i.unidadeId === unidadeId && i.setor === setor).sort((a, b) => a.ordem - b.ordem)
         .map((i) => ({ ...i, ideal: [...i.ideal], nome: insumosDemo.find((x) => x.id === i.insumoId)?.nome ?? '', categoria: insumosDemo.find((x) => x.id === i.insumoId)?.categoria ?? null, prePreparo: prePreparoDemo.has(i.insumoId) })))
+    },
+    async importarVendas(linhas, aoProgresso) {
+      exigeGestao()
+      const dias = new Set(linhas.map((l) => l.unidadeId + '|' + l.data))
+      for (let k = vendasProdutosDemo.length - 1; k >= 0; k--) if (dias.has(vendasProdutosDemo[k].unidadeId + '|' + vendasProdutosDemo[k].data)) vendasProdutosDemo.splice(k, 1)
+      vendasProdutosDemo.push(...structuredClone(linhas))
+      aoProgresso?.(1)
+      return espera(linhas.length)
+    },
+    async vendasResumo() {
+      exigeGestao()
+      const m = new Map<string, { unidadeId: string; mes: string; dias: Set<string>; quantidade: number; valor: number }>()
+      for (const v of vendasProdutosDemo) {
+        const k = v.unidadeId + v.data.slice(0, 7)
+        const r = m.get(k) ?? { unidadeId: v.unidadeId, mes: v.data.slice(0, 7) + '-01', dias: new Set(), quantidade: 0, valor: 0 }
+        r.dias.add(v.data)
+        r.quantidade += v.quantidade
+        r.valor += v.valor
+        m.set(k, r)
+      }
+      return espera([...m.values()].map((r) => { const d = [...r.dias].sort(); return { unidadeId: r.unidadeId, mes: r.mes, dias: d.length, primeiro: d[0], ultimo: d[d.length - 1], quantidade: r.quantidade, valor: r.valor } })
+        .sort((a, b) => a.unidadeId.localeCompare(b.unidadeId) || a.mes.localeCompare(b.mes)))
+    },
+    async vendasMedias(ate, semanas) {
+      exigeGestao()
+      const de = addDias(ate, -7 * semanas)
+      const janela = vendasProdutosDemo.filter((v) => v.data > de && v.data <= ate)
+      const dow = (d: string) => (new Date(d + 'T12:00:00').getDay() + 6) % 7
+      const abertos = new Map<string, Set<string>>()
+      for (const v of janela) { const k = v.unidadeId + dow(v.data); abertos.set(k, (abertos.get(k) ?? new Set()).add(v.data)) }
+      const m = new Map<string, MediaVenda>()
+      for (const v of janela) {
+        const k = [v.unidadeId, dow(v.data), v.codigo, v.delivery].join('|')
+        const r = m.get(k) ?? { unidadeId: v.unidadeId, diaSemana: dow(v.data), codigo: v.codigo, delivery: v.delivery, nome: v.nome, media: 0, dias: abertos.get(v.unidadeId + dow(v.data))!.size }
+        r.media += v.quantidade / r.dias
+        m.set(k, r)
+      }
+      return espera([...m.values()].map((r) => ({ ...r, media: Math.round(r.media * 1000) / 1000 })))
+    },
+    async ultimoFornecedorInsumos() {
+      exigeGestao()
+      const r = new Map<string, UltimoFornecedor>()
+      for (const h of [...historicoComprasDemo].sort((a, b) => a.dia.localeCompare(b.dia))) r.set(h.insumoId, { insumoId: h.insumoId, fornecedorId: h.fornecedorId, preco: h.preco, em: h.dia })
+      for (const p of [...pedidosCompraDemo].filter((x) => x.status !== 'cancelado').sort((a, b) => a.dataPedido.localeCompare(b.dataPedido)))
+        for (const i of p.itens) if (!r.has(i.insumoId) || r.get(i.insumoId)!.em <= p.dataPedido) r.set(i.insumoId, { insumoId: i.insumoId, fornecedorId: p.fornecedorId, preco: i.preco, em: p.dataPedido })
+      return espera([...r.values()])
     },
     async salvarItemListaFechamento(i) {
       exigeGestao()

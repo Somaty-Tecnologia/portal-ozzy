@@ -4,7 +4,7 @@ import { LOJAS_FECHAMENTO, chaveDe, daChave } from './types'
 import { addDias as addDiasIso, hoje } from './datas'
 import { comFolgasDoTurno } from './pessoal'
 import { movimentosNovos } from './ofx'
-import type { PreparoRefeicao, MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, VotacaoCardapio, ResultadoVotacao, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ModeloRefeicao, VotosRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, SaldoEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, NotaFiscal, ContaPagar, ContaRecorrente, ItemNota, MovimentoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, NovoItemEnvio, EnvioEvento, Inventario, ItemModeloChecklist, VendaEvento, Fornecedor, Insumo, Receita, VersaoReceita, DiaEvento, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, Avaliacao, Chamado, VersaoRegulamento, Comunicado, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, VendaDia, ResumoVendas, MediaVenda, UltimoFornecedor } from './types'
 
 // O login é celular + senha. Internamente o Supabase usa um e-mail derivado do celular,
 // assim não dependemos de SMS (que é pago).
@@ -1762,6 +1762,40 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       ok(await sb.from('fechamento_itens').update(comum).eq('setor', i.setor).eq('insumo_id', i.insumoId))
       ok(await sb.from('fechamento_itens').update({ ideal }).eq('unidade_id', i.unidadeId).eq('setor', i.setor).eq('insumo_id', i.insumoId))
       ok(await sb.from('insumos').update({ pre_preparo: i.prePreparo }).eq('id', i.insumoId))
+    },
+    async importarVendas(linhas, aoProgresso) {
+      // O banco troca os dias que vieram em cada envio: um dia de uma loja vai sempre inteiro no mesmo envio.
+      const porDia = new Map<string, typeof linhas>()
+      for (const l of linhas) {
+        const k = l.unidadeId + '|' + l.data
+        porDia.set(k, [...(porDia.get(k) ?? []), l])
+      }
+      const lotes: (typeof linhas)[] = [[]]
+      for (const d of porDia.values()) {
+        if (lotes[lotes.length - 1].length + d.length > 3000) lotes.push([])
+        lotes[lotes.length - 1].push(...d)
+      }
+      let n = 0
+      for (const [k, lote] of lotes.entries()) {
+        n += Number(ok(await sb.rpc('importar_vendas', {
+          p_linhas: lote.map((l) => ({ unidade_id: l.unidadeId, data: l.data, codigo: l.codigo, delivery: l.delivery, nome: l.nome, quantidade: l.quantidade, valor: l.valor })),
+        })) ?? 0)
+        aoProgresso?.((k + 1) / lotes.length)
+      }
+      return n
+    },
+    async vendasResumo() {
+      return (ok(await sb.rpc('vendas_resumo')) ?? []).map((r: any): ResumoVendas => ({
+        unidadeId: r.unidade_id, mes: r.mes, dias: r.dias, primeiro: r.primeiro, ultimo: r.ultimo, quantidade: Number(r.quantidade), valor: Number(r.valor),
+      }))
+    },
+    async vendasMedias(ate, semanas) {
+      return (await todas((de, fim) => sb.rpc('vendas_medias', { p_ate: ate, p_semanas: semanas }).order('unidade_id').order('dia_semana').order('codigo').order('delivery').range(de, fim)))
+        .map((r: any): MediaVenda => ({ unidadeId: r.unidade_id, diaSemana: r.dia_semana, codigo: r.codigo, delivery: r.delivery, nome: r.nome, media: Number(r.media), dias: r.dias }))
+    },
+    async ultimoFornecedorInsumos() {
+      return (await todas((de, fim) => sb.rpc('ultimo_fornecedor_insumos').order('insumo_id').range(de, fim)))
+        .map((r: any): UltimoFornecedor => ({ insumoId: r.insumo_id, fornecedorId: r.fornecedor_id, preco: numeroOuNulo(r.preco), em: r.em }))
     },
     async lancarMovimentoEstoque(m) {
       ok(await sb.from('estoque_movimentos').insert((Array.isArray(m) ? m : [m]).map((x) => ({

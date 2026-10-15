@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import Impressao from '../components/Impressao'
 import EstoqueUniformes from './EstoqueUniformes'
 import { PedidosCompra, SemanaCompras } from './ComprasPedidos'
+import SugestaoCompras from './SugestaoCompras'
 import { Botao, Campo, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
 import logo from '../assets/logo.png'
 import { useApp } from '../lib/contexto'
 import { dataLonga, hoje } from '../lib/datas'
 import { lerNumero, reais } from '../lib/financeiro'
 import { ir } from '../lib/rota'
-import { operaEstoque } from '../lib/permissoes'
+import { operaEstoque, podeGerenciar } from '../lib/permissoes'
 import { CORES_CAMISETA, PECAS, consolidado, corCamiseta, descricaoPeca, modelagemDe } from '../lib/uniformes'
 import {
   STATUS_PEDIDO_UNIFORME, apelidoUnidade,
@@ -30,22 +31,25 @@ export const tamanhosDe = (p: Funcionario) =>
 export const ABAS_COMPRAS = [
   { id: '', nome: 'Pedidos de compra' },
   { id: 'semana', nome: 'Entregas da semana' },
+  { id: 'sugestao', nome: 'Sugestão pelas vendas', soGestao: true },
   { id: 'uniformes', nome: 'Uniformes' },
 ]
 export default function Compras({ sub }: { sub?: string }) {
   const { eu } = useApp()
   // Produção (13/10) só vê as entregas da semana, para marcar o que chegou.
   if (!operaEstoque(eu.nivel)) return <div className="space-y-4"><Titulo>Entregas da semana</Titulo><SemanaCompras /></div>
-  const area = sub === 'semana' || sub === 'uniformes' ? sub : 'pedidos'
+  const gestao = podeGerenciar(eu.nivel)
+  const abas = ABAS_COMPRAS.filter((a) => gestao || !a.soGestao)
+  const area = sub === 'semana' || sub === 'uniformes' || (sub === 'sugestao' && gestao) ? sub : 'pedidos'
   return (
     <div className="space-y-4">
       <Titulo>Compras</Titulo>
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-stone-200 p-1 text-sm font-semibold print:hidden">
-        {ABAS_COMPRAS.map((a) => (
+      <div className={`grid grid-cols-2 gap-1 ${abas.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} rounded-xl bg-stone-200 p-1 text-sm font-semibold print:hidden`}>
+        {abas.map((a) => (
           <button key={a.id} onClick={() => ir('compras' + (a.id ? '/' + a.id : ''))} className={`rounded-lg px-2 py-2 ${area === (a.id || 'pedidos') ? 'bg-white shadow-sm' : 'text-stone-600'}`}>{a.nome}</button>
         ))}
       </div>
-      {area === 'pedidos' ? <PedidosCompra /> : area === 'semana' ? <SemanaCompras /> : <Uniformes />}
+      {area === 'pedidos' ? <PedidosCompra /> : area === 'semana' ? <SemanaCompras /> : area === 'sugestao' ? <SugestaoCompras /> : <Uniformes />}
     </div>
   )
 }
