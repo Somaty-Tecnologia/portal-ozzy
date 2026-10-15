@@ -508,7 +508,7 @@ function LancarDespesa({ d, m, pedido, aoFechar, aoSalvar }: { d: Dados; m: Movi
   const [comp, setComp] = useState<Comprovante>('nao')
   const [numero, setNumero] = useState('')
   const [arquivo, setArquivo] = useState<File | null>(null)
-  const [rec, setRec] = useState({ ligado: false, dia: String(Number(m.data.slice(8, 10))), forma: 'debito_automatico' as FormaPagamento, variavel: false })
+  const [rec, setRec] = useState({ ligado: false, dia: String(Number(m.data.slice(8, 10))), forma: 'debito_automatico' as FormaPagamento, variavel: false, fim: '' })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const ativos = d.fornecedores.filter((f) => f.ativo)
@@ -528,7 +528,7 @@ function LancarDespesa({ d, m, pedido, aoFechar, aoSalvar }: { d: Dados; m: Movi
     if (!rec.ligado) return
     await store.salvarRecorrente({
       descricao: v.descricao.trim() || f.nome, fornecedorId: f.id, fornecedorNome: f.nome, centroCustoId: v.centro, contaId: v.conta || null, valor,
-      variavel: rec.variavel, dia: Number(rec.dia), forma: rec.forma, inicio: addMeses(mesDe(m.data), 1), fim: null, situacao: 'ativa',
+      variavel: rec.variavel, dia: Number(rec.dia), forma: rec.forma, inicio: addMeses(mesDe(m.data), 1), fim: rec.fim || null, situacao: 'ativa',
       observacao: 'Cadastrada na conciliação',
     })
   }
@@ -723,11 +723,24 @@ function LancarDespesa({ d, m, pedido, aoFechar, aoSalvar }: { d: Dados; m: Movi
                     </select>
                   </Campo>
                 </div>
+                <Campo rotulo="Até quando repete">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select className={`${estiloEntrada} w-auto!`} value={rec.fim ? 'ate' : ''} aria-label="Até quando repete"
+                      onChange={(e) => setRec({ ...rec, fim: e.target.value ? addMeses(mesDe(m.data), 12) : '' })}>
+                      <option value="">Indefinido (sem fim)</option>
+                      <option value="ate">Até um mês</option>
+                    </select>
+                    {rec.fim && <input type="month" className={`${estiloEntrada} w-auto!`} min={addMeses(mesDe(m.data), 1)} value={rec.fim} onChange={(e) => e.target.value && setRec({ ...rec, fim: e.target.value })} aria-label="Última parcela" />}
+                    {rec.fim && <span className="text-sm text-stone-600">{Math.max(0, (Number(rec.fim.slice(0, 4)) - Number(m.data.slice(0, 4))) * 12 + Number(rec.fim.slice(5, 7)) - Number(m.data.slice(5, 7)))} parcela(s) depois desta</span>}
+                  </div>
+                </Campo>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={rec.variavel} onChange={(e) => setRec({ ...rec, variavel: e.target.checked })} />
                   O valor muda todo mês (lança {reais(valor)} como previsão)
                 </label>
-                <p className="text-xs text-stone-500">Começa em {addMeses(mesDe(m.data), 1).split('-').reverse().join('/')}; este mês já é este débito.</p>
+                <p className="text-xs text-stone-500">
+                  Começa em {addMeses(mesDe(m.data), 1).split('-').reverse().join('/')}{rec.fim ? ` e vai até ${rec.fim.split('-').reverse().join('/')}` : ', sem data para acabar'}; este mês já é este débito.
+                </p>
               </div>
             )}
           </>

@@ -207,7 +207,15 @@ export function EditarRecorrente({ d, r, modelo, aoFechar, aoSalvar }: {
             </select>
           </Campo>
           <Campo rotulo="Começa em"><input type="month" className={estiloEntrada} value={v.inicio} onChange={(e) => set({ inicio: e.target.value })} /></Campo>
-          <Campo rotulo="Termina em (se tiver)"><input type="month" className={estiloEntrada} value={v.fim} onChange={(e) => set({ fim: e.target.value })} /></Campo>
+          <Campo rotulo="Até quando repete">
+            <div className="flex flex-wrap gap-2">
+              <select className={`${estiloEntrada} w-auto!`} value={v.fim ? 'ate' : ''} aria-label="Até quando repete" onChange={(e) => set({ fim: e.target.value ? addMeses(v.inicio || mesDe(hoje()), 11) : '' })}>
+                <option value="">Indefinido (sem fim)</option>
+                <option value="ate">Até um mês</option>
+              </select>
+              {v.fim && <input type="month" className={`${estiloEntrada} w-auto!`} value={v.fim} onChange={(e) => e.target.value && set({ fim: e.target.value })} aria-label="Termina em" />}
+            </div>
+          </Campo>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={v.variavel} onChange={(e) => set({ variavel: e.target.checked })} />
