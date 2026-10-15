@@ -639,6 +639,10 @@ function Saldo() {
   // Heitor (13/10): mostrar também o que está zerado; inativos só quando pedir.
   const [soComSaldo, setSoComSaldo] = useState(false)
   const [inativos, setInativos] = useState(false)
+  // Curva ABC das compras dos últimos 90 dias (Heitor, 15/10); sem compra no período conta como C.
+  const [curvas, setCurvas] = useState<Set<'A' | 'B' | 'C'>>(new Set())
+  const [curva, setCurva] = useState<Map<string, 'A' | 'B' | 'C'>>(new Map())
+  useEffect(() => { store.curvaAbc().then((l) => setCurva(new Map(l.map((x) => [x.insumoId, x.classe]))), () => undefined) }, [store])
   const [mov, setMov] = useState<{ insumoId: string } | null>(null)
   const carregar = useCallback(() => {
     let vale = true
@@ -658,9 +662,10 @@ function Saldo() {
       const ins = c.insumos.find((i) => i.id === id)
       const q = v?.quantidade ?? 0
       const custo = v?.custo ?? ins?.preco ?? null
-      return { id, ins, qtd: q, ultima: v?.ultima ?? null, custo, valor: custo !== null ? Math.max(q, 0) * custo : 0 }
+      return { id, ins, qtd: q, ultima: v?.ultima ?? null, custo, valor: custo !== null ? Math.max(q, 0) * custo : 0, curva: curva.get(id) ?? 'C' }
     })
     .filter((l) => inativos || l.ins?.ativo !== false || Math.abs(l.qtd) > 0.0001)
+    .filter((l) => !curvas.size || curvas.has(l.curva))
   const comSaldo = todas.filter((l) => Math.abs(l.qtd) > 0.0001)
   const linhas = (soComSaldo ? comSaldo : todas)
     .filter((l) => !busca || (l.ins?.nome ?? '').toLowerCase().includes(busca.toLowerCase()))
@@ -683,7 +688,15 @@ function Saldo() {
         <input className={`${estiloEntrada} w-auto! flex-1`} placeholder="Buscar insumo" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <label className="flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={soComSaldo} onChange={(e) => setSoComSaldo(e.target.checked)} /> Só com saldo</label>
         <label className="flex items-center gap-2 text-sm text-stone-600"><input type="checkbox" checked={inativos} onChange={(e) => setInativos(e.target.checked)} /> Mostrar inativos</label>
+        <div className="flex items-center gap-1 text-sm" role="group" aria-label="Curva ABC">
+          <span className="text-stone-600">Curva</span>
+          {(['A', 'B', 'C'] as const).map((k) => (
+            <button key={k} onClick={() => setCurvas((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })} aria-pressed={curvas.has(k)}
+              className={`rounded-full px-3 py-1 font-semibold ring-1 ${curvas.has(k) ? 'bg-carvao text-white ring-carvao' : 'bg-white text-stone-600 ring-stone-300'}`}>{k}</button>
+          ))}
+        </div>
       </div>
+      {curvas.size > 0 && <p className="-mt-2 text-xs text-stone-500">Curva pelas compras dos últimos 90 dias: A = itens que somam 80% do valor comprado, B = os próximos 15%, C = o resto e o que não foi comprado.</p>}
       <div className="grid grid-cols-2 gap-2">
         <Cartao><p className="text-sm text-stone-500">Itens com saldo</p><p className="text-xl font-bold">{comSaldo.length} <span className="text-sm font-normal text-stone-500">de {todas.length}</span></p></Cartao>
         <Cartao><p className="text-sm text-stone-500">Valor em estoque</p><p className="text-xl font-bold">{reais(total)}</p></Cartao>
@@ -701,22 +714,23 @@ function Saldo() {
   )
 }
 
-type LinhaSaldo = { id: string; ins?: Insumo; qtd: number; ultima: string | null; custo: number | null; valor: number }
+type LinhaSaldo = { id: string; ins?: Insumo; qtd: number; ultima: string | null; custo: number | null; valor: number; curva: 'A' | 'B' | 'C' }
 function TabelaSaldo({ linhas, aoAjustar }: { linhas: LinhaSaldo[]; aoAjustar: (id: string) => void }) {
   const { ordenada, cabecalho } = useOrdem(linhas, {
-    nome: (l) => l.ins?.nome ?? '', categoria: (l) => l.ins?.categoria, qtd: (l) => l.qtd, custo: (l) => l.custo, valor: (l) => l.valor,
+    nome: (l) => l.ins?.nome ?? '', categoria: (l) => l.ins?.categoria, curva: (l) => l.curva, qtd: (l) => l.qtd, custo: (l) => l.custo, valor: (l) => l.valor,
   }, { col: 'nome' })
   return (
     <Cartao className="overflow-x-auto p-0!">
       <table className="w-full text-sm">
         <thead className="bg-stone-50 text-left text-stone-500">
-          <tr>{cabecalho('nome', 'Insumo')}{cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}{cabecalho('qtd', 'Saldo', 'text-right', true)}{cabecalho('custo', 'Custo', 'text-right', true)}{cabecalho('valor', 'Valor', 'text-right', true)}<th /></tr>
+          <tr>{cabecalho('nome', 'Insumo')}{cabecalho('categoria', 'Categoria', 'hidden sm:table-cell')}{cabecalho('curva', 'Curva', 'text-center')}{cabecalho('qtd', 'Saldo', 'text-right', true)}{cabecalho('custo', 'Custo', 'text-right', true)}{cabecalho('valor', 'Valor', 'text-right', true)}<th /></tr>
         </thead>
         <tbody className="divide-y divide-stone-100">
           {ordenada.map((l) => (
             <tr key={l.id}>
               <td className="px-3 py-2">{l.ins?.nome ?? 'Insumo removido'} {l.ins && !l.ins.ativo && <Selo>Inativo</Selo>}<span className="block text-xs text-stone-400">{l.ultima ? `último movimento ${dataCurta(l.ultima)}` : 'sem movimento'}</span></td>
               <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{l.ins?.categoria ?? '—'}</td>
+              <td className={`px-3 py-2 text-center ${l.curva === 'A' ? 'font-bold' : 'text-stone-500'}`}>{l.curva}</td>
               <td className={`px-3 py-2 text-right whitespace-nowrap ${l.qtd < 0 ? 'font-semibold text-red-700' : Math.abs(l.qtd) <= 0.0001 ? 'text-stone-400' : ''}`}>{mostrarQtd(l.qtd)} {l.ins?.unidade}</td>
               <td className="px-3 py-2 text-right whitespace-nowrap">{l.custo !== null ? reais(l.custo) : '—'}</td>
               <td className="px-3 py-2 text-right whitespace-nowrap">{reais(l.valor)}</td>
