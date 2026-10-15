@@ -1,3 +1,4 @@
+import { abrirComposicaoDe, pegarAbrirComposicao } from '../lib/abrirComposicao'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Botao, Campo, Cartao, Modal, Selo, Vazio, estiloEntrada } from '../components/ui'
 import { useApp } from '../lib/contexto'
@@ -181,6 +182,7 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
             setNova(false)
             await aoMudar()
             avisar('Ficha criada. Agora monte a composição.')
+            abrirComposicaoDe(salva.id)
             ir(baseFichas() + '/' + salva.id)
           }}
         />
@@ -192,7 +194,8 @@ function ListaFichas({ d, aoMudar }: { d: Dados; aoMudar: () => Promise<void> })
 function PaginaFicha({ r, d, aoMudar }: { r: Receita; d: Dados; aoMudar: () => Promise<void> }) {
   const { nomeDe, avisar } = useApp()
   const [editandoDados, setEditandoDados] = useState(false)
-  const [editandoComposicao, setEditandoComposicao] = useState(false)
+  // Ficha recém-criada (aqui ou pelo cadastro de produtos) já abre na composição.
+  const [editandoComposicao, setEditandoComposicao] = useState(() => pegarAbrirComposicao(r.id))
   const [verVersao, setVerVersao] = useState<VersaoReceita | null>(null)
   const [imprimindo, setImprimindo] = useState(false)
   const versoes = d.versoes.filter((v) => v.receitaId === r.id).sort((a, b) => b.numero - a.numero)
@@ -585,6 +588,25 @@ function EditarComposicao({ r, d, aoFechar, aoSalvar }: { r: Receita; d: Dados; 
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [novoRend, setNovoRend] = useState('')
+  const [copiarDe, setCopiarDe] = useState('')
+
+  // Copiar a composição de outra ficha (Heitor, 15/10): troca os itens e o rendimento pelos da versão atual dela.
+  const fichasParaCopiar = useMemo(
+    () => [...d.cat.receitas.values()].filter((x) => x.id !== r.id && (d.cat.atual.get(x.id)?.itens.length ?? 0) > 0).sort((a, b) => a.nome.localeCompare(b.nome)),
+    [d, r.id],
+  )
+  const copiar = (nome: string) => {
+    setCopiarDe(nome)
+    const x = fichasParaCopiar.find((f) => f.nome.toLowerCase() === nome.trim().toLowerCase())
+    const v = x && d.cat.atual.get(x.id)
+    if (!x || !v) return
+    if (linhas.some((l) => l.ref) && !confirm(`Trocar os itens desta ficha pelos de ${x.nome}?`)) return setCopiarDe('')
+    setLinhas(v.itens.map((i) => ({ ref: i.insumoId ? 'i:' + i.insumoId : 'r:' + i.subReceitaId, quantidade: doNumero(i.quantidade), aproveitamento: doNumero(Math.round(i.aproveitamento * 1000) / 10), soDelivery: i.soDelivery })))
+    setRendimento(doNumero(v.rendimento))
+    setNota((n) => n || `Copiada de ${x.nome}`)
+    setCopiarDe('')
+    setErro('')
+  }
 
   // Passar a receita para outra base (ex.: da Eclética, por 1 kg, para a receita da produção, que rende 1,7 kg):
   // multiplica tudo pela mesma conta, então o custo por kg não muda.
@@ -646,6 +668,12 @@ function EditarComposicao({ r, d, aoFechar, aoSalvar }: { r: Receita; d: Dados; 
     <Modal titulo={`Composição: ${r.nome}`} aberto aoFechar={aoFechar}>
       <div className="space-y-3">
         <p className="text-sm text-stone-600">Quantidade líquida por {r.tipo === 'produto' ? 'unidade vendida' : 'receita'}, na unidade do item. Aproveitamento: quanto sobra depois de limpar (cenoura 85%).</p>
+        <div className="rounded-xl bg-stone-50 p-3">
+          <Campo rotulo="Copiar de outra ficha" dica="Puxa os itens e o rendimento dela. Depois é só ajustar o que muda.">
+            <input list="fichas-copiar" className={estiloEntrada} value={copiarDe} onChange={(e) => copiar(e.target.value)} placeholder="Digite o nome da ficha" aria-label="Copiar de outra ficha" />
+          </Campo>
+          <datalist id="fichas-copiar">{fichasParaCopiar.map((x) => <option key={x.id} value={x.nome} />)}</datalist>
+        </div>
         {linhas.map((l, i) => (
           <div key={i} className="grid grid-cols-[1fr_5.5rem_4.5rem_auto] items-end gap-2">
             <Campo rotulo={i === 0 ? 'Item' : ' '}>

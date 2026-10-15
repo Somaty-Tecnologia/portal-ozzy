@@ -542,6 +542,11 @@ function DetalheNota({ id }: { id: string }) {
                       )}
                     </p>
                   )}
+                  {ins && !e?.foraEstoque && fator !== 1 && (it.unidade ?? '').toLowerCase() === ins.unidade.toLowerCase() && (
+                    <p className="text-xs font-semibold text-amber-700">
+                      A nota já vem em {ins.unidade}: o normal é 1 {it.unidade} = 1 {ins.unidade}. Com {mostrarQtd(fator)} o custo fica dividido por {mostrarQtd(fator)}.
+                    </p>
+                  )}
                 </div>
               )
             })}

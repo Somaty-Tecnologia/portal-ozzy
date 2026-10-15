@@ -1,3 +1,4 @@
+import { abrirComposicaoDe } from '../lib/abrirComposicao'
 import { useCallback, useEffect, useState } from 'react'
 import { nomeItem } from '../lib/store'
 import { Botao, Campo, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
@@ -36,6 +37,19 @@ export default function Cadastros({ aba }: { aba?: string }) {
 
 const numTexto = (n: number | null) => (n === null ? '' : String(n).replace('.', ','))
 
+// Cria a ficha a partir do produto sem ficha (Heitor, 15/10): nome, preço e código do produto, liga ao produto
+// e abre a ficha já no editor da composição (lá dá para copiar de outra ficha).
+async function criarFichaDoProduto(store: ReturnType<typeof useApp>['store'], p: ProdutoVenda) {
+  const r = await store.salvarReceita({
+    nome: p.nome, tipo: 'produto', linha: null, operacaoId: null, origem: 'propria', unidade: 'un', precoVenda: p.preco ?? p.precoPizza,
+    tempoPreparoMin: null, tempoFinalizacaoMin: null, capacidadeHora: null, equipamentos: null, conservacao: null, validadeDias: null, modoPreparo: null,
+    ativo: true, area: 'lojas', ecleticaCodigo: p.ecleticaCodigo,
+  } as Parameters<typeof store.salvarReceita>[0])
+  await store.salvarProdutoVenda({ ...p, receitaId: r.id })
+  abrirComposicaoDe(r.id)
+  ir('fichas/' + r.id)
+}
+
 function ProdutosVenda() {
   const { store, avisar } = useApp()
   const [produtos, setProdutos] = useState<ProdutoVenda[] | null>(null)
@@ -46,6 +60,16 @@ function ProdutosVenda() {
   const [tipo, setTipo] = useState<TipoProdutoVenda | ''>('normal')
   const [semFicha, setSemFicha] = useState(false)
   const [editando, setEditando] = useState<ProdutoVenda | 'novo' | null>(null)
+  const [criando, setCriando] = useState<string | null>(null)
+  const criarFicha = async (p: ProdutoVenda) => {
+    setCriando(p.id ?? p.nome)
+    try {
+      await criarFichaDoProduto(store, p)
+    } catch (e) {
+      setErro((e as Error).message)
+      setCriando(null)
+    }
+  }
   const carregar = useCallback(async () => {
     try {
       const [p, r] = await Promise.all([store.produtosVenda(), store.receitas().catch(() => [])])
@@ -111,6 +135,12 @@ function ProdutosVenda() {
                       <span className="sm:hidden">{(p.subgrupo || p.grupo) && `${p.subgrupo || p.grupo} · `}</span>
                       {[p.tipo !== 'normal' && TIPOS_PRODUTO_VENDA[p.tipo], p.receitaId ? `ficha: ${nomeFicha(p.receitaId)}` : 'sem ficha'].filter(Boolean).join(' · ')}
                     </div>
+                    {!p.receitaId && p.tipo !== 'vinculo' && (
+                      <button type="button" disabled={criando !== null} onClick={(e) => { e.stopPropagation(); criarFicha(p) }}
+                        className="mt-1 rounded-full bg-ozzy-400 px-3 py-0.5 text-xs font-semibold text-carvao hover:brightness-95 disabled:opacity-50">
+                        {criando === (p.id ?? p.nome) ? 'Criando…' : '+ Criar ficha técnica'}
+                      </button>
+                    )}
                   </td>
                   <td className="hidden px-3 py-2 text-stone-600 md:table-cell">{p.ecleticaCodigo ?? '—'}</td>
                   <td className="hidden px-3 py-2 text-stone-600 sm:table-cell">{p.grupo ?? '—'}</td>
@@ -191,7 +221,10 @@ function EditarProduto({ p, grupos, receitas, aoFechar, aoSalvar }: { p: Produto
           <Botao type="button" variante="secundario" className="w-full" onClick={() => ir('fichas/' + p.receitaId)}>Abrir a ficha técnica ›</Botao>
         )}
         {p && !f.receitaId && (
-          <Botao type="button" variante="secundario" className="w-full" onClick={() => ir('fichas')}>Ir para Fichas técnicas para criar a ficha ›</Botao>
+          <Botao type="button" variante="secundario" className="w-full" disabled={salvando} onClick={async () => {
+            setSalvando(true)
+            try { await criarFichaDoProduto(store, p) } catch (e) { setErro((e as Error).message); setSalvando(false) }
+          }}>Criar a ficha técnica deste produto ›</Botao>
         )}
         {p && (
           <label className="flex items-center gap-3 text-sm">
