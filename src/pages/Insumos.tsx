@@ -54,7 +54,8 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('')
   const [semPreco, setSemPreco] = useState(false)
-  const [inativos, setInativos] = useState(false)
+  // Status (Heitor, 15/10): achar só os inativos (escondidos).
+  const [status, setStatus] = useState<'ativos' | 'todos' | 'inativos'>('ativos')
   const [estoque, setEstoque] = useState<'' | 'sim' | 'nao'>('')
   // Curva ABC das compras dos últimos 90 dias (0077): mostra o que pesa no valor comprado.
   const [curva, setCurva] = useState<Map<string, CurvaAbc>>(new Map())
@@ -103,7 +104,7 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
   const nomeForn = (id: string | null) => fornecedores.find((f) => f.id === id)?.nome
   const termo = busca.trim().toLowerCase()
   const lista = insumos.filter(
-    (i) => (inativos || i.ativo) && (!categoria || i.categoria === categoria) && (!estoque || controlaDe(i) === (estoque === 'sim')) && (!semPreco || precoDoInsumo(cat, i) === null)
+    (i) => (status === 'todos' || i.ativo === (status === 'ativos')) && (!categoria || i.categoria === categoria) && (!estoque || controlaDe(i) === (estoque === 'sim')) && (!semPreco || precoDoInsumo(cat, i) === null)
       && (!termo || i.nome.toLowerCase().includes(termo) || i.ecleticaCodigo === termo),
   )
   const faltando = insumos.filter((i) => i.ativo && precoDoInsumo(cat, i) === null).length
@@ -142,9 +143,9 @@ function ListaInsumos({ insumos, fornecedores, categorias, cat, aoMudar }: { ins
         <label className="flex items-center gap-2">
           <input type="checkbox" className="accent-carvao" checked={semPreco} onChange={(e) => setSemPreco(e.target.checked)} /> Só sem preço {faltando > 0 && <Selo cor="ambar">{faltando} ativos</Selo>}
         </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" className="accent-carvao" checked={inativos} onChange={(e) => setInativos(e.target.checked)} /> Mostrar inativos
-        </label>
+        <select className={`${estiloEntrada} w-auto! py-2!`} value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Status">
+          <option value="ativos">Só ativos</option><option value="inativos">Só inativos (escondidos)</option><option value="todos">Ativos e inativos</option>
+        </select>
       </div>
       {lista.length === 0 ? (
         <Vazio>Nenhum insumo neste filtro.</Vazio>
