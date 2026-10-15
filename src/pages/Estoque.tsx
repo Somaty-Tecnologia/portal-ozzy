@@ -243,7 +243,7 @@ function NotaManual({ aberto, aoFechar, c, aoCriar }: {
 interface ItemEdit { id: string; insumoId: string; fator: string; foraEstoque: boolean }
 interface ParcelaEdit { vencimento: string; valor: string; forma: FormaPagamento; documento: string }
 
-interface ReciboEdit { insumoId: string; descricao: string; quantidade: string; valor: string }
+interface ReciboEdit { insumoId: string; descricao: string; quantidade: string; valor: string; unit?: string }
 
 function parcelasIniciais(n: NotaFiscal): ParcelaEdit[] {
   // Veio da conciliação: o débito do extrato já pagou, à vista.
@@ -439,7 +439,7 @@ function DetalheNota({ id }: { id: string }) {
               const v = lerValor(x.valor) ?? 0
               const mudar = (m: Partial<ReciboEdit>) => setRecibo(recibo.map((y, i) => (i === k ? { ...y, ...m } : y)))
               return (
-                <div key={k} className="grid grid-cols-2 gap-2 border-b border-stone-100 pb-2 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center">
+                <div key={k} className="grid grid-cols-2 gap-2 border-b border-stone-100 pb-2 sm:grid-cols-[2fr_1fr_2fr_auto] sm:items-end">
                   <div className="col-span-2 space-y-1 sm:col-span-1">
                     <select aria-label="Insumo" className={`${estiloEntrada} py-1.5!`} value={x.insumoId} disabled={!aberta} onChange={(e) => mudar({ insumoId: e.target.value })}>
                       <option value="">Sem insumo (não controla)</option>
@@ -451,11 +451,25 @@ function DetalheNota({ id }: { id: string }) {
                     <input aria-label="Quantidade" inputMode="decimal" placeholder="Qtd" className={`${estiloEntrada} py-1.5!`} value={x.quantidade} disabled={!aberta} onChange={(e) => mudar({ quantidade: e.target.value })} />
                     {ins?.unidade}
                   </label>
-                  <input aria-label="Valor do item" inputMode="decimal" placeholder="Valor R$" className={`${estiloEntrada} py-1.5!`} value={x.valor} disabled={!aberta} onChange={(e) => mudar({ valor: e.target.value })} />
+                  <div className="grid grid-cols-2 gap-1">
+                    {/* Preço por unidade e total do item: preencher um calcula o outro (Heitor digitou o R$/kg no total, 15/10). */}
+                    <label className="text-xs text-stone-500">R$/{ins?.unidade ?? 'un'}
+                      <input aria-label="Preço por unidade" inputMode="decimal" placeholder="0,00" className={`${estiloEntrada} py-1.5!`} disabled={!aberta}
+                        value={x.unit ?? (q > 0 && v > 0 ? mostrarValor(Math.round((v / q) * 100) / 100) : '')}
+                        onChange={(e) => { const u = lerValor(e.target.value); mudar({ unit: e.target.value, valor: u !== null && q > 0 ? mostrarValor(Math.round(u * q * 100) / 100) : x.valor }) }}
+                        onBlur={() => mudar({ unit: undefined })} />
+                    </label>
+                    <label className="text-xs text-stone-500">Total do item
+                      <input aria-label="Valor do item" inputMode="decimal" placeholder="0,00" className={`${estiloEntrada} py-1.5!`} value={x.valor} disabled={!aberta} onChange={(e) => mudar({ valor: e.target.value, unit: undefined })} />
+                    </label>
+                  </div>
                   {aberta ? <button className="text-sm text-red-700 hover:underline" onClick={() => setRecibo(recibo.filter((_, i) => i !== k))}>Tirar</button> : <span />}
                   {ins && q > 0 && v > 0 && (
                     <p className="col-span-2 text-xs text-stone-500 sm:col-span-4">
-                      {reais(v / q)}/{ins.unidade}{ins.preco ? ` (cadastro: ${reais(ins.preco)})` : ''}
+                      Entra {mostrarQtd(q)} {ins.unidade} a {reais(v / q)}/{ins.unidade}{ins.preco ? ` (cadastro: ${reais(ins.preco)})` : ''}
+                      {ins.preco && (v / q >= ins.preco * 3 || v / q <= ins.preco / 3) && (
+                        <span className="font-semibold text-amber-700"> · muito diferente do cadastro, confira se o valor é o total do item</span>
+                      )}
                     </p>
                   )}
                 </div>
