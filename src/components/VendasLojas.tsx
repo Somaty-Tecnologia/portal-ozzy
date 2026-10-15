@@ -6,6 +6,7 @@ import { mostrarQtd, reais } from '../lib/financeiro'
 import { ir } from '../lib/rota'
 import { ligarProdutos, produtosSemFicha } from '../lib/consumoVendas'
 import { lerVendasEcletica, type VendasLidas } from '../lib/vendasEcletica'
+import FichaRapida from './FichaRapida'
 import type { ResumoVendas } from '../lib/types'
 
 // Produção › Vendas das lojas (Heitor, 15/10): importar a exportação "Vendas por cupons" da Eclética, enquanto não
@@ -20,11 +21,14 @@ export default function VendasLojas() {
   const [lidas, setLidas] = useState<VendasLidas | null>(null)
   const [progresso, setProgresso] = useState<{ etapa: string; f: number } | null>(null)
   const [erro, setErro] = useState('')
+  const [ficha, setFicha] = useState<{ codigo: string; nome: string } | null>(null)
   const carregar = useCallback(async () => {
     try {
       const [r, medias, produtos, insumos] = await Promise.all([store.vendasResumo(), store.vendasMedias(hoje(), 8), store.produtosVenda(), store.insumos()])
       setResumo(r)
-      setSemFicha(produtosSemFicha(medias, ligarProdutos(produtos, insumos)))
+      // Observação do PDV (vínculo sem ficha) não precisa de ficha.
+      const obs = new Set(produtos.filter((p) => p.tipo === 'vinculo' && !p.receitaId).map((p) => p.ecleticaCodigo))
+      setSemFicha(produtosSemFicha(medias, ligarProdutos(produtos, insumos)).filter((p) => !obs.has(p.codigo)))
     } catch (e) {
       setErro((e as Error).message)
     }
@@ -123,21 +127,23 @@ export default function VendasLojas() {
         <section className="space-y-2">
           <h2 className="font-bold">Vendidos sem ficha (fora da conta)</h2>
           <p className="text-sm text-stone-600">
-            Nas últimas 8 semanas. Produto sem ficha não entra no ideal nem nas compras: ligue a ficha em Cadastros › Produtos de venda.
+            Nas últimas 8 semanas. Produto sem ficha não entra no ideal nem nas compras: em Resolver, use a ficha de um produto parecido, monte a ficha ou marque como observação.
             Observações (sem picles, para viagem…) podem ficar assim. O “SMASH (100G)” não entra porque a ficha do burger já tem a carne, e o
             “Refrigerante do combo” da ficha do combo também não, porque o refrigerante escolhido sai numa linha própria do cupom.
           </p>
           <div className="divide-y divide-stone-100 rounded-2xl bg-white ring-1 ring-stone-200">
             {semFicha.slice(0, 40).map((p) => (
-              <div key={p.codigo} className="flex justify-between gap-2 px-3 py-1.5 text-sm">
-                <span>{p.nome} <span className="text-xs text-stone-500">cód. {p.codigo}</span></span>
+              <div key={p.codigo} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+                <span className="min-w-0 flex-1">{p.nome} <span className="text-xs text-stone-500">cód. {p.codigo}</span></span>
                 <span className="text-stone-600">{mostrarQtd(Math.round(p.porSemana))} por semana</span>
+                <Botao variante="secundario" className="px-3! py-1!" onClick={() => setFicha(p)}>Resolver</Botao>
               </div>
             ))}
           </div>
-          <Botao variante="secundario" onClick={() => ir('cadastros/produtos')}>Ir para Produtos de venda</Botao>
+          <Botao variante="fantasma" onClick={() => ir('cadastros/produtos')}>Ir para Produtos de venda</Botao>
         </section>
       )}
+      {ficha && <FichaRapida codigo={ficha.codigo} nome={ficha.nome} aoFechar={() => setFicha(null)} aoSalvar={(msg) => { setFicha(null); avisar(msg); carregar() }} />}
     </div>
   )
 }
