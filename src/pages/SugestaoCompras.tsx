@@ -6,7 +6,8 @@ import { addDias, dataCurta, diaSemana, hoje, inicioDaSemana } from '../lib/data
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { ir } from '../lib/rota'
 import { montarCatalogo } from '../lib/custos'
-import { arredondarIdeal, consumo, ligarProdutos, linhasDe } from '../lib/consumoVendas'
+import { arredondarIdeal, consumo, coberturaVendas, ligarProdutos, linhasDe } from '../lib/consumoVendas'
+import AvisoCobertura from '../components/AvisoCobertura'
 import type { CategoriaCompra, Fornecedor, Insumo, MediaVenda, PedidoCompra, ProdutoVenda, Receita, UltimoFornecedor, VersaoReceita } from '../lib/types'
 
 // Sugestão de compra da semana pelas vendas (Heitor, 15/10): média por dia da semana do que as três lojas
@@ -90,13 +91,13 @@ export default function SugestaoCompras() {
       const linha: Linha = { ins, semana: q, precisa, estoque, caminho: cam, comprar: arredondarCompra(precisa - estoque - cam, ins), preco: u && u.fornecedorId === forn && u.preco ? u.preco : ins.preco }
       porFornecedor.set(forn, [...(porFornecedor.get(forn) ?? []), linha])
     }
-    return porFornecedor
+    return { porFornecedor, cobertura: coberturaVendas(d.medias, ligarProdutos(d.produtos, d.insumos), d.produtos) }
   }, [d, margem, descontar])
 
   if (erro) return <p className="text-red-700">{erro}</p>
   const dias = d ? Math.max(0, ...d.medias.map((m) => m.dias)) : 0
   const termo = busca.trim().toLowerCase()
-  const grupos = [...(calc ?? new Map<string, Linha[]>()).entries()]
+  const grupos = [...(calc?.porFornecedor ?? new Map<string, Linha[]>()).entries()]
     .map(([f, ls]) => ({ f, nome: d?.fornecedores.find((x) => x.id === f)?.nome ?? 'Sem fornecedor', linhas: ls.filter((l) => (tudo || l.comprar > 0) && (!termo || l.ins.nome.toLowerCase().includes(termo))) }))
     .filter((g) => g.linhas.length)
     .sort((a, b) => (a.f === '' ? 1 : b.f === '' ? -1 : a.nome.localeCompare(b.nome, 'pt-BR')))
@@ -125,11 +126,14 @@ export default function SugestaoCompras() {
       </div>
       {!d ? <p className="text-stone-400">Calculando…</p> : !dias ? (
         <Vazio>Nenhuma venda nas últimas {semanas} semanas. Importe a planilha da Eclética em Produção › Vendas das lojas.</Vazio>
-      ) : !grupos.length ? <Vazio>Nada a comprar pelas vendas.</Vazio> : (
-        grupos.map((g) => (
+      ) : (
+        <>
+        {calc && <AvisoCobertura porcento={calc.cobertura.porcento} semFicha={calc.cobertura.semFicha} />}
+        {!grupos.length ? <Vazio>Nada a comprar pelas vendas.</Vazio> : grupos.map((g) => (
           <GrupoFornecedor key={g.f || 'sem'} fornecedorId={g.f} nome={g.nome} linhas={g.linhas} entrega={entrega} criado={criados[g.f]}
             aoCriar={(n) => setCriados((c) => ({ ...c, [g.f]: n }))} />
-        ))
+        ))}
+        </>
       )}
     </div>
   )

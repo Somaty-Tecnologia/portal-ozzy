@@ -4,7 +4,7 @@ import { useApp } from '../lib/contexto'
 import { dataCurta, hoje, nomeMes } from '../lib/datas'
 import { mostrarQtd, reais } from '../lib/financeiro'
 import { ir } from '../lib/rota'
-import { ligarProdutos, produtosSemFicha } from '../lib/consumoVendas'
+import { coberturaVendas, ligarProdutos, produtosSemFicha } from '../lib/consumoVendas'
 import { lerVendasEcletica, type VendasLidas } from '../lib/vendasEcletica'
 import FichaRapida from './FichaRapida'
 import type { ResumoVendas } from '../lib/types'
@@ -21,14 +21,17 @@ export default function VendasLojas() {
   const [lidas, setLidas] = useState<VendasLidas | null>(null)
   const [progresso, setProgresso] = useState<{ etapa: string; f: number } | null>(null)
   const [erro, setErro] = useState('')
+  const [porcento, setPorcento] = useState<number | null>(null)
   const [ficha, setFicha] = useState<{ codigo: string; nome: string } | null>(null)
   const carregar = useCallback(async () => {
     try {
       const [r, medias, produtos, insumos] = await Promise.all([store.vendasResumo(), store.vendasMedias(hoje(), 8), store.produtosVenda(), store.insumos()])
       setResumo(r)
       // Observação do PDV (vínculo sem ficha) não precisa de ficha.
-      const obs = new Set(produtos.filter((p) => p.tipo === 'vinculo' && !p.receitaId).map((p) => p.ecleticaCodigo))
-      setSemFicha(produtosSemFicha(medias, ligarProdutos(produtos, insumos)).filter((p) => !obs.has(p.codigo)))
+      const ligar = ligarProdutos(produtos, insumos)
+      const c = coberturaVendas(medias, ligar, produtos)
+      setPorcento(c.porcento)
+      setSemFicha(produtosSemFicha(medias, ligar).filter((p) => !c.obs.has(p.codigo)))
     } catch (e) {
       setErro((e as Error).message)
     }
@@ -126,6 +129,7 @@ export default function VendasLojas() {
       {semFicha.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-bold">Vendidos sem ficha (fora da conta)</h2>
+          {porcento !== null && <p className="text-sm font-semibold">A conta pega {String(porcento).replace('.', ',')}% dos itens vendidos nas 3 lojas.</p>}
           <p className="text-sm text-stone-600">
             Nas últimas 8 semanas. Produto sem ficha não entra no ideal nem nas compras: em Resolver, use a ficha de um produto parecido, monte a ficha ou marque como observação.
             Observações (sem picles, para viagem…) podem ficar assim. O “SMASH (100G)” não entra porque a ficha do burger já tem a carne, e o

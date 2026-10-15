@@ -12,7 +12,8 @@ import { LOJAS_FECHAMENTO } from '../lib/types'
 import InventarioLojas from './InventarioLojas'
 import VendasLojas from '../components/VendasLojas'
 import { montarCatalogo } from '../lib/custos'
-import { arredondarIdeal, consumo, ligarProdutos, linhasDe } from '../lib/consumoVendas'
+import { arredondarIdeal, consumo, coberturaVendas, ligarProdutos, linhasDe } from '../lib/consumoVendas'
+import AvisoCobertura from '../components/AvisoCobertura'
 import type { CentroCusto, Fechamento, Insumo, ItemListaFechamento, PedidoProducao, Producao as ProducaoT, Receita, SetorFechamento, VersaoReceita } from '../lib/types'
 
 // Menu Produção (Heitor, 09/10): pedidos das lojas (vindos do fechamento), lista de preparo descontando o que
@@ -504,7 +505,7 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
   const { store } = useApp()
   const [semanas, setSemanas] = useState(8)
   const [margem, setMargem] = useState(20)
-  const [calc, setCalc] = useState<{ porItem: Map<string, number[]>; dias: number; origem: Map<string, Map<string, Origem>> } | null>(null)
+  const [calc, setCalc] = useState<{ porItem: Map<string, number[]>; dias: number; origem: Map<string, Map<string, Origem>>; cobertura: ReturnType<typeof coberturaVendas> } | null>(null)
   const [erro, setErro] = useState('')
   const [aberto, setAberto] = useState<string | null>(null)
   useEffect(() => {
@@ -539,7 +540,7 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
           origem.set(id, porProduto)
         }
       }
-      setCalc({ porItem, dias: Math.max(0, ...daLoja.map((m) => m.dias)), origem })
+      setCalc({ porItem, dias: Math.max(0, ...daLoja.map((m) => m.dias)), origem, cobertura: coberturaVendas(daLoja, ligar, produtos) })
     }, (e) => vivo && setErro((e as Error).message))
     return () => { vivo = false }
   }, [store, loja, semanas, insumos, itens])
@@ -582,6 +583,7 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
           <Vazio>Sem vendas desta loja nas últimas {semanas} semanas. Importe em Produção › Vendas das lojas.</Vazio>
         ) : (
           <>
+            <AvisoCobertura porcento={calc.cobertura.porcento} semFicha={calc.cobertura.semFicha} />
             <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-xs text-stone-500">

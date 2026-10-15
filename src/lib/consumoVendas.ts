@@ -87,6 +87,22 @@ export function produtosSemFicha(medias: MediaVenda[], ligar: ReturnType<typeof 
   return [...soma.values()].sort((a, b) => b.porSemana - a.porSemana)
 }
 
+// Quanto das vendas entra na conta (Heitor, 15/10: saber se a sugestão está certa). Fora do total: o que é
+// ignorado de propósito e as observações do PDV (vínculo sem ficha).
+export function coberturaVendas(medias: MediaVenda[], ligar: ReturnType<typeof ligarProdutos>, produtos: ProdutoVenda[]) {
+  const obs = new Set(produtos.filter((p) => p.tipo === 'vinculo' && !p.receitaId).map((p) => p.ecleticaCodigo))
+  let total = 0
+  let coberto = 0
+  const fora = new Set<string>()
+  for (const m of medias) {
+    if (ignorado(m.codigo) || obs.has(m.codigo)) continue
+    total += m.media
+    if (ligar(m.codigo, m.nome)) coberto += m.media
+    else fora.add(m.codigo)
+  }
+  return { porcento: total ? Math.round((coberto / total) * 1000) / 10 : 100, semFicha: fora.size, obs }
+}
+
 // Arredonda para cima: unidade inteira; kg e litro com uma casa.
 export const arredondarIdeal = (q: number, unidade: string) => {
   if (q <= 0) return 0
