@@ -28,7 +28,16 @@ export function BaterPonto({ compacto = false, codigo }: { compacto?: boolean; c
   const [estado, setEstado] = useState<string | null>(null)
   const [feita, setFeita] = useState<MarcacaoPonto | null>(null)
   const usouQr = useRef<string | null>(null)
-  const carregar = useCallback(() => store.meuProximoPonto().then(setProximo, () => setProximo('entrada')), [store])
+  // Últimas batidas (Heitor, 15/10): a pessoa vê a última antes de bater a próxima, para saber se está batendo certo.
+  const [recentes, setRecentes] = useState<MarcacaoPonto[]>([])
+  const carregar = useCallback(async () => {
+    const [p, ms] = await Promise.all([
+      store.meuProximoPonto().catch(() => 'entrada' as TipoMarcacao),
+      store.marcacoesPonto(eu.id, addDias(hoje(), -1), hoje()).catch(() => [] as MarcacaoPonto[]),
+    ])
+    setProximo(p)
+    setRecentes(ms.filter((m) => !m.desconsiderada))
+  }, [store, eu.id])
   useEffect(() => { carregar() }, [carregar])
 
   const bater = useCallback(async (tipo?: TipoMarcacao, qr?: string) => {
@@ -56,6 +65,13 @@ export function BaterPonto({ compacto = false, codigo }: { compacto?: boolean; c
 
   if (!proximo) return null
   const loja = (id: string | null) => apelidoUnidade(unidades.find((u) => u.id === id)?.nome ?? '')
+  const ultima = recentes.at(-1)
+  const deHoje = recentes.filter((m) => diaSP(m.momento) === hoje())
+  const quando = (m: MarcacaoPonto) => {
+    const min = Math.round((Date.now() - new Date(m.momento).getTime()) / 60000)
+    const dia = diaSP(m.momento) === hoje() ? 'hoje' : 'ontem'
+    return `${dia} às ${horaSP(m.momento)} (há ${min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`})`
+  }
 
   return (
     <section className={`space-y-3 rounded-2xl bg-carvao p-4 text-white ${compacto ? '' : 'sm:p-5'}`}>
@@ -63,6 +79,12 @@ export function BaterPonto({ compacto = false, codigo }: { compacto?: boolean; c
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold tracking-wide text-ozzy-400 uppercase">Ponto</div>
           <div className="text-lg font-bold">Próxima: {NOME_MARCACAO[proximo]}</div>
+          {ultima && <div className="text-sm text-white/80">Último ponto: <b className="text-white">{NOME_MARCACAO[ultima.tipo]}</b> {quando(ultima)}</div>}
+          {deHoje.length > 1 && (
+            <div className="mt-1 flex flex-wrap gap-1 text-xs text-white/70">
+              Hoje:{deHoje.map((m) => <span key={m.id} className="rounded bg-white/10 px-1.5">{horaSP(m.momento)} {NOME_MARCACAO[m.tipo].toLowerCase()}</span>)}
+            </div>
+          )}
         </div>
         <button disabled={!!estado} onClick={() => bater()}
           className="rounded-2xl bg-ozzy-400 px-6 py-4 text-lg font-extrabold text-carvao shadow-sm transition active:scale-95 disabled:opacity-60">
