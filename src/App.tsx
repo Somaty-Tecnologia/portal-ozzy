@@ -37,6 +37,7 @@ import Estoque, { ABAS_ESTOQUE } from './pages/Estoque'
 import Eventos, { ABAS_EVENTOS } from './pages/Eventos'
 import Refeicoes, { ABAS_REFEICOES, souCozinha } from './pages/Refeicoes'
 import IrPara, { type Destino } from './components/IrPara'
+import AtalhosOperacao, { ATALHOS_OPERACAO } from './components/AtalhosOperacao'
 import { MeuEvento } from './pages/EventoLogistica'
 import Icone from './components/Icone'
 import logo from './assets/logo.png'
@@ -341,7 +342,10 @@ function Casca({ aoSair }: { aoSair: () => void }) {
         </div>
       )}
 
-      <main className="mx-auto max-w-5xl px-4 py-5 pb-12">{conteudo}</main>
+      <main className="mx-auto max-w-5xl px-4 py-5 pb-12">
+        {ATALHOS_OPERACAO.includes(modulo.id) && <AtalhosOperacao destinos={destinos.filter((d) => ATALHOS_OPERACAO.includes(d.caminho.split('/')[0]))} atual={caminhoDe(modulo.id, abaAtiva(modulo.id))} />}
+        {conteudo}
+      </main>
       <IrPara destinos={destinos} aberto={irPara} aoFechar={() => setIrPara(false)} />
     </div>
   )
