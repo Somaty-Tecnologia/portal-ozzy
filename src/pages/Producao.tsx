@@ -24,6 +24,9 @@ const NOME_LOJA: Record<string, string> = { 'burger-psd': 'PSD', 'burger-va': 'V
 const NOME_SETOR: Record<SetorFechamento, string> = { cozinha: 'Cozinha', atendimento: 'Atendimento' }
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const q = (n: number | null) => (n === null || n === 0 ? '' : mostrarQtd(n))
+// Quantidade do material (estoque) na unidade da lista: pacote de 2,5 kg → kg ÷ 2,5.
+const naLista = (l: { fator?: number | null }, qMaterial: number) => (l.fator ? qMaterial / l.fator : qMaterial)
+const nomeUnidade = (i: { unidadeContagem: string; fator?: number | null }, un?: string) => (i.fator ? `${i.unidadeContagem} (${mostrarQtd(i.fator)} ${un ?? ''})`.replace(' )', ')') : i.unidadeContagem)
 
 // Abas com endereço próprio (#/producao/<aba>); quem é da produção e não é gestão vê só pedidos e inventário.
 export const ABAS_PRODUCAO = [
@@ -82,7 +85,7 @@ function Pedidos() {
       setLinhas(l)
       setFechs(f)
       setFeitos(p)
-      setTem(Object.fromEntries(l.filter((x) => x.prePreparo && x.central > 0).map((x) => [x.insumoId, String(Math.round(x.central * 1000) / 1000).replace('.', ',')])))
+      setTem(Object.fromEntries(l.filter((x) => x.prePreparo && x.central > 0).map((x) => [x.insumoId, String(Math.round(naLista(x, x.central) * 1000) / 1000).replace('.', ',')])))
     } catch (e) {
       setErro((e as Error).message)
     }
@@ -105,7 +108,7 @@ function Pedidos() {
       setLancar(l)
     } catch (e) { avisar((e as Error).message) }
   }
-  const mudados = preparar.filter((l) => tem[l.insumoId] !== undefined && lerValor(tem[l.insumoId]) !== null && Math.abs((lerValor(tem[l.insumoId]) ?? 0) - l.central) > 0.0001)
+  const mudados = preparar.filter((l) => tem[l.insumoId] !== undefined && lerValor(tem[l.insumoId]) !== null && Math.abs((lerValor(tem[l.insumoId]) ?? 0) - naLista(l, l.central)) > 0.0001)
 
   const copiar = async (texto: string) => {
     try { await navigator.clipboard.writeText(texto); avisar('Copiado') } catch { avisar('Não consegui copiar') }
@@ -152,7 +155,7 @@ function Pedidos() {
                   <Botao variante="secundario" disabled={salvando} onClick={async () => {
                     setSalvando(true)
                     try {
-                      await store.contarCentral(hoje(), mudados.map((l) => ({ insumoId: l.insumoId, quantidade: lerValor(tem[l.insumoId])! })))
+                      await store.contarCentral(hoje(), mudados.map((l) => ({ insumoId: l.insumoId, quantidade: Math.round(lerValor(tem[l.insumoId])! * (l.fator ?? 1) * 1000) / 1000 })))
                       avisar('Estoque da Central atualizado')
                       await carregar()
                     } catch (e) { avisar((e as Error).message) } finally { setSalvando(false) }
@@ -172,7 +175,7 @@ function Pedidos() {
                   <tbody className="divide-y divide-stone-100">
                     {prepararOrd.map((l) => (
                       <tr key={l.insumoId}>
-                        <td className="px-2 py-2 font-semibold">{l.nome} <span className="text-xs font-normal text-stone-500">{l.unidadeContagem}</span></td>
+                        <td className="px-2 py-2 font-semibold">{l.nome} <span className="text-xs font-normal text-stone-500">{nomeUnidade(l, l.unidade)}</span></td>
                         <td className="px-1 py-2 text-right">{q(l.psd)}</td>
                         <td className="px-1 py-2 text-right">{q(l.va)}</td>
                         <td className="px-1 py-2 text-right">{mostrarQtd(l.total)}</td>
@@ -182,7 +185,7 @@ function Pedidos() {
                         </td>
                         <td className={`px-2 py-2 text-right font-bold ${fazer(l) > 0 ? '' : 'text-emerald-700'}`}>{fazer(l) > 0 ? mostrarQtd(fazer(l)) : 'tem'}</td>
                         <td className="px-2 py-1 text-right whitespace-nowrap">
-                          {feito(l) > 0 && <span className="mr-1 text-xs font-semibold text-emerald-700">{mostrarQtd(feito(l))}</span>}
+                          {feito(l) > 0 && <span className="mr-1 text-xs font-semibold text-emerald-700">{mostrarQtd(feito(l))}{l.fator ? ` ${l.unidade}` : ''}</span>}
                           <button onClick={() => abrirLancar(l)} className="rounded-lg bg-carvao px-2 py-1 text-xs font-semibold text-white hover:bg-stone-700" aria-label={`Lançar ${l.nome}`}>
                             {feito(l) > 0 ? '+ Lançar' : 'Lançar'}
                           </button>
@@ -218,7 +221,7 @@ function Pedidos() {
         </>
       )}
       {lancar && dados && (
-        <LancarProducao d={dados} inicial={{ insumoId: lancar.insumoId, quantidade: unidadeIgual(lancar.unidadeContagem, dados.insumos.find((i) => i.id === lancar.insumoId)?.unidade) && fazer(lancar) - feito(lancar) > 0 ? Math.round((fazer(lancar) - feito(lancar)) * 1000) / 1000 : null }}
+        <LancarProducao d={dados} inicial={{ insumoId: lancar.insumoId, quantidade: (lancar.fator || unidadeIgual(lancar.unidadeContagem, dados.insumos.find((i) => i.id === lancar.insumoId)?.unidade)) && fazer(lancar) * (lancar.fator ?? 1) - feito(lancar) > 0 ? Math.round((fazer(lancar) * (lancar.fator ?? 1) - feito(lancar)) * 1000) / 1000 : null }}
           aoFechar={() => setLancar(null)} aoSalvar={async () => { setLancar(null); avisar('Produção lançada: estoque atualizado'); await carregar() }} />
       )}
     </div>
@@ -266,6 +269,7 @@ function Listas() {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const [calcular, setCalcular] = useState(false)
+  const [unidadeDe, setUnidadeDe] = useState<ItemListaFechamento | null>(null)
   // Muda o campo do ideal quando a sugestão é aceita (os campos são não controlados).
   const [versao, setVersao] = useState(0)
   const carregar = useCallback(async () => {
@@ -361,6 +365,10 @@ function Listas() {
             avisar('Ideal preenchido pelas vendas. Confira e clique em Salvar.')
           }} />
       )}
+      {unidadeDe && (
+        <UnidadeDaLista item={unidadeDe} ins={insumos.find((x) => x.id === unidadeDe.insumoId)} aoFechar={() => setUnidadeDe(null)}
+          aoEscolher={(u, fator) => { mudar(unidadeDe.id, { unidadeContagem: u, fator }); setUnidadeDe(null) }} />
+      )}
       {(itens?.length ?? 0) > 8 && <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar na lista" aria-label="Procurar na lista" className={`${estiloEntrada} max-w-xs`} />}
       {!itens ? <p className="text-stone-400">Carregando…</p> : (
         <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
@@ -376,7 +384,11 @@ function Listas() {
                 {lista.map((i) => (
                   <tr key={i.id}>
                     <td className="min-w-48 px-3 py-1">{i.nome}</td>
-                    <td className="px-1 py-1"><input value={i.unidadeContagem} onChange={(e) => mudar(i.id, { unidadeContagem: e.target.value })} className={`${estiloEntrada} w-14! px-1! text-center`} aria-label={`Unidade de ${i.nome}`} /></td>
+                    <td className="px-1 py-1">
+                      <button onClick={() => setUnidadeDe(i)} className="min-w-14 rounded-lg px-1.5 py-1 text-center text-xs font-semibold ring-1 ring-stone-300 hover:bg-stone-50" aria-label={`Unidade de ${i.nome}`}>
+                        {i.unidadeContagem}{i.fator ? <span className="block font-normal text-stone-500">{mostrarQtd(i.fator)} {insumos.find((x) => x.id === i.insumoId)?.unidade}</span> : null}
+                      </button>
+                    </td>
                     {i.ideal.map((v, k) => (
                       <td key={k} className="px-1 py-1">
                         <input key={versao} inputMode="decimal" defaultValue={v === null ? '' : String(v).replace('.', ',')} aria-label={`Ideal de ${i.nome} na ${DIAS_CURTOS[k]}`}
@@ -406,7 +418,79 @@ function Listas() {
   )
 }
 
+// ——— Unidade em que a loja pede (Heitor, 15/10) ———
+// Batata e nuggets em pacote, sobrecoxa em unidades de sanduíche: quem conta não precisa fazer conta. O fator diz
+// quanto 1 unidade da lista vale no material; a ficha de um produto que usa o material dá o fator do "sanduíche".
+
+function UnidadeDaLista({ item, ins, aoEscolher, aoFechar }: {
+  item: ItemListaFechamento
+  ins?: Insumo
+  aoEscolher: (unidade: string, fator: number | null) => void
+  aoFechar: () => void
+}) {
+  const { store } = useApp()
+  const un = ins?.unidade ?? 'un'
+  const [nome, setNome] = useState(item.fator ? item.unidadeContagem : '')
+  const [fator, setFator] = useState(item.fator ? String(item.fator).replace('.', ',') : '')
+  const [fichas, setFichas] = useState<{ nome: string; q: number }[] | null>(null)
+  useEffect(() => {
+    if (!ins) return
+    Promise.all([store.receitas(), store.versoesReceitas()]).then(([rs, vs]) => {
+      const cat = montarCatalogo([ins], rs, vs)
+      const out: { nome: string; q: number }[] = []
+      for (const r of rs) {
+        if (r.tipo !== 'produto' || !r.ativo) continue
+        const q = consumo(cat, [{ ligacao: { receitaId: r.id }, quantidade: 1, delivery: false }], new Set([ins.id])).get(ins.id)
+        if (q && q > 0) out.push({ nome: r.nome, q: Math.round(q * 10000) / 10000 })
+      }
+      setFichas(out.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).slice(0, 30))
+    }, () => setFichas([]))
+  }, [store, ins])
+  const padrao = un === 'kg' ? 'Kg' : un === 'l' ? 'Lts' : 'Uni'
+  const f = lerValor(fator)
+  return (
+    <Modal titulo={`Como a loja pede ${item.nome}`} aberto aoFechar={aoFechar}>
+      <div className="space-y-3 text-sm">
+        <p className="text-stone-600">Vale para as duas lojas. O estoque continua em {un}; o portal converte o pedido, o ideal e a separação.</p>
+        <div className="flex flex-wrap gap-2">
+          <Botao variante={!item.fator ? 'primario' : 'secundario'} onClick={() => aoEscolher(padrao, null)}>Em {un} (como no estoque)</Botao>
+          {ins?.embalagem && ins.embalagemQtd && ins.embalagemQtd !== 1 && (
+            <Botao variante="secundario" onClick={() => aoEscolher(ins.embalagem!.replace(/^./, (c) => c.toUpperCase()), ins.embalagemQtd!)}>
+              Em {ins.embalagem} de {mostrarQtd(ins.embalagemQtd)} {un}
+            </Botao>
+          )}
+        </div>
+        <div className="space-y-2 rounded-xl bg-stone-50 p-3">
+          <p className="font-semibold">Outra unidade</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Pacote, sanduíche, caixa…" aria-label="Nome da unidade" className={`${estiloEntrada} w-44!`} />
+            <span>com</span>
+            <input value={fator} onChange={(e) => setFator(e.target.value)} inputMode="decimal" placeholder="2,5" aria-label={`Quanto vale em ${un}`} className={`${estiloEntrada} w-20! text-center`} />
+            <span>{un}</span>
+            <Botao disabled={!nome.trim() || !f || f <= 0} onClick={() => aoEscolher(nome.trim().replace(/^./, (c) => c.toUpperCase()), f)}>Usar</Botao>
+          </div>
+          {fichas === null ? <p className="text-stone-400">Procurando fichas que usam este item…</p> : fichas.length > 0 && (
+            <div>
+              <p className="text-xs text-stone-500">Ou pelo que vai em 1 produto (para pedir em unidades de sanduíche):</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {fichas.map((x) => (
+                  <button key={x.nome} onClick={() => { setNome('Sanduíche'); setFator(String(x.q).replace('.', ',')) }} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-stone-300 hover:bg-stone-100">
+                    {x.nome}: {mostrarQtd(x.q)} {un}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-stone-500">Pedidos já enviados ficam na unidade em que foram feitos.</p>
+      </div>
+    </Modal>
+  )
+}
+
 // ——— Ideal pelas vendas (Heitor, 15/10) ———
+interface Origem { nome: string; vendido: number[]; gasto: number[] }
+const um = (n: number) => mostrarQtd(Math.round(n * 10) / 10)
 // Para cada dia da semana: a média do que a loja vendeu nesse dia (últimas semanas) × fichas, parando nos itens
 // da lista (um pré-preparo da lista conta como ele mesmo), mais a margem de segurança, arredondado para cima.
 
@@ -420,8 +504,9 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
   const { store } = useApp()
   const [semanas, setSemanas] = useState(8)
   const [margem, setMargem] = useState(20)
-  const [calc, setCalc] = useState<{ porItem: Map<string, number[]>; dias: number } | null>(null)
+  const [calc, setCalc] = useState<{ porItem: Map<string, number[]>; dias: number; origem: Map<string, Map<string, Origem>> } | null>(null)
   const [erro, setErro] = useState('')
+  const [aberto, setAberto] = useState<string | null>(null)
   useEffect(() => {
     let vivo = true
     setCalc(null)
@@ -440,7 +525,21 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
           porItem.set(id, l)
         }
       }
-      setCalc({ porItem, dias: Math.max(0, ...daLoja.map((m) => m.dias)) })
+      // De onde vem cada número (Heitor, 15/10: conferir o brownie): produto por produto, vendido e gasto por dia.
+      const origem = new Map<string, Map<string, Origem>>()
+      for (const m of daLoja) {
+        const ligacao = ligar(m.codigo, m.nome)
+        if (!ligacao) continue
+        for (const [id, q] of consumo(cat, [{ ligacao, quantidade: m.media, delivery: m.delivery }], parar)) {
+          const porProduto = origem.get(id) ?? new Map<string, Origem>()
+          const o = porProduto.get(m.codigo) ?? { nome: m.nome, vendido: Array(7).fill(0), gasto: Array(7).fill(0) }
+          o.vendido[m.diaSemana] += m.media
+          o.gasto[m.diaSemana] += q
+          porProduto.set(m.codigo, o)
+          origem.set(id, porProduto)
+        }
+      }
+      setCalc({ porItem, dias: Math.max(0, ...daLoja.map((m) => m.dias)), origem })
     }, (e) => vivo && setErro((e as Error).message))
     return () => { vivo = false }
   }, [store, loja, semanas, insumos, itens])
@@ -449,11 +548,18 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
   const linhas = itens.map((i) => {
     const ins = porId.get(i.insumoId)
     const c = calc?.porItem.get(i.insumoId)
-    const mesmaUnidade = unidadeIgual(i.unidadeContagem, ins?.unidade)
-    const proposto = c && mesmaUnidade && ins ? c.map((q) => (q > 0 ? arredondarIdeal(q * (1 + margem / 100), ins.unidade) : 0)) : null
-    return { i, ins, proposto, motivo: !c ? 'sem venda pelas fichas' : !mesmaUnidade ? `conta em ${i.unidadeContagem}, a ficha usa ${ins?.unidade ?? '?'}` : '' }
+    const mesmaUnidade = !!i.fator || unidadeIgual(i.unidadeContagem, ins?.unidade)
+    // Com fator (pacote, sanduíche), o ideal é em unidades inteiras da lista.
+    const proposto = c && mesmaUnidade && ins
+      ? c.map((q) => (q > 0 ? (i.fator ? arredondarIdeal((q * (1 + margem / 100)) / i.fator, 'un') : arredondarIdeal(q * (1 + margem / 100), ins.unidade)) : 0))
+      : null
+    return { i, ins, proposto, motivo: !c ? 'sem venda pelas fichas' : !mesmaUnidade ? `conta em ${i.unidadeContagem}, a ficha usa ${ins?.unidade ?? '?'}: escolha a unidade na lista` : '' }
   })
   const comProposta = linhas.filter((l) => l.proposto)
+  // Quais itens mudar (Heitor, 15/10): começa com todos os calculados marcados.
+  const [fora, setFora] = useState<Set<string>>(new Set())
+  const escolhidos = comProposta.filter((l) => !fora.has(l.i.id))
+  const marcar = (id: string, sim: boolean) => setFora((s) => { const n = new Set(s); if (sim) n.delete(id); else n.add(id); return n })
   return (
     <Modal titulo={`Ideal pelas vendas · ${NOME_LOJA[loja] ?? loja}`} aberto aoFechar={aoFechar}>
       <div className="space-y-3">
@@ -478,11 +584,18 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
           <>
             <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-stone-200">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-stone-500"><th className="px-2 py-2">Item</th>{DIAS_CURTOS.map((d) => <th key={d} className="px-1 py-2 text-center">{d}</th>)}</tr></thead>
+                <thead><tr className="text-left text-xs text-stone-500">
+                  <th className="px-2 py-2"><input type="checkbox" aria-label="Marcar todos" checked={escolhidos.length === comProposta.length && comProposta.length > 0}
+                    onChange={(e) => setFora(e.target.checked ? new Set() : new Set(comProposta.map((l) => l.i.id)))} /></th>
+                  <th className="px-2 py-2">Item</th>{DIAS_CURTOS.map((d) => <th key={d} className="px-1 py-2 text-center">{d}</th>)}
+                </tr></thead>
                 <tbody className="divide-y divide-stone-100">
-                  {linhas.map(({ i, proposto, motivo }) => (
-                    <tr key={i.id}>
-                      <td className="min-w-40 px-2 py-1">{i.nome} <span className="text-xs text-stone-500">{i.unidadeContagem}</span>{motivo && <div className="text-xs text-stone-400">{motivo}</div>}</td>
+                  {linhas.map(({ i, ins, proposto, motivo }) => (
+                    <tr key={i.id} className={proposto && fora.has(i.id) ? 'opacity-50' : ''}>
+                      <td className="px-2 py-1">{proposto && <input type="checkbox" checked={!fora.has(i.id)} onChange={(e) => marcar(i.id, e.target.checked)} aria-label={`Mudar o ideal de ${i.nome}`} />}</td>
+                      <td className="min-w-40 px-2 py-1">
+                        <button className="text-left hover:underline" onClick={() => setAberto(aberto === i.id ? null : i.id)} aria-expanded={aberto === i.id}>{i.nome}</button>{' '}
+                        <span className="text-xs text-stone-500">{nomeUnidade(i, ins?.unidade)}</span>{motivo && <div className="text-xs text-stone-400">{motivo}</div>}</td>
                       {DIAS_CURTOS.map((_, k) => {
                         const atual = i.ideal[k]
                         const novo = proposto?.[k]
@@ -499,13 +612,40 @@ function IdealPelasVendas({ loja, itens, insumos, aoUsar, aoFechar }: {
                 </tbody>
               </table>
             </div>
+            {aberto && (() => {
+              const it = itens.find((x) => x.id === aberto)!
+              const un = porId.get(it.insumoId)?.unidade ?? ''
+              const prods = [...(calc.origem.get(it.insumoId)?.values() ?? [])].sort((a, b) => b.gasto.reduce((t, x) => t + x, 0) - a.gasto.reduce((t, x) => t + x, 0))
+              return (
+                <div className="rounded-2xl bg-stone-50 p-3 ring-1 ring-stone-200">
+                  <p className="text-sm font-semibold">De onde vem o número de {it.nome}</p>
+                  <p className="text-xs text-stone-500">Média por dia da semana nas últimas {semanas} semanas (só dias em que a loja vendeu), antes da margem. Vendido = produtos; gasto = em {un}.</p>
+                  {!prods.length ? <p className="mt-2 text-sm text-stone-500">Nenhum produto vendido usa este item pelas fichas.</p> : (
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-left text-stone-500"><th className="py-1 pr-2">Produto</th>{DIAS_CURTOS.map((d) => <th key={d} className="px-1 py-1 text-center">{d}</th>)}<th className="px-1 py-1 text-right">Semana</th></tr></thead>
+                        <tbody className="divide-y divide-stone-200">
+                          {prods.map((o) => (
+                            <tr key={o.nome}>
+                              <td className="py-1 pr-2">{o.nome}</td>
+                              {o.vendido.map((v, k) => <td key={k} className="px-1 py-1 text-center">{v ? <>{um(v)}<div className="text-stone-400">{um(o.gasto[k])}</div></> : ''}</td>)}
+                              <td className="px-1 py-1 text-right font-semibold">{um(o.vendido.reduce((t, x) => t + x, 0))}<div className="font-normal text-stone-400">{um(o.gasto.reduce((t, x) => t + x, 0))} {un}</div></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             <p className="text-xs text-stone-500">
-              Em negrito, o calculado (riscado, o de hoje). Itens sem cálculo ficam como estão. Se a Central não entrega em algum dia, o dia anterior
+              Clique no nome do item para ver de onde vem o número. Em negrito, o calculado (riscado, o de hoje). Só os itens marcados mudam; os outros ficam como estão. Se a Central não entrega em algum dia, o dia anterior
               precisa cobrir os dois: ajuste à mão depois.
             </p>
             <div className="flex gap-2">
-              <Botao disabled={!comProposta.length} onClick={() => aoUsar(new Map(comProposta.map((l) => [l.i.id, l.proposto!.map((x) => (x > 0 ? x : null))])))}>
-                Usar nos {comProposta.length} itens calculados
+              <Botao disabled={!escolhidos.length} onClick={() => aoUsar(new Map(escolhidos.map((l) => [l.i.id, l.proposto!.map((x) => (x > 0 ? x : null))])))}>
+                Usar nos {escolhidos.length} {escolhidos.length === 1 ? 'item marcado' : 'itens marcados'}
               </Botao>
               <Botao variante="fantasma" onClick={aoFechar}>Fechar</Botao>
             </div>

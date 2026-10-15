@@ -1739,7 +1739,7 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async pedidosProducao(para) {
       return (ok(await sb.rpc('pedidos_producao', { p_para: para })) ?? []).map((r: any): PedidoProducao => ({
         insumoId: r.insumo_id, nome: r.nome, setor: r.setor, unidadeContagem: r.unidade_contagem, unidade: r.unidade, prePreparo: r.pre_preparo,
-        psd: numeroOuNulo(r.psd), va: numeroOuNulo(r.va), total: Number(r.total), central: Number(r.central),
+        psd: numeroOuNulo(r.psd), va: numeroOuNulo(r.va), total: Number(r.total), central: Number(r.central), fator: numeroOuNulo(r.fator),
       }))
     },
     async contarCentral(data, itens) {
@@ -1748,13 +1748,13 @@ export function criarSupabaseStore(url: string, chave: string): Store {
     async itensListaFechamento(unidadeId, setor) {
       const linhas = ok(await sb.from('fechamento_itens').select('*, insumos(nome, categoria, pre_preparo)').eq('unidade_id', unidadeId).eq('setor', setor).order('ordem')) ?? []
       return linhas.map((r: any): ItemListaFechamento => ({
-        id: r.id, unidadeId: r.unidade_id, setor: r.setor, insumoId: r.insumo_id, nome: r.insumos?.nome ?? '', categoria: r.insumos?.categoria ?? null, unidadeContagem: r.unidade_contagem,
+        id: r.id, unidadeId: r.unidade_id, setor: r.setor, insumoId: r.insumo_id, nome: r.insumos?.nome ?? '', categoria: r.insumos?.categoria ?? null, unidadeContagem: r.unidade_contagem, fator: numeroOuNulo(r.fator),
         ordem: r.ordem, ideal: Array.from({ length: 7 }, (_, k) => numeroOuNulo(r.ideal?.[k])), prePreparo: !!r.insumos?.pre_preparo, ativo: r.ativo,
       }))
     },
     async salvarItemListaFechamento(i) {
       // A lista é a mesma nas duas lojas (Heitor, 09/10): item, unidade, ordem e ativo valem para as duas; o ideal é de cada loja.
-      const comum = { unidade_contagem: i.unidadeContagem.trim() || 'Uni', ordem: i.ordem, ativo: i.ativo }
+      const comum = { unidade_contagem: i.unidadeContagem.trim() || 'Uni', fator: i.fator ?? null, ordem: i.ordem, ativo: i.ativo }
       const ideal = i.ideal.some((x) => x !== null) ? i.ideal : null
       // Item tirado antes (inativo) e adicionado de novo volta a valer nas duas lojas.
       ok(await sb.from('fechamento_itens').upsert(LOJAS_FECHAMENTO.map((u) => ({ ...comum, unidade_id: u, setor: i.setor, insumo_id: i.insumoId })),

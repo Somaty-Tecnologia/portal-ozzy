@@ -3341,7 +3341,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
           const ins = insumosDemo.find((x) => x.id === it.insumoId)!
           const p = r.get(ins.id) ?? {
             insumoId: ins.id, nome: ins.nome, setor: f.setor, unidadeContagem: it.unidadeContagem, unidade: ins.unidade, prePreparo: prePreparoDemo.has(ins.id),
-            psd: null, va: null, total: 0, central: movimentosDemo.filter((m) => m.centroCustoId === 'central' && m.insumoId === ins.id).reduce((t, m) => t + m.quantidade, 0),
+            psd: null, va: null, total: 0, central: movimentosDemo.filter((m) => m.centroCustoId === 'central' && m.insumoId === ins.id).reduce((t, m) => t + m.quantidade, 0), fator: it.fator ?? null,
           }
           if (f.unidadeId === 'burger-psd') p.psd = (p.psd ?? 0) + c.pedido!
           else p.va = (p.va ?? 0) + c.pedido!
@@ -3417,7 +3417,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async salvarItemListaFechamento(i) {
       exigeGestao()
-      const comum = { unidadeContagem: i.unidadeContagem.trim() || 'Uni', ordem: i.ordem, ativo: i.ativo }
+      const comum = { unidadeContagem: i.unidadeContagem.trim() || 'Uni', fator: i.fator ?? null, ordem: i.ordem, ativo: i.ativo }
       const atual = listaFechDemo.find((x) => x.unidadeId === i.unidadeId && x.setor === i.setor && x.insumoId === i.insumoId)
       if (atual) {
         // Item tirado antes e adicionado de novo volta a valer nas duas lojas.

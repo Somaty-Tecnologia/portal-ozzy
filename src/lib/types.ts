@@ -1609,6 +1609,8 @@ export interface PedidoProducao {
   va: number | null
   total: number
   central: number
+  // Quanto 1 unidade do pedido vale na unidade do material (pacote = 2,5 kg); nulo = a mesma.
+  fator: number | null
 }
 // Cadastro da lista (gestão): ideal de segunda (0) a domingo (6).
 export interface ItemListaFechamento {
@@ -1619,6 +1621,8 @@ export interface ItemListaFechamento {
   nome: string
   categoria?: string | null
   unidadeContagem: string
+  // Quanto 1 unidade da lista vale na unidade do material (Heitor, 15/10: batata em pacote); nulo = a mesma.
+  fator?: number | null
   ordem: number
   ideal: (number | null)[]
   prePreparo: boolean
