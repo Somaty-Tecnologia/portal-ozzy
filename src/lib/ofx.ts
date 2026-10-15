@@ -111,23 +111,63 @@ export function partesExtrato(descricao: string): { tipo: string | null; nome: s
 // meio do dia, um lançamento que entra depois pode mudar a numeração, e o mesmo FITID passa a ser outro lançamento.
 // Por isso o repetido é reconhecido pelo dia + valor + texto (contando repetições iguais), não só pelo FITID;
 // e um lançamento novo cujo FITID já foi usado ganha um sufixo, para não ser descartado.
+// 15/10: o Itaú também muda o texto do mesmo lançamento entre um OFX e outro ("PAMA COMERCI PAMA COMERCIO…" e
+// "PAMA COMERCIO…"). O que sobra sem texto igual é comparado só por dia + valor, contando: se o banco já tem 1
+// lançamento de R$ 100 no dia e o arquivo traz 2, só 1 é novo.
 type Mov = ExtratoOfx['movimentos'][number]
-export function movimentosNovos(movs: Mov[], existentes: { fitid: string; data: string; valor: number; descricao: string | null }[]): Mov[] {
-  const chave = (m: { data: string; valor: number; descricao: string | null }) => `${m.data}|${Math.round(m.valor * 100)}|${m.descricao ?? ''}`
-  const restam = new Map<string, number>()
-  for (const x of existentes) restam.set(chave(x), (restam.get(chave(x)) ?? 0) + 1)
+type Existente = { fitid: string; data: string; valor: number; descricao: string | null }
+export function movimentosNovos(movs: Mov[], existentes: Existente[]): Mov[] {
+  const centavos = (v: number) => Math.round(v * 100)
+  const chave = (m: { data: string; valor: number; descricao: string | null }) => `${m.data}|${centavos(m.valor)}|${m.descricao ?? ''}`
+  const diaValor = (m: { data: string; valor: number }) => `${m.data}|${centavos(m.valor)}`
+  const restam = new Map<string, Existente[]>()
+  for (const x of existentes) restam.set(chave(x), [...(restam.get(chave(x)) ?? []), x])
+  // 1ª volta: texto igual.
+  const sobra: Mov[] = []
+  const casados = new Set<Existente>()
+  for (const m of movs) {
+    const x = restam.get(chave(m))?.shift()
+    if (x) casados.add(x)
+    else sobra.push(m)
+  }
+  // 2ª volta: dia + valor, entre os que ainda não casaram.
+  const porDia = new Map<string, number>()
+  for (const x of existentes) if (!casados.has(x)) porDia.set(diaValor(x), (porDia.get(diaValor(x)) ?? 0) + 1)
   const usados = new Set(existentes.map((x) => x.fitid))
   const novos: Mov[] = []
-  for (const m of movs) {
-    const n = restam.get(chave(m)) ?? 0
+  for (const m of sobra) {
+    const n = porDia.get(diaValor(m)) ?? 0
     if (n > 0) {
-      restam.set(chave(m), n - 1)
+      porDia.set(diaValor(m), n - 1)
       continue
     }
     let fitid = m.fitid
-    for (let k = 1; usados.has(fitid); k++) fitid = `${m.fitid}~${Math.round(m.valor * 100)}${k > 1 ? `#${k}` : ''}`
+    for (let k = 1; usados.has(fitid); k++) fitid = `${m.fitid}~${centavos(m.valor)}${k > 1 ? `#${k}` : ''}`
     usados.add(fitid)
     novos.push({ ...m, fitid })
   }
   return novos
+}
+
+// Repetidos que já entraram (15/10, antes da 2ª volta acima): mesma conta, dia e valor, vindos de importações
+// diferentes. Em cada dia + valor, o número certo de lançamentos é o maior que uma importação sozinha trouxe; o que
+// passa disso é repetido. Sai primeiro o que não foi conciliado e, entre iguais, o importado por último.
+export function repetidosNoExtrato<T extends { id: string; banco: string; agencia: string; conta: string; data: string; valor: number; status: string; importadoEm: string }>(movs: T[]): T[] {
+  const grupos = new Map<string, T[]>()
+  for (const m of movs) {
+    const k = `${m.banco}|${m.agencia}|${m.conta}|${m.data}|${Math.round(m.valor * 100)}`
+    grupos.set(k, [...(grupos.get(k) ?? []), m])
+  }
+  const fora: T[] = []
+  for (const g of grupos.values()) {
+    if (g.length < 2) continue
+    const porImportacao = new Map<string, number>()
+    for (const m of g) porImportacao.set(m.importadoEm, (porImportacao.get(m.importadoEm) ?? 0) + 1)
+    const certos = Math.max(...porImportacao.values())
+    if (g.length <= certos) continue
+    const peso = (m: T) => (m.status === 'pendente' ? 0 : m.status === 'ignorado' ? 1 : 2)
+    const ordem = [...g].sort((a, b) => peso(a) - peso(b) || b.importadoEm.localeCompare(a.importadoEm))
+    fora.push(...ordem.slice(0, g.length - certos))
+  }
+  return fora
 }

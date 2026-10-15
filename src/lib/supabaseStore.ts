@@ -1673,6 +1673,9 @@ export function criarSupabaseStore(url: string, chave: string): Store {
       if (m?.status === 'ignorado') ok(await sb.from('extrato_movimentos').update({ status: 'pendente', observacao: null }).eq('id', movimentoId))
       else ok(await sb.rpc('desconciliar_movimento', { p_mov: movimentoId }))
     },
+    async excluirMovimentoRepetido(movimentoId) {
+      ok(await sb.rpc('excluir_movimento_duplicado', { p_mov: movimentoId }))
+    },
     async registrarMovimento(movimentoId, r) {
       ok(await sb.rpc('registrar_movimento', {
         p_mov: movimentoId, p_centro: r.centroCustoId, p_conta: r.contaId, p_favorecido: r.favorecido ?? '', p_descricao: r.descricao, p_chave: r.chave, p_fornecedor: r.fornecedorId ?? null,

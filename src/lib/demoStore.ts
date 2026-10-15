@@ -3171,6 +3171,18 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       Object.assign(m, { status: 'pendente', contaPagarId: null, observacao: null })
       return espera(undefined)
     },
+    async excluirMovimentoRepetido(movimentoId) {
+      exigeFinanceiro()
+      const m = extratoDemo.find((x) => x.id === movimentoId)
+      if (!m) return espera(undefined)
+      if (!extratoDemo.some((x) => x.id !== m.id && x.banco === m.banco && x.agencia === m.agencia && x.conta === m.conta && x.data === m.data && x.valor === m.valor))
+        throw new Error('Não há outro lançamento igual (mesmo dia e valor) para este ser o repetido.')
+      const c = contasPagarDemo.find((x) => x.id === m.contaPagarId)
+      await this.desconciliarMovimento(movimentoId)
+      if (c?.observacao === 'Lançada pela conciliação bancária') contasPagarDemo.splice(contasPagarDemo.indexOf(c), 1)
+      extratoDemo.splice(extratoDemo.indexOf(m), 1)
+      return espera(undefined)
+    },
     async pagamentosFuncionario(fid) {
       exigeGestao()
       return espera(contasPagarDemo.filter((c) => c.funcionarioId === fid || (c.origem ?? '').startsWith(`sal:${fid}:`))

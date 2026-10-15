@@ -4,7 +4,7 @@ import { useApp } from '../lib/contexto'
 import { dataCurta, diaSemana } from '../lib/datas'
 import { type GrupoLote, type TipoQuem, LIMITE_DIARIA, aprendidosDe, candidatas, pedidoParecido, quemParece, sugestaoPessoal, gruposLote, lotesPara, nomeLote, sugestoes, sugestoesLote } from '../lib/conciliacao'
 import { nomeCentro, nomeConta, reais } from '../lib/financeiro'
-import { chaveExtrato, lerArquivoOfx, partesExtrato } from '../lib/ofx'
+import { chaveExtrato, lerArquivoOfx, partesExtrato, repetidosNoExtrato } from '../lib/ofx'
 
 const simplesBusca = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 import { garantirFornecedor } from './LancarContas'
@@ -51,6 +51,7 @@ export default function Conciliacao() {
   const [lancarPedido, setLancarPedido] = useState<PedidoCompra | null>(null)
   const [ignorar, setIgnorar] = useState<MovimentoExtrato | null>(null)
   const [recorrenteDe, setRecorrenteDe] = useState<ContaPagar | null>(null)
+  const [verRepetidos, setVerRepetidos] = useState(false)
   const arquivo = useRef<HTMLInputElement>(null)
 
   const carregar = useCallback(
@@ -117,6 +118,7 @@ export default function Conciliacao() {
   const contasBanco = [...new Map(d.movs.map((m) => [`${m.banco}|${m.agencia}|${m.conta}`, m])).values()]
   const daConta = (m: MovimentoExtrato) => !contaBanco || `${m.banco}|${m.agencia}|${m.conta}` === contaBanco
   const movs = d.movs.filter(daConta)
+  const repetidos = repetidosNoExtrato(movs)
   const pendentes = movs.filter((m) => m.status === 'pendente' && m.valor < 0)
   const comSugestao = pendentes.filter((m) => sug.has(m.id) || sugLote.has(m.id))
   const regraDe = (m: MovimentoExtrato) => d.regras.find((r) => r.chave === chaveExtrato(m.descricao))
@@ -215,6 +217,12 @@ export default function Conciliacao() {
               <p className="text-xs text-stone-400">{saldo ? `em ${dataCurta(saldo.data)}` : 'o OFX não trouxe'}</p>
             </Cartao>
           </div>
+          {repetidos.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 p-3 text-sm ring-1 ring-amber-200">
+              <span><b>{repetidos.length} lançamento{repetidos.length === 1 ? '' : 's'} entr{repetidos.length === 1 ? 'ou' : 'aram'} duas vezes</b> (mesmo dia e valor, vindos de outro OFX).</span>
+              <Botao className="px-3! py-1.5! text-sm!" onClick={() => setVerRepetidos(true)}>Ver e remover</Botao>
+            </div>
+          )}
           {comSugestao.length > 0 && filtro === 'pendentes' && (
             <Botao variante="secundario" onClick={confirmarTodas}>Confirmar as {comSugestao.length} sugestões</Botao>
           )}
@@ -370,6 +378,7 @@ export default function Conciliacao() {
           aoSalvar={() => { setRecorrenteDe(null); setAviso('Recorrente cadastrado. Aparece em Financeiro › Recorrentes.') }}
         />
       )}
+      {verRepetidos && <RemoverRepetidos d={d} repetidos={repetidos} aoFechar={() => setVerRepetidos(false)} aoSalvar={(msg) => { setVerRepetidos(false); setAviso(msg); carregar() }} />}
       {ignorar && <Ignorar m={ignorar} aoFechar={() => setIgnorar(null)} aoSalvar={() => { setIgnorar(null); carregar() }} />}
     </div>
   )
@@ -751,6 +760,65 @@ function LancarDespesa({ d, m, pedido, aoFechar, aoSalvar }: { d: Dados; m: Movi
           {comp !== 'nota' && (
             <Botao onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : comp === 'recibo' ? 'Continuar para os itens' : 'Lançar'}</Botao>
           )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// Lançamentos que entraram duas vezes (Heitor, 15/10): mostra cada repetido ao lado do que fica.
+function RemoverRepetidos({ d, repetidos, aoFechar, aoSalvar }: { d: Dados; repetidos: MovimentoExtrato[]; aoFechar: () => void; aoSalvar: (msg: string) => void }) {
+  const { store } = useApp()
+  const [marcados, setMarcados] = useState(() => new Set(repetidos.map((m) => m.id)))
+  const [salvando, setSalvando] = useState(false)
+  const fora = new Set(repetidos.map((m) => m.id))
+  const conta = (m: MovimentoExtrato) => (m.contaPagarId ? d.contas.find((c) => c.id === m.contaPagarId) : undefined)
+  const situacao = (m: MovimentoExtrato) => {
+    if (m.status === 'ignorado') return `Ignorado${m.observacao ? `: ${m.observacao}` : ''}`
+    if (m.status !== 'conciliado') return 'A conciliar'
+    const c = conta(m)
+    const lote = d.contas.filter((x) => x.extratoMovimentoId === m.id).length
+    return c ? `Conciliado: ${c.descricao} · ${nomeCentro(d.centros.find((x) => x.id === c.centroCustoId))}` : lote ? `Conciliado com ${lote} contas` : 'Conciliado'
+  }
+  const ficam = (m: MovimentoExtrato) => d.movs.filter((x) => !fora.has(x.id) && x.banco === m.banco && x.agencia === m.agencia && x.conta === m.conta && x.data === m.data && x.valor === m.valor)
+  async function remover() {
+    setSalvando(true)
+    let n = 0
+    let falha = ''
+    for (const m of repetidos.filter((x) => marcados.has(x.id))) {
+      try {
+        await store.excluirMovimentoRepetido(m.id)
+        n++
+      } catch (e) {
+        falha = (e as Error).message
+      }
+    }
+    setSalvando(false)
+    aoSalvar(`${n} lançamento${n === 1 ? '' : 's'} repetido${n === 1 ? '' : 's'} removido${n === 1 ? '' : 's'}.${falha ? ` Algum não saiu: ${falha}` : ''}`)
+  }
+  return (
+    <Modal titulo="Lançamentos repetidos" aberto aoFechar={aoFechar}>
+      <div className="space-y-3">
+        <p className="text-sm text-stone-600">
+          O Itaú mudou o texto de alguns lançamentos de um OFX para outro, e eles entraram de novo. Cada um abaixo tem um igual que fica.
+          Se o repetido foi conciliado, a conciliação é desfeita e a despesa que ela criou é apagada.
+        </p>
+        <div className="max-h-[55vh] divide-y divide-stone-100 overflow-y-auto rounded-xl ring-1 ring-stone-200">
+          {repetidos.map((m) => (
+            <label key={m.id} className="flex cursor-pointer items-start gap-2 px-3 py-2 text-sm">
+              <input type="checkbox" className="mt-1" checked={marcados.has(m.id)}
+                onChange={(e) => setMarcados((s) => { const n = new Set(s); if (e.target.checked) n.add(m.id); else n.delete(m.id); return n })} />
+              <span className="min-w-0 flex-1">
+                <span className="flex justify-between gap-2"><b className="min-w-0 break-words">{dataCurta(m.data)} · {partesExtrato(m.descricao).nome}</b><b className="shrink-0">{reais(m.valor)}</b></span>
+                <span className="block text-xs text-red-700">Sai: {situacao(m)}</span>
+                {ficam(m).slice(0, 1).map((x) => <span key={x.id} className="block text-xs text-green-700">Fica: {partesExtrato(x.descricao).nome} · {situacao(x)}</span>)}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Botao variante="secundario" onClick={aoFechar}>Cancelar</Botao>
+          <Botao onClick={remover} disabled={salvando || !marcados.size}>{salvando ? 'Removendo…' : `Remover ${marcados.size} repetido${marcados.size === 1 ? '' : 's'}`}</Botao>
         </div>
       </div>
     </Modal>

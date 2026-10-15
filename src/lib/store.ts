@@ -456,6 +456,8 @@ export interface Store {
   conciliarLote(movimentoId: string, contaIds: string[], contaDiferencaId: string | null): Promise<void>
   conciliarMovimento(movimentoId: string, contaPagarId: string): Promise<void>
   desconciliarMovimento(movimentoId: string): Promise<void>
+  // Apaga um lançamento do extrato que entrou duas vezes (desfaz a conciliação; a despesa que ela criou sai junto).
+  excluirMovimentoRepetido(movimentoId: string): Promise<void>
   registrarMovimento(movimentoId: string, r: { centroCustoId: string; contaId: string | null; favorecido: string | null; fornecedorId?: string | null; funcionarioId?: string | null; motoboyId?: string | null; descricao: string; chave: string }): Promise<void>
   pagamentosFuncionario(funcionarioId: string): Promise<PagamentoPessoa[]>
   ignorarMovimento(movimentoId: string, motivo: string, chaveSempre: string | null): Promise<void>
