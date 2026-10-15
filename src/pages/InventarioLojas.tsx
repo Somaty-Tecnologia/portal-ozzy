@@ -61,8 +61,6 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
   const gestao = podeGerenciar(eu.nivel)
   const [todos, setTodos] = useState<Insumo[] | null>(null)
   const [curva, setCurva] = useState<Map<string, CurvaAbc>>(new Map())
-  // Semanal = só a curva A das compras (o que pesa no CMV); uma vez por mês, tudo.
-  const [modo, setModo] = useState<'a' | 'tudo'>('a')
   const [saldos, setSaldos] = useState<Map<string, number> | null>(null)
   const [historico, setHistorico] = useState<InventarioEstoque[]>([])
   const [erro, setErro] = useState('')
@@ -90,8 +88,6 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
       setCurva(mapa)
       setHistorico(hist)
       const feito = hist.find((h) => h.data === data)
-      // Sem curva (sem compras ainda) não há o que filtrar; contagem já feita com itens fora da A abre em "tudo".
-      if (!abc.length || feito?.itens.some((i) => mapa.get(i.insumoId)?.classe !== 'A')) setModo('tudo')
       if (feito) {
         setCont(Object.fromEntries(feito.itens.map((i) => [i.insumoId, numTexto(i.quantidade)])))
         setResponsavel(feito.responsavel ?? '')
@@ -115,7 +111,8 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
     return saldos ? saldos.get(id) ?? 0 : null
   }
 
-  const insumos = useMemo(() => (todos ? (modo === 'a' ? todos.filter((i) => curva.get(i.id)?.classe === 'A') : todos) : null), [todos, curva, modo])
+  // Toda semana conta tudo (Heitor, 15/10): não separa mais curva A semanal e tudo no mês.
+  const insumos = todos
   const itensVoz: ItemContagem[] = useMemo(() => (insumos ?? []).map((i) => ({ chave: i.id, nome: i.nome, categoria: i.categoria, unidade: i.unidade, embalagem: i.embalagem, embalagemQtd: i.embalagemQtd })), [insumos])
   const ler = (texto: string) => {
     const r = lerContagem(texto, itensVoz)
@@ -206,18 +203,8 @@ function TelaInventario({ centro, nomeLoja, data, aoTrocarData }: { centro: stri
           : 'Ainda não enviado.'}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-xl bg-white p-1 ring-1 ring-stone-200">
-          <button onClick={() => setModo('a')} disabled={!curva.size} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${modo === 'a' ? 'bg-carvao text-white' : 'text-stone-600'}`}>Semanal: curva A</button>
-          <button onClick={() => setModo('tudo')} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${modo === 'tudo' ? 'bg-carvao text-white' : 'text-stone-600'}`}>Mensal: tudo</button>
-        </div>
-        <p className="text-sm text-stone-500">
-          {modo === 'a'
-            ? `Os ${insumos.length} itens que somam 80% do valor comprado nos últimos 90 dias (carne, pão, batata…). Uma vez por mês, conte tudo.`
-            : `Todos os ${insumos.length} materiais que controlam estoque.`}
-        </p>
-      </div>
-      {insumos.length === 0 && <Vazio>Nenhum material {modo === 'a' ? 'da curva A' : 'ativo que controla estoque'}.</Vazio>}
+      <p className="text-sm text-stone-500">Todos os {insumos.length} materiais que controlam estoque, toda semana.</p>
+      {insumos.length === 0 && <Vazio>Nenhum material ativo que controla estoque.</Vazio>}
 
       <Cartao>
         <div className="flex flex-wrap items-center gap-3">
