@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Botao, Campo, CampoNumero, Modal, Selo, Titulo, Vazio, estiloEntrada } from '../components/ui'
 import { useOrdem } from '../components/Ordenar'
 import { useApp } from '../lib/contexto'
@@ -174,6 +174,11 @@ export function RefeicoesDaSemana({ completo = false }: { completo?: boolean }) 
 
 interface Linha { chave: string; insumoId: string; texto: string; quantidade: number | null; dica?: string }
 let seq = 0
+// Rascunho do Montar o prato (Heitor, 15/10): quem sai para os cadastros e volta encontra o que já tinha posto.
+interface Rascunho { prato: string; acomp: string; obs: string; pessoas: number | null; pesos: Pesagem[]; linhas: Linha[] }
+const chaveRascunho = (data: string, local: string) => `refeicao-rascunho:${data}:${local}`
+const lerRascunho = (k: string): Rascunho | null => { try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : null } catch { return null } }
+const semChave = (r: Rascunho) => JSON.stringify({ ...r, linhas: r.linhas.map((l) => ({ ...l, chave: '' })) })
 const novaLinha = (x: Partial<Linha> = {}): Linha => ({ chave: 'l' + ++seq, insumoId: '', texto: '', quantidade: null, ...x })
 
 // Material do cadastro para um ingrediente do prato salvo: o que foi ligado, senão o nome mais parecido.
@@ -209,6 +214,9 @@ function Montar({ inicial }: { inicial?: string }) {
   const [usados, setUsados] = useState<ModeloRefeicao[]>([])
   const [salvando, setSalvando] = useState(false)
   const [fichas, setFichas] = useState(false)
+  // O que estava salvo no banco quando abriu: rascunho igual a isso não é guardado.
+  const base = useRef<string | null>(null)
+  const [recuperado, setRecuperado] = useState(false)
   const usarFicha = (f: FichaResolvida) => {
     setFichas(false)
     usarModelo({ id: 'ficha:' + f.nome, nome: f.nome, tipo: f.tipo, modoPreparo: f.modo, ativo: true,
@@ -233,12 +241,52 @@ function Montar({ inicial }: { inicial?: string }) {
       setObs(r?.observacao ?? '')
       setUsados([])
       const todos = q ? q.equipe.length + q.motoboys.length : 0
-      setPessoas(r?.pessoas ?? (todos || null))
-      setPesos(r?.pesos?.length ? r.pesos.map((x) => ({ ...x })) : r?.pesoKg ? [{ nome: 'Tudo junto', kg: r.pesoKg }] : [])
-      setLinhas((r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })))
+      const doBanco: Rascunho = {
+        prato: r?.prato ?? '', acomp: r?.acompanhamentos ?? '', obs: r?.observacao ?? '', pessoas: r?.pessoas ?? (todos || null),
+        pesos: r?.pesos?.length ? r.pesos.map((x) => ({ ...x })) : r?.pesoKg ? [{ nome: 'Tudo junto', kg: r.pesoKg }] : [],
+        linhas: (r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })),
+      }
+      base.current = semChave(doBanco)
+      const rasc = lerRascunho(chaveRascunho(data, local))
+      const usar = rasc && semChave(rasc) !== base.current ? { ...rasc, linhas: rasc.linhas.map(({ chave: _, ...l }) => novaLinha(l)) } : doBanco
+      setRecuperado(usar !== doBanco)
+      setPrato(usar.prato)
+      setAcomp(usar.acomp)
+      setObs(usar.obs)
+      setPessoas(usar.pessoas)
+      setPesos(usar.pesos)
+      setLinhas(usar.linhas)
     }, (e) => avisar((e as Error).message))
-    return () => { vivo = false }
+    return () => { vivo = false; base.current = null }
   }, [store, data, local, avisar])
+  // Guarda o rascunho a cada mudança; igual ao que está salvo, apaga.
+  useEffect(() => {
+    if (base.current === null) return
+    const k = chaveRascunho(data, local)
+    const r = semChave({ prato, acomp, obs, pessoas, pesos, linhas })
+    try {
+      if (r === base.current) localStorage.removeItem(k)
+      else localStorage.setItem(k, JSON.stringify({ prato, acomp, obs, pessoas, pesos, linhas }))
+    } catch { /* sem armazenamento: segue sem rascunho */ }
+  }, [data, local, prato, acomp, obs, pessoas, pesos, linhas])
+  const descartarRascunho = () => {
+    try { localStorage.removeItem(chaveRascunho(data, local)) } catch { /* nada */ }
+    setRecuperado(false)
+    // Recarrega o que está salvo.
+    base.current = null
+    setRefeicao(undefined)
+    store.refeicoesCozinha(data, data).then((rs) => {
+      const r = rs.find((x) => x.centroCustoId === local) ?? null
+      const doBanco: Rascunho = {
+        prato: r?.prato ?? '', acomp: r?.acompanhamentos ?? '', obs: r?.observacao ?? '', pessoas: r?.pessoas ?? pessoas,
+        pesos: r?.pesos?.length ? r.pesos.map((x) => ({ ...x })) : r?.pesoKg ? [{ nome: 'Tudo junto', kg: r.pesoKg }] : [],
+        linhas: (r?.itens ?? []).map((i) => novaLinha({ insumoId: i.insumoId, texto: '', quantidade: i.quantidade })),
+      }
+      setRefeicao(r)
+      setPrato(doBanco.prato); setAcomp(doBanco.acomp); setObs(doBanco.obs); setPessoas(doBanco.pessoas); setPesos(doBanco.pesos); setLinhas(doBanco.linhas)
+      base.current = semChave(doBanco)
+    }, (e) => avisar((e as Error).message))
+  }
 
   const porId = useMemo(() => new Map(insumos.map((i) => [i.id, i])), [insumos])
   const ativos = useMemo(() => insumos.filter((i) => i.ativo || linhas.some((l) => l.insumoId === i.id)), [insumos, linhas])
@@ -282,6 +330,9 @@ function Montar({ inicial }: { inicial?: string }) {
       const rs = await store.refeicoesCozinha(data, data)
       store.modelosRefeicao().then(setModelos, () => {})
       setRefeicao(rs.find((x) => x.centroCustoId === local) ?? null)
+      base.current = semChave({ prato, acomp, obs, pessoas, pesos, linhas })
+      try { localStorage.removeItem(chaveRascunho(data, local)) } catch { /* nada */ }
+      setRecuperado(false)
       avisar('Refeição salva: já aparece para a equipe e saiu do estoque')
     } catch (e) {
       avisar((e as Error).message)
@@ -298,6 +349,9 @@ function Montar({ inicial }: { inicial?: string }) {
       setAcomp('')
       setObs('')
       setLinhas([])
+      base.current = semChave({ prato: '', acomp: '', obs: '', pessoas, pesos, linhas: [] })
+      try { localStorage.removeItem(chaveRascunho(data, local)) } catch { /* nada */ }
+      setRecuperado(false)
       avisar('Refeição excluída')
     } catch (e) {
       avisar((e as Error).message)
@@ -314,6 +368,12 @@ function Montar({ inicial }: { inicial?: string }) {
         <span className="pb-2 text-sm text-stone-600">Sai do estoque da <b>{nomeLocal(local)}</b></span>
         {refeicao && <Selo cor="verde">Já lançada</Selo>}
       </div>
+      {recuperado && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-amber-50 px-4 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+          <span>Voltou o que você tinha posto e ainda não salvou.</span>
+          <button className="font-semibold underline" onClick={descartarRascunho}>Descartar e voltar ao salvo</button>
+        </div>
+      )}
 
       <QuemComePainel quem={quem} local={local} data={data} aoUsar={setPessoas} />
 
