@@ -7,7 +7,7 @@ import { possoAlterar, podeGerenciar, podeVerDocumentosDe, podeVerEquipe, isento
 import { ir } from '../lib/rota'
 import {
   NATUREZAS, TIPOS_DESLIGAMENTO, TIPOS_DOCUMENTO, TIPOS_OCORRENCIA, ehSaude, nomeNivel, nomeTipoDocumento, nomeTipoOcorrencia,
-  type Desligamento, type TipoDesligamento, type VinculoAnterior, type Documento, type Funcionario, type Ocorrencia, type Salario, type PagamentoPessoa, type TipoDocumento, type TipoOcorrencia,
+  type Desligamento, type TipoDesligamento, type VinculoAnterior, type Documento, type Funcionario, type Ocorrencia, type OcorrenciaRemovida, type Salario, type PagamentoPessoa, type TipoDocumento, type TipoOcorrencia,
 } from '../lib/types'
 import { addMesesData, corSituacao, exigenciasDe, iconeSituacao, situacaoDoc, textoSituacao } from '../lib/vencimentos'
 import Uniformes from './Uniformes'
@@ -44,6 +44,9 @@ export default function Perfil({ funcionarioId }: { funcionarioId: string }) {
   const [vinculos, setVinculos] = useState<VinculoAnterior[]>([])
   const [readmitir, setReadmitir] = useState(false)
   const [imprimir, setImprimir] = useState<Ocorrencia | null>(null)
+  const [remover, setRemover] = useState<Ocorrencia | null>(null)
+  const [removidas, setRemovidas] = useState<OcorrenciaRemovida[]>([])
+  const [verRemovidas, setVerRemovidas] = useState(false)
   const [declaracao, setDeclaracao] = useState(false)
   const [admissao, setAdmissao] = useState<'contrato' | 'guia' | null>(null)
   const [versaoAdm, setVersaoAdm] = useState(0)
@@ -58,6 +61,7 @@ export default function Perfil({ funcionarioId }: { funcionarioId: string }) {
     setDocs(await store.documentos(funcionarioId))
     setOcorrencias(await store.ocorrencias(funcionarioId))
     if (podeGerenciar(eu.nivel)) {
+      setRemovidas(await store.ocorrenciasRemovidas(funcionarioId).catch(() => []))
       setDesligamentos(await store.desligamentos(funcionarioId).catch(() => []))
       setVinculos(await store.vinculosAnteriores(funcionarioId).catch(() => []))
     }
@@ -398,14 +402,48 @@ export default function Perfil({ funcionarioId }: { funcionarioId: string }) {
                 <p className="mt-1 text-sm text-stone-700">{o.descricao}</p>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="text-xs text-stone-400">Registrado por {nomeDe(o.registradoPor)}</span>
-                  {gestao && temDocumento(o) && (
-                    <button onClick={() => setImprimir(o)} className="text-sm font-semibold underline decoration-ozzy-500 decoration-2 underline-offset-4">
-                      Imprimir documento
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {gestao && temDocumento(o) && (
+                      <button onClick={() => setImprimir(o)} className="text-sm font-semibold underline decoration-ozzy-500 decoration-2 underline-offset-4">
+                        Imprimir documento
+                      </button>
+                    )}
+                    {/* Remover lançamento errado ou de teste (Heitor, 16/10/2026): gestão, nunca de si mesmo. */}
+                    {gestao && !souEu && (
+                      <button onClick={() => setRemover(o)} className="text-sm font-semibold text-red-600 underline underline-offset-4">
+                        Remover
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Cartao>
             ))
+          )}
+          {gestao && removidas.length > 0 && (
+            <div className="pt-2">
+              <button onClick={() => setVerRemovidas((v) => !v)} className="text-sm text-stone-500 underline underline-offset-4">
+                {verRemovidas ? 'Esconder removidas' : `Ver removidas (${removidas.length})`}
+              </button>
+              {verRemovidas && (
+                <div className="mt-2 space-y-2">
+                  {removidas.map((o) => (
+                    <Cartao key={o.id} className="opacity-70">
+                      <div className="flex items-center gap-2">
+                        <Selo cor="cinza">{nomeTipoOcorrencia(o.tipo)}</Selo>
+                        <span className="text-sm font-medium line-through">{dataLonga(o.data)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-stone-700">{o.descricao}</p>
+                      <p className="mt-1 text-sm">
+                        <span className="font-medium">Motivo da remoção:</span> {o.motivo}
+                      </p>
+                      <span className="text-xs text-stone-400">
+                        Removida por {nomeDe(o.removidoPor)} em {dataLonga(o.removidoEm.slice(0, 10))} · registrada por {nomeDe(o.registradoPor)}
+                      </span>
+                    </Cartao>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -450,6 +488,17 @@ export default function Perfil({ funcionarioId }: { funcionarioId: string }) {
       {admissao === 'guia' && <GuiaExame pessoa={pessoa} aoFechar={() => { setAdmissao(null); setVersaoAdm((v) => v + 1) }} />}
       {declaracao && <DeclaracaoVinculo pessoa={pessoa} aoFechar={() => setDeclaracao(false)} />}
       {imprimir && <DocumentoOcorrencia o={imprimir} pessoa={pessoa} aoFechar={() => setImprimir(null)} />}
+      {remover && (
+        <RemoverOcorrencia
+          o={remover}
+          aoFechar={() => setRemover(null)}
+          aoRemover={async () => {
+            setRemover(null)
+            await carregar()
+            avisar('Ocorrência removida')
+          }}
+        />
+      )}
       {readmitir && (
         <Readmitir
           pessoa={pessoa}
@@ -652,6 +701,43 @@ function EnviarDocumento({
         {erro && <p className="text-sm text-red-600">{erro}</p>}
         <Botao className="w-full" disabled={enviando}>
           {enviando ? 'Enviando…' : 'Enviar'}
+        </Botao>
+      </form>
+    </Modal>
+  )
+}
+
+function RemoverOcorrencia({ o, aoFechar, aoRemover }: { o: Ocorrencia; aoFechar: () => void; aoRemover: () => void }) {
+  const { store } = useApp()
+  const [motivo, setMotivo] = useState('')
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  const confirmar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSalvando(true)
+    try {
+      await store.removerOcorrencia(o.id, motivo)
+      aoRemover()
+    } catch (err) {
+      setErro((err as Error).message)
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Modal titulo="Remover ocorrência" aberto aoFechar={aoFechar}>
+      <form onSubmit={confirmar} className="space-y-4">
+        <p className="text-sm text-stone-700">
+          {nomeTipoOcorrencia(o.tipo)} de {dataLonga(o.data)}: some do perfil, da caixinha e do painel. Fica guardada em
+          "Ver removidas" com o seu nome e o motivo.
+        </p>
+        <Campo rotulo="Motivo da remoção" dica="Ex.: lançada na pessoa errada, lançada em teste.">
+          <textarea className={estiloEntrada} rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} minLength={5} required />
+        </Campo>
+        {erro && <p className="text-sm text-red-600">{erro}</p>}
+        <Botao variante="perigo" className="w-full" disabled={salvando || motivo.trim().length < 5}>
+          Remover
         </Botao>
       </form>
     </Modal>
