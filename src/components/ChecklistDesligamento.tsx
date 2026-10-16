@@ -6,12 +6,13 @@ import { etapasDesligamento, progressoDesligamento, prazoRescisao } from '../lib
 import { TIPOS_DESLIGAMENTO, type Desligamento, type Funcionario } from '../lib/types'
 
 // Etapas do desligamento: a gestão marca cada uma; o portal registra quem marcou e quando.
-export default function ChecklistDesligamento({ d, pessoa, podeMarcar, aoMudar, aoTermos }: {
+export default function ChecklistDesligamento({ d, pessoa, podeMarcar, aoMudar, aoTermos, aoCancelar }: {
   d: Desligamento
   pessoa: Funcionario
   podeMarcar: boolean
   aoMudar: () => void
   aoTermos: () => void
+  aoCancelar: () => Promise<void>
 }) {
   const { eu, store, nomeDe, avisar } = useApp()
   const [salvando, setSalvando] = useState(false)
@@ -97,9 +98,30 @@ export default function ChecklistDesligamento({ d, pessoa, podeMarcar, aoMudar, 
               Reabrir
             </Botao>
           ) : (
-            <Botao disabled={salvando || feitas < total} onClick={() => mudar({ concluido: true }, 'Desligamento concluído')}>
-              {feitas < total ? `Faltam ${total - feitas} etapa${total - feitas > 1 ? 's' : ''}` : 'Concluir desligamento'}
-            </Botao>
+            <>
+              <Botao disabled={salvando || feitas < total} onClick={() => mudar({ concluido: true }, 'Desligamento concluído')}>
+                {feitas < total ? `Faltam ${total - feitas} etapa${total - feitas > 1 ? 's' : ''}` : 'Concluir desligamento'}
+              </Botao>
+              {/* Desligamento aberto sem querer (Heitor, 16/10/2026): o checklist ficava preso no perfil. */}
+              <Botao
+                variante="perigo"
+                disabled={salvando}
+                onClick={async () => {
+                  const aviso = feitas > 0 ? ` As ${feitas} etapa${feitas > 1 ? 's' : ''} já marcada${feitas > 1 ? 's' : ''} também some${feitas > 1 ? 'm' : ''}.` : ''
+                  if (!confirm(`Cancelar o desligamento de ${pessoa.nome}? O checklist some e a pessoa continua (ou volta a ficar) ativa.${aviso}`)) return
+                  setSalvando(true)
+                  try {
+                    await aoCancelar()
+                  } catch (e) {
+                    avisar((e as Error).message)
+                  } finally {
+                    setSalvando(false)
+                  }
+                }}
+              >
+                Cancelar desligamento
+              </Botao>
+            </>
           )}
         </div>
       )}
