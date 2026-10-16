@@ -3,7 +3,7 @@ import { EVENTO_ALTERADO, codigoAleatorio, linkDaGuia, distanciaM, nomeItem, nom
 import { cpfValido } from './cpf'
 import { movimentosNovos } from './ofx'
 import { jornadas } from './ponto'
-import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, Unidade, LinhaVenda, MediaVenda, UltimoFornecedor } from './types'
+import type { PreparoRefeicao, MarcacaoPonto, TipoMarcacao, VotacaoCardapio, RecadoRefeicao, CaixaTurno, PedidoTirarFechamento, Refeicao, ItemRefeicao, ModeloRefeicao, EnvioMotoboy, TurnoMotoboy, EscalaMotoboy, CurvaAbc, InventarioEstoque, CompraFornecedor, ProdutoVenda, PedidoCompra, PrecoFornecedor, ItemFechamento, Fechamento, PedidoProducao, ItemListaFechamento, Producao, Motoboy, SemanaMotoboy, CentroCusto, ContaContabil, NotaFiscal, ContaPagar, ContaRecorrente, MovimentoEstoque, ItemNota, MovimentoExtrato, RegraExtrato, SaldoExtrato, MembroEquipeEvento, FreelaEvento, DiariaFreelaEvento, ItemEnvio, ProdutoEvento, QtdDiaProduto, VendaEvento, ItemModeloChecklist, EnvioEvento, Inventario, Fornecedor, Insumo, PrecoInsumo, Receita, VersaoReceita, Evento, HistoricoEvento, Operacao, Admissao, AjustePonto, DevolucaoUniforme, LocalEnvio, LocalLoja, EnvioFreela, ContaPagamento, RemessaPagamento, VinculoAnterior, SolicitacaoUniforme, PedidoUniforme, ItemPedidoUniforme, MovimentoUniforme, Equipamento, ManutencaoEquipamento, Preventiva, ExecucaoPreventiva, Desligamento, DecimoTerceiro, Ferias, Salario, DiariaFreela, Freelancer, PagamentoFreela, Chamado, Comunicado, LeituraRegulamento, VersaoRegulamento, Documento, EntregaUniforme, Folga, Funcionario, Ocorrencia, OcorrenciaRemovida, Unidade, LinhaVenda, MediaVenda, UltimoFornecedor } from './types'
 import { chamadoEmAberto } from './types'
 import type { ModeloChecklist, ExecucaoChecklist, RespostaChecklist, ItemChecklist } from './types'
 import { conformeDe, noDia, pontuar, prazoDe } from './checklists'
@@ -725,6 +725,8 @@ const ocorrencias: Ocorrencia[] = ([
   descricao: tipo === 'falta' ? 'Falta (importada da planilha de caixinha).' : 'Advertência (importada da planilha de caixinha).',
   registradoPor: 'p-maria-costa', criadoEm: data + 'T12:00:00Z',
 }))
+
+const ocorrenciasRemovidas: OcorrenciaRemovida[] = []
 
 const comunicados: Comunicado[] = [
   { id: 'c1', titulo: 'Bem-vindos ao Portal do Time The Ozzy', corpo: 'A partir de agora, comunicados, folgas e documentos ficam aqui. Atestados devem ser enviados pelo portal no mesmo dia, com foto legível.', unidadeId: null, autorId: 'f1', criadoEm: addDias(hoje(), -2) + 'T12:00:00Z', lidoPor: ['p-maria-costa'] },
@@ -1477,6 +1479,23 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const nova = { ...o, id: novoId('o'), registradoPor: u.id, criadoEm: agora() }
       ocorrencias.push(nova)
       return espera(nova)
+    },
+    async removerOcorrencia(id, motivo) {
+      const u = exigeGestao()
+      const i = ocorrencias.findIndex((o) => o.id === id)
+      if (i < 0) throw new Error('Ocorrência não encontrada.')
+      const o = ocorrencias[i]
+      if (!possoAlterar(u, porId(o.funcionarioId))) throw new Error('Seu nível de acesso não permite remover esta ocorrência.')
+      if (o.funcionarioId === u.id) throw new Error('Você não pode remover uma ocorrência sua.')
+      if (motivo.trim().length < 5) throw new Error('Escreva o motivo da remoção.')
+      ocorrenciasRemovidas.push({ ...o, motivo: motivo.trim(), removidoPor: u.id, removidoEm: agora() })
+      ocorrencias.splice(i, 1)
+      return espera(undefined)
+    },
+    async ocorrenciasRemovidas(fid) {
+      const u = exigeEu()
+      if (!possoAlterar(u, porId(fid))) return espera([])
+      return espera(ocorrenciasRemovidas.filter((o) => o.funcionarioId === fid).sort((a, b) => b.removidoEm.localeCompare(a.removidoEm)))
     },
     async comunicados() {
       const u = exigeEu()

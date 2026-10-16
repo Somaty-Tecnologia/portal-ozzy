@@ -98,6 +98,13 @@ export interface Ocorrencia {
   suspensaoDias?: number | null
 }
 
+// Ocorrência removida pela gestão (16/10/2026): fica guardada com quem removeu, quando e por quê.
+export interface OcorrenciaRemovida extends Ocorrencia {
+  motivo: string
+  removidoPor: string
+  removidoEm: string
+}
+
 export interface Comunicado {
   id: string
   titulo: string
