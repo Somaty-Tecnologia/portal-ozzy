@@ -1,0 +1,65 @@
+# Portal The Ozzy — guia para o Claude e para o time
+
+Portal interno da The Ozzy Burger e The Ozzy Pizza: RH/Departamento Pessoal, freelancers, motoboys,
+fechamento das lojas, produção, fichas técnicas, compras, estoque, financeiro (contas, conciliação, Lucro Fácil),
+checklists, manutenção, eventos e refeição da equipe.
+
+Repositório: `Somaty-Tecnologia/portal-ozzy` (antes `theozzyburger/portal-ozzy`; transferido em 10/2026).
+
+## Stack
+
+- React 19 + TypeScript + Vite + Tailwind 4 (`src/`). Sem roteador externo: as telas ficam em `src/pages/`.
+- Supabase (Postgres + Auth + Storage + Edge Function `supabase/functions/criar-acesso`).
+- Vercel publica sozinha a partir do GitHub (não há deploy manual).
+
+## Como o código vira produção
+
+| Branch | Vercel | Banco |
+| --- | --- | --- |
+| `main` | Produção | Supabase real (secret `SUPABASE_DB_URL`) |
+| `teste` | Ambiente de testes | Supabase de teste (secret `SUPABASE_TESTE_DB_URL`) + `supabase/teste/dados-de-teste.sql` |
+| `dados-lucro` | — | Só carrega o `lucro.json` da rotina do Lucro Fácil |
+| PR para `main` | Link de preview | Nenhum (o CI só confere tipos e monta) |
+
+Workflows em `.github/workflows/`:
+
+- `ci.yml`: `npm run typecheck`, `npm run build` e `npm run build:preview` em todo push/PR na `main`.
+- `migrations.yml`: aplica as migrations novas de `supabase/migrations` (uma transação cada, com backup antes).
+  Controle na tabela `public._migracoes`. Até a 0027 foram rodadas à mão.
+- `backup.yml`: `pg_dump` diário (3h de Brasília), guardado como artifact por 90 dias.
+- `restore-test.yml`: todo dia 1, restaura o último backup num Postgres descartável.
+- `importar-lucro.yml`: importa o `lucro.json` do branch `dados-lucro`.
+
+## Regras de trabalho
+
+1. **Nunca alterar o banco pelo SQL Editor.** Toda mudança de schema é uma migration nova numerada
+   (`supabase/migrations/00NN_nome_curto.sql`), que roda sozinha no merge. Não editar migration já aplicada.
+2. **Testar no `teste` antes da `main`** quando mexer em banco ou em permissões.
+3. **Permissões valem no banco (RLS)**, não só na tela. Quem pode o quê fica em `src/lib/permissoes.ts`
+   e precisa estar espelhado nas policies das migrations.
+4. Dados sensíveis (documentos, atestados, salários, LGPD) só para o próprio funcionário e a gestão.
+5. Menu e visibilidade dos módulos: `src/lib/modulos.ts`.
+6. Acesso ao banco pelas telas passa por `src/lib/store.ts` (`supabaseStore.ts` real, `demoStore.ts` exemplo).
+   Toda função nova precisa existir nos dois.
+7. Antes de abrir PR: `npm run typecheck && npm run build`.
+8. Comentários e mensagens de commit em português, explicando o porquê e citando quem pediu e quando.
+
+## Níveis de acesso
+
+`funcionario`, `manutencao` (degrau 1) → `supervisor` (2) → `gerente`, `administrativo` (3) → `proprietario` (4).
+Ninguém altera dados de quem está acima nem dá um nível acima do seu.
+
+## Rodar local
+
+```bash
+npm install
+npm run dev   # sem .env abre em modo demonstração (senha 1234)
+```
+
+Variáveis: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (ver `.env.example`). Chaves de produção ficam só na Vercel.
+
+## Outras referências
+
+- `scripts/lucro/ROTINA.md`: rotina diária de cópia do Lucro Fácil (tarefa agendada do Claude).
+- `scripts/*.py`: importações pontuais de planilhas (DPEN, Eclética, cadastros).
+- `docs/`: inventário e notas SEFAZ.
