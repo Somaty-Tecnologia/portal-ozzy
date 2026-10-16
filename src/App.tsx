@@ -3,7 +3,7 @@ import { ligarAtalhoSalvar } from './lib/atalhoSalvar'
 import { ProvedorApp, useApp } from './lib/contexto'
 import { criarDemoStore } from './lib/demoStore'
 import { criarSupabaseStore } from './lib/supabaseStore'
-import { operaEstoque, podeGerenciar, podeVerEquipe } from './lib/permissoes'
+import { abaInicialRh, operaEstoque, podeGerenciar, podeVerEquipe } from './lib/permissoes'
 import { ir } from './lib/rota'
 import type { Funcionario } from './lib/types'
 import { nomeNivel } from './lib/types'
@@ -144,7 +144,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
     { id: 'ponto', nome: 'Ponto' },
     { id: 'perfil', nome: 'Meu perfil' },
   ]
-  const abaRh = abasRh.find((a) => a.id === sub)?.id ?? 'avisos'
+  const abaRh = abasRh.find((a) => a.id === sub)?.id ?? abaInicialRh(eu.nivel)
 
   // Abas de cada menu, com endereço próprio: aparecem embaixo do menu na lateral e no "Ir para" (Heitor, 12/10).
   const abasDe = (id: string): { id: string; nome: string }[] =>
@@ -239,7 +239,7 @@ function Casca({ aoSair }: { aoSair: () => void }) {
             <div key={m.id}>
               <div className={`flex items-center rounded-xl transition ${ativo ? 'bg-ozzy-500 text-carvao' : 'hover:bg-white/10 hover:text-white'}`}>
                 <button
-                  onClick={() => ir(m.id === 'rh' ? 'rh/avisos' : m.id)}
+                  onClick={() => ir(m.id === 'rh' ? `rh/${abaInicialRh(eu.nivel)}` : m.id)}
                   className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left text-sm font-semibold"
                 >
                   <Icone nome={m.id} />
