@@ -254,7 +254,21 @@ export default function Perfil({ funcionarioId }: { funcionarioId: string }) {
         />
       )}
       {podeGerenciar(eu.nivel) && desligamento && (
-        <ChecklistDesligamento d={desligamento} pessoa={pessoa} podeMarcar={gestao} aoMudar={carregar} aoTermos={() => setTermos(true)} />
+        <ChecklistDesligamento
+          d={desligamento}
+          pessoa={pessoa}
+          podeMarcar={gestao}
+          aoMudar={carregar}
+          aoTermos={() => setTermos(true)}
+          aoCancelar={async () => {
+            // Mesmo efeito do "foi engano" do Reativar, mas também serve para quem continuou ativo com o checklist aberto.
+            await store.excluirDesligamento(desligamento.id)
+            if (pessoa.status === 'inativo') await store.salvarFuncionario({ ...pessoa, status: 'ativo', dataDesligamento: null })
+            await recarregarEquipe()
+            await carregar()
+            avisar('Desligamento cancelado')
+          }}
+        />
       )}
       {podeGerenciar(eu.nivel) && vinculos.length > 0 && <HistoricoVinculos vinculos={vinculos} pessoa={pessoa} />}
       {gestao && !desligamento && pessoa.status === 'inativo' && pessoa.dataDesligamento && (
