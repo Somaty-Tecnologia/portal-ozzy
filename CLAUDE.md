@@ -17,14 +17,14 @@ Repositório: `Somaty-Tecnologia/portal-ozzy` (antes `theozzyburger/portal-ozzy`
 | Branch | Vercel | Banco |
 | --- | --- | --- |
 | `main` | Produção | Supabase real (secret `SUPABASE_DB_URL`) |
-| `teste` | Ambiente de testes (faixa azul) | Supabase de teste + `supabase/teste/dados-de-teste.sql` (ver nota abaixo) |
+| `teste` | Ambiente de testes (faixa azul) | Supabase de teste (secret `SUPABASE_TESTE_DB_URL`) + `supabase/teste/dados-de-teste.sql` |
 | `dados-lucro` | — | Só carrega o `lucro.json` da rotina do Lucro Fácil |
 | PR para `main` | Link de preview | Nenhum (o CI só confere tipos e monta) |
 
-Banco de teste: o `migrations.yml` espera o secret `SUPABASE_TESTE_DB_URL`, que **ainda não foi criado**
-(16/10/2026). Por isso as migrations no `teste` não rodam sozinhas: são aplicadas pelo conector do Supabase.
-As que têm `delete` não foram aplicadas lá (0067, 0084, 0090/0091, 0095–0103, 0106, 0108+), então o teste
-está desatualizado; se precisar, refazer do zero. Mandar o código para o teste: `git push origin main:teste`.
+Banco de teste (projeto Supabase `ctpxygjchnqisbzfsoew`; produção é `kblvyncdlwcxgltyjocm`): refeito do zero em
+16/10/2026 com as 112 migrations e os dados fictícios. Desde então o `migrations.yml` aplica sozinho as migrations
+novas em todo push no `teste`. Mandar o código para o teste: `git push origin main:teste`
+(ou rodar o workflow "Rodar migrations" no branch `teste`). Não aplicar migration no teste pelo conector.
 
 Workflows em `.github/workflows/`:
 
