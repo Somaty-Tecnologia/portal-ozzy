@@ -39,7 +39,9 @@ Workflows em `.github/workflows/`:
 
 1. **Nunca alterar o banco pelo SQL Editor.** Toda mudança de schema é uma migration nova numerada
    (`supabase/migrations/00NN_nome_curto.sql`), que roda sozinha no merge. Não editar migration já aplicada.
-2. **Testar no `teste` antes da `main`** quando mexer em banco ou em permissões.
+2. **Publicar direto na `main`** (decisão do Heitor em 16/10/2026: o portal ainda está em elaboração e ele quer ver
+   as mudanças na hora). Fluxo: PR para a `main`, typecheck/build e CI verdes, e o Claude faz o merge. O `teste`
+   fica para quando houver mais clientes; até lá, é opcional.
 3. **Permissões valem no banco (RLS)**, não só na tela. Quem pode o quê fica em `src/lib/permissoes.ts`
    e precisa estar espelhado nas policies das migrations.
 4. Dados sensíveis (documentos, atestados, salários, LGPD) só para o próprio funcionário e a gestão.
