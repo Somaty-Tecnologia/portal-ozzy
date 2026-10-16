@@ -17,9 +17,14 @@ Repositório: `Somaty-Tecnologia/portal-ozzy` (antes `theozzyburger/portal-ozzy`
 | Branch | Vercel | Banco |
 | --- | --- | --- |
 | `main` | Produção | Supabase real (secret `SUPABASE_DB_URL`) |
-| `teste` | Ambiente de testes | Supabase de teste (secret `SUPABASE_TESTE_DB_URL`) + `supabase/teste/dados-de-teste.sql` |
+| `teste` | Ambiente de testes (faixa azul) | Supabase de teste + `supabase/teste/dados-de-teste.sql` (ver nota abaixo) |
 | `dados-lucro` | — | Só carrega o `lucro.json` da rotina do Lucro Fácil |
 | PR para `main` | Link de preview | Nenhum (o CI só confere tipos e monta) |
+
+Banco de teste: o `migrations.yml` espera o secret `SUPABASE_TESTE_DB_URL`, que **ainda não foi criado**
+(16/10/2026). Por isso as migrations no `teste` não rodam sozinhas: são aplicadas pelo conector do Supabase.
+As que têm `delete` não foram aplicadas lá (0067, 0084, 0090/0091, 0095–0103, 0106, 0108+), então o teste
+está desatualizado; se precisar, refazer do zero. Mandar o código para o teste: `git push origin main:teste`.
 
 Workflows em `.github/workflows/`:
 
@@ -43,6 +48,19 @@ Workflows em `.github/workflows/`:
    Toda função nova precisa existir nos dois.
 7. Antes de abrir PR: `npm run typecheck && npm run build`.
 8. Comentários e mensagens de commit em português, explicando o porquê e citando quem pediu e quando.
+9. Toda tabela nova é ordenável (`useOrdem` de `src/components/Ordenar.tsx`) e tem a categoria em coluna própria.
+10. Nomes de pessoas ganham iniciais maiúsculas automáticas.
+11. Não fixar lojas nem CNPJs no código de recursos novos: ler de `src/lib/empresas.ts` (preparo para multi-cliente).
+12. Nunca pedir senha, chave ou certificado no chat: o Heitor cola direto nos segredos do Supabase, da Vercel ou do GitHub.
+13. Este repositório é **público**: não commitar dados reais de vendas, salários, documentos ou planilhas da equipe.
+14. Tarefas grandes (planilhas, varreduras, conferências): usar a skill `economia-de-tokens` (`.claude/skills/`).
+
+## Como falar com o Heitor
+
+- Ele escreve em pt-BR, muitas vezes por áudio transcrito do celular; integrações e sincronizações ele faz depois no PC.
+- A marca é **The Ozzy** (o áudio às vezes transcreve "Deose" ou "DOs"). O app se chama **Portal do Time The Ozzy**,
+  nunca "Portal do Funcionário".
+- Lucro Fácil: o conector não está mais em uso (16/10/2026); o portal já substitui o LF desde 11/10.
 
 ## Níveis de acesso
 
