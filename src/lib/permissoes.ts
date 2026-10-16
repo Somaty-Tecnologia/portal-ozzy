@@ -21,6 +21,8 @@ export const atendeChamados = (n: Nivel) => n === 'manutencao' || podeGerenciar(
 
 // Supervisor enxerga a equipe da própria unidade, sem editar.
 export const podeVerEquipe = (n: Nivel) => n !== 'funcionario' && n !== 'manutencao'
+// Departamento Pessoal abre direto em Equipe para quem vê a equipe (Heitor, 16/10/2026); os outros, em Avisos.
+export const abaInicialRh = (n: Nivel) => (podeVerEquipe(n) ? 'equipe' : 'avisos')
 
 // Documentos e atestados são dados sensíveis (LGPD): só o próprio funcionário e a gestão.
 export const podeVerDocumentosDe = (eu: Funcionario, alvo: Funcionario) =>

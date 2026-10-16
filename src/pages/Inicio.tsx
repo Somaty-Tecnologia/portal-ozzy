@@ -17,7 +17,7 @@ import { useApp } from '../lib/contexto'
 import { conferirPrecos, type AlertaPreco } from '../lib/conferencia'
 import { montarCatalogo } from '../lib/custos'
 import { addDias, dataCurta, diaSemana, hoje, inicioDaSemana, tempoDesde } from '../lib/datas'
-import { avisaFerias, isentoDeRotinas, podeGerenciar, podeVerPainel } from '../lib/permissoes'
+import { abaInicialRh, avisaFerias, isentoDeRotinas, podeGerenciar, podeVerPainel } from '../lib/permissoes'
 import { COR_SITUACAO, TEXTO_SITUACAO, alertasFerias, type AlertaFerias as AlertaFeriasT } from '../lib/ferias'
 const dataBr = (d: string) => d.split('-').reverse().join('/')
 import Painel from './Painel'
@@ -188,7 +188,7 @@ export default function Inicio() {
             .map((m) => (
               <button
                 key={m.id}
-                onClick={() => ir(m.id === 'rh' ? 'rh/avisos' : m.id)}
+                onClick={() => ir(m.id === 'rh' ? `rh/${abaInicialRh(eu.nivel)}` : m.id)}
                 className="flex flex-col items-start gap-3 rounded-2xl bg-white p-4 text-left ring-1 ring-stone-200 transition hover:ring-carvao"
               >
                 <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${m.pronto ? 'bg-carvao text-ozzy-400' : 'bg-stone-100 text-stone-500'}`}>
