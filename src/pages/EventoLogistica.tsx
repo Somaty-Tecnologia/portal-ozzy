@@ -1235,6 +1235,10 @@ export function Contagem({
 
 // ——— Para quem está escalado no evento (sem acesso ao módulo Eventos): conferir a separação e contar as sobras ———
 
+// Manutencista (17/10/2026): vê todos os eventos em andamento só para a separação, sem as sobras.
+export const PAPEL_SEPARACAO = 'Separação (manutenção)'
+const soSeparacao = (x: EventoEscalado) => x.papel === PAPEL_SEPARACAO
+
 const ABAS_ESCALADO = [
   { id: '', nome: 'Separação' },
   { id: 'sobras', nome: 'Sobras do dia' },
@@ -1273,8 +1277,8 @@ export function MeuEvento({ id, aba }: { id?: string; aba?: string }) {
         <h1 className="text-2xl font-bold tracking-tight">{ev.nome}</h1>
         <p className="text-sm text-stone-600">{ev.dias.map((d) => diaCurto(d.data)).join(', ')}</p>
       </div>
-      <AbasEvento id={ev.id} aba={aba ?? ''} base="meu-evento" abas={ABAS_ESCALADO} />
-      <MeuEventoAba e={e} aba={aba ?? ''} />
+      {!soSeparacao(ev) && <AbasEvento id={ev.id} aba={aba ?? ''} base="meu-evento" abas={ABAS_ESCALADO} />}
+      <MeuEventoAba e={e} aba={soSeparacao(ev) ? '' : aba ?? ''} />
     </div>
   )
 }
@@ -1296,7 +1300,7 @@ export function CartaoEventosEscalado() {
   if (!eventos.length) return null
   return (
     <Cartao>
-      <h2 className="font-bold">Eventos em que você está escalado</h2>
+      <h2 className="font-bold">{eventos.every(soSeparacao) ? 'Separação dos eventos' : 'Eventos em que você está escalado'}</h2>
       <ul className="mt-2 space-y-2">
         {eventos.map((x) => (
           <li key={x.id} className="flex flex-wrap items-center gap-2">
@@ -1305,7 +1309,7 @@ export function CartaoEventosEscalado() {
               <span className="block text-sm text-stone-600">{x.dias.map((d) => diaCurto(d.data)).join(', ')}{x.papel && ` · ${x.papel}`}</span>
             </span>
             <Botao variante="secundario" onClick={() => ir('meu-evento/' + x.id)}>Separação</Botao>
-            <Botao onClick={() => ir('meu-evento/' + x.id + '/sobras')}>Contar sobra</Botao>
+            {!soSeparacao(x) && <Botao onClick={() => ir('meu-evento/' + x.id + '/sobras')}>Contar sobra</Botao>}
           </li>
         ))}
       </ul>

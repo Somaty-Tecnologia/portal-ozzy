@@ -2688,7 +2688,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async envios(eventoId) {
       const u = exigeEu()
       const vejo = (ev: string) => podeGerenciar(u.nivel) || eventosDemo.find((e) => e.id === ev)?.responsaveis.some((r) => r.funcionarioId === u.id)
-      return structuredClone(enviosDemo.filter((e) => (!eventoId || e.eventoId === eventoId) && vejo(e.eventoId))).sort((a, b) => a.data.localeCompare(b.data) || a.criadoEm.localeCompare(b.criadoEm))
+      return structuredClone(enviosDemo.filter((e) => (!eventoId || e.eventoId === eventoId) && (vejo(e.eventoId) || u.nivel === 'manutencao'))).sort((a, b) => a.data.localeCompare(b.data) || a.criadoEm.localeCompare(b.criadoEm))
     },
     async criarEnvio(eventoId, data, tipo, observacao, itens) {
       const u = exigeGestao()
@@ -2719,7 +2719,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
       const e = enviosDemo.find((x) => x.itens.some((i) => i.id === itemId))
       const ev = eventosDemo.find((x) => x.id === e?.eventoId)
       if (!e || !ev) throw new Error('Item não encontrado.')
-      if (!podeGerenciar(u.nivel) && !ev.responsaveis.some((r) => r.funcionarioId === u.id)) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (!podeGerenciar(u.nivel) && u.nivel !== 'manutencao' && !ev.responsaveis.some((r) => r.funcionarioId === u.id)) throw new Error('Seu nível de acesso não permite esta ação.')
       const item = e.itens.find((i) => i.id === itemId)!
       if (etapa === 'saida') Object.assign(item, { quantidade, conferido: feito, conferidoPor: feito ? u.id : null, conferidoEm: feito ? agora() : null })
       else Object.assign(item, { retornou: feito, retornoPor: feito ? u.id : null, retornoEm: feito ? agora() : null })
@@ -2746,7 +2746,7 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     },
     async itensContagem() {
       const u = exigeEu()
-      if (!podeGerenciar(u.nivel) && !eventosDemo.some((e) => e.responsaveis.some((r) => r.funcionarioId === u.id))) throw new Error('Seu nível de acesso não permite esta ação.')
+      if (!podeGerenciar(u.nivel) && u.nivel !== 'manutencao' && !eventosDemo.some((e) => e.responsaveis.some((r) => r.funcionarioId === u.id))) throw new Error('Seu nível de acesso não permite esta ação.')
       return [
         ...insumosDemo.filter((i) => i.ativo).map((i) => ({ chave: 'i:' + i.id, nome: i.nome, categoria: i.categoria, unidade: i.unidade, embalagem: i.embalagem, embalagemQtd: i.embalagemQtd })),
         ...receitasDemo.filter((r) => r.ativo && r.tipo === 'preparo').map((r) => ({ chave: 'r:' + r.id, nome: r.nome, categoria: 'Pré-preparos', unidade: r.unidade, embalagem: null, embalagemQtd: null })),
@@ -2755,8 +2755,11 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async meusEventosEscalados() {
       const u = exigeEu()
       return eventosDemo
-        .filter((e) => ['aprovado', 'preparacao', 'execucao'].includes(e.status) && e.responsaveis.some((r) => r.funcionarioId === u.id))
-        .map((e) => ({ id: e.id, nome: e.nome, status: e.status, papel: e.responsaveis.find((r) => r.funcionarioId === u.id)?.papel ?? null, dias: structuredClone(e.dias) }))
+        .filter((e) => ['aprovado', 'preparacao', 'execucao'].includes(e.status) && (u.nivel === 'manutencao' || e.responsaveis.some((r) => r.funcionarioId === u.id)))
+        .map((e) => {
+          const r = e.responsaveis.find((x) => x.funcionarioId === u.id)
+          return { id: e.id, nome: e.nome, status: e.status, papel: r ? r.papel ?? null : 'Separação (manutenção)', dias: structuredClone(e.dias) }
+        })
     },
 
     async freelasEvento() {
