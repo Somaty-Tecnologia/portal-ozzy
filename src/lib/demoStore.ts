@@ -2755,7 +2755,9 @@ export function criarDemoStore(): Store & { entrarComo(id: string): Promise<Func
     async meusEventosEscalados() {
       const u = exigeEu()
       return eventosDemo
-        .filter((e) => ['aprovado', 'preparacao', 'execucao'].includes(e.status) && (u.nivel === 'manutencao' || e.responsaveis.some((r) => r.funcionarioId === u.id)))
+        .filter((e) =>
+          (['aprovado', 'preparacao', 'execucao'].includes(e.status) && e.responsaveis.some((r) => r.funcionarioId === u.id)) ||
+          (u.nivel === 'manutencao' && !['finalizado', 'cancelado'].includes(e.status) && enviosDemo.some((v) => v.eventoId === e.id)))
         .map((e) => {
           const r = e.responsaveis.find((x) => x.funcionarioId === u.id)
           return { id: e.id, nome: e.nome, status: e.status, papel: r ? r.papel ?? null : 'Separação (manutenção)', dias: structuredClone(e.dias) }
